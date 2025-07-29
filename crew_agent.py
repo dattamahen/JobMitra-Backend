@@ -1,0 +1,473 @@
+"""
+CrewAI agent setup and execution module.
+Defines agents, tasks, and crew for query processing and resume enhancement.
+"""
+
+import os
+from crewai import Agent, Task, Crew
+from langchain_openai import ChatOpenAI
+
+
+def setup_llm():
+    """
+    Setup OpenAI LLM with API key from environment variables.
+    
+    Returns:
+        ChatOpenAI: Configured OpenAI language model
+    """
+    # Get OpenAI API key from environment variables
+    openai_api_key = os.getenv("OPENAI_API_KEY")
+    
+    if not openai_api_key:
+        raise ValueError("OPENAI_API_KEY environment variable is required")
+    
+    # Initialize OpenAI LLM with GPT-4
+    llm = ChatOpenAI(
+        model="gpt-4",
+        api_key=openai_api_key,
+        temperature=0.7
+    )
+    
+    return llm
+
+
+def create_researcher_agent():
+    """
+    Create a researcher agent specialized in analyzing and answering queries.
+    
+    Returns:
+        Agent: Configured CrewAI researcher agent
+    """
+    # Setup the language model
+    llm = setup_llm()
+    
+    # Create researcher agent with specific role and capabilities
+    researcher = Agent(
+        role="Researcher",
+        goal="Analyze and answer user queries with accurate, comprehensive, and helpful information",
+        backstory="""You are an expert researcher with vast knowledge across multiple domains.
+        You excel at understanding user queries, conducting thorough analysis, and providing 
+        well-structured, informative responses. You always strive to be helpful, accurate, 
+        and provide actionable insights when possible.""",
+        verbose=True,
+        allow_delegation=False,
+        llm=llm
+    )
+    
+    return researcher
+
+
+def create_resume_matcher_agent():
+    """
+    Create a resume matcher agent specialized in comparing resumes with job descriptions.
+    
+    Returns:
+        Agent: Configured CrewAI resume matcher agent
+    """
+    # Setup the language model
+    llm = setup_llm()
+    
+    # Create resume matcher agent
+    resume_matcher = Agent(
+        role="Resume Validator",
+        goal="Compare resume with job description and return match percentage and gaps",
+        backstory="""You are an expert HR professional and ATS (Applicant Tracking System) specialist 
+        with years of experience in resume screening and job matching. You excel at analyzing resumes 
+        against job requirements, identifying skill gaps, and calculating compatibility scores. 
+        You understand what recruiters look for and how ATS systems parse and rank resumes.""",
+        verbose=True,
+        allow_delegation=False,
+        llm=llm
+    )
+    
+    return resume_matcher
+
+
+def create_resume_improver_agent():
+    """
+    Create a resume improver agent specialized in providing enhancement suggestions.
+    
+    Returns:
+        Agent: Configured CrewAI resume improver agent
+    """
+    # Setup the language model
+    llm = setup_llm()
+    
+    # Create resume improver agent
+    resume_improver = Agent(
+        role="Enhancement Advisor",
+        goal="Suggest updates to the resume based on validation analysis and best practices",
+        backstory="""You are a professional resume writer and career coach with expertise in 
+        resume optimization across various industries. You specialize in translating skill gaps 
+        into actionable improvement strategies, suggesting better keyword usage, improving content 
+        structure, and enhancing overall presentation to maximize ATS compatibility and recruiter appeal.""",
+        verbose=True,
+        allow_delegation=False,
+        llm=llm
+    )
+    
+    return resume_improver
+
+
+def create_resume_finalizer_agent():
+    """
+    Create a resume finalizer agent specialized in generating improved resume versions.
+    
+    Returns:
+        Agent: Configured CrewAI resume finalizer agent
+    """
+    # Setup the language model
+    llm = setup_llm()
+    
+    # Create resume finalizer agent
+    resume_finalizer = Agent(
+        role="Resume Generator",
+        goal="Use improvement suggestions to generate the enhanced final version of the resume",
+        backstory="""You are a professional resume formatting expert and content writer who 
+        specializes in creating polished, ATS-optimized resumes. You excel at implementing 
+        improvement suggestions while maintaining professional formatting, ensuring proper 
+        keyword density, and creating compelling content that highlights candidate strengths 
+        effectively.""",
+        verbose=True,
+        allow_delegation=False,
+        llm=llm
+    )
+    
+    return resume_finalizer
+
+
+def create_research_task(query: str, agent: Agent):
+    """
+    Create a research task for the given query and agent.
+    
+    Args:
+        query (str): User's input query to be analyzed
+        agent (Agent): The agent that will execute this task
+        
+    Returns:
+        Task: Configured CrewAI task
+    """
+    # Create task with specific description and expected output
+    research_task = Task(
+        description=f"""
+        Analyze and provide a comprehensive answer to the following query: "{query}"
+        
+        Your response should:
+        1. Directly address the user's question or request
+        2. Provide accurate and up-to-date information
+        3. Be well-structured and easy to understand
+        4. Include relevant examples or actionable advice when appropriate
+        5. Be concise yet thorough
+        
+        If the query is unclear or needs clarification, acknowledge this and provide 
+        the best possible interpretation along with your response.
+        """,
+        expected_output="""A clear, comprehensive, and helpful response that directly 
+        addresses the user's query with accurate information and actionable insights.""",
+        agent=agent
+    )
+    
+    return research_task
+
+
+def create_resume_matching_task(resume: str, job_description: str, agent: Agent):
+    """
+    Create a resume matching task to analyze compatibility between resume and job description.
+    
+    Args:
+        resume (str): The candidate's resume content
+        job_description (str): The job description to match against
+        agent (Agent): The resume matcher agent that will execute this task
+        
+    Returns:
+        Task: Configured CrewAI resume matching task
+    """
+    matching_task = Task(
+        description=f"""
+        Analyze the compatibility between the provided resume and job description.
+        
+        RESUME:
+        {resume}
+        
+        JOB DESCRIPTION:
+        {job_description}
+        
+        Your analysis should include:
+        1. Overall match percentage (0-100%)
+        2. Skills analysis:
+           - Required skills present in resume
+           - Required skills missing from resume
+           - Additional relevant skills in resume
+        3. Experience analysis:
+           - Years of experience match
+           - Industry experience relevance
+           - Role level compatibility
+        4. Education and certification analysis
+        5. Key gaps that need to be addressed
+        6. ATS optimization assessment
+        7. Specific recommendations for improvement areas
+        
+        Provide a detailed, structured analysis that will be used by the next agent 
+        to suggest specific improvements.
+        """,
+        expected_output="""A comprehensive analysis report including:
+        - Match percentage with justification
+        - Detailed skills gap analysis
+        - Experience and qualification assessment
+        - Specific areas needing improvement
+        - ATS compatibility score and recommendations""",
+        agent=agent
+    )
+    
+    return matching_task
+
+
+def create_resume_improvement_task(agent: Agent):
+    """
+    Create a resume improvement task that builds on the matching analysis.
+    
+    Args:
+        agent (Agent): The resume improver agent that will execute this task
+        
+    Returns:
+        Task: Configured CrewAI resume improvement task
+    """
+    improvement_task = Task(
+        description="""
+        Based on the previous resume matching analysis, provide specific, actionable 
+        improvement suggestions for the resume.
+        
+        Your suggestions should include:
+        1. Content improvements:
+           - Skills to add or emphasize
+           - Experience descriptions to enhance
+           - Keywords to incorporate for ATS optimization
+           - Quantifiable achievements to highlight
+        2. Structure improvements:
+           - Section reorganization recommendations
+           - Format optimization for ATS parsing
+           - Length and readability enhancements
+        3. Industry-specific customizations:
+           - Role-specific terminology to include
+           - Industry buzzwords and trends
+           - Certification or skill priorities
+        4. Gap-filling strategies:
+           - How to address missing requirements
+           - Ways to reframe existing experience
+           - Suggestions for skill development
+        
+        Provide concrete, implementable suggestions that the next agent can use 
+        to generate an improved resume version.
+        """,
+        expected_output="""Detailed improvement recommendations including:
+        - Specific content additions and modifications
+        - Structural and formatting suggestions
+        - ATS optimization strategies
+        - Industry-specific customizations
+        - Implementation priority ranking""",
+        agent=agent
+    )
+    
+    return improvement_task
+
+
+def create_resume_generation_task(original_resume: str, agent: Agent):
+    """
+    Create a resume generation task that produces the final improved resume.
+    
+    Args:
+        original_resume (str): The original resume content
+        agent (Agent): The resume finalizer agent that will execute this task
+        
+    Returns:
+        Task: Configured CrewAI resume generation task
+    """
+    generation_task = Task(
+        description=f"""
+        Using the original resume and the improvement suggestions from the previous analysis, 
+        generate an enhanced version of the resume.
+        
+        ORIGINAL RESUME:
+        {original_resume}
+        
+        Requirements for the improved resume:
+        1. Implement all feasible improvement suggestions
+        2. Maintain professional formatting and structure
+        3. Ensure ATS compatibility with proper keyword density
+        4. Preserve original qualifications while enhancing presentation
+        5. Add relevant keywords and industry terminology
+        6. Quantify achievements where possible
+        7. Improve action verbs and impact statements
+        8. Ensure logical flow and readability
+        
+        Generate a complete, polished resume that addresses the identified gaps 
+        and incorporates the suggested improvements while maintaining authenticity.
+        """,
+        expected_output="""A complete, improved resume that:
+        - Addresses the skill gaps identified in the analysis
+        - Incorporates ATS optimization improvements
+        - Features enhanced content and formatting
+        - Maintains professional standards and authenticity
+        - Is ready for job application submission""",
+        agent=agent
+    )
+    
+    return generation_task
+
+
+def run_crew_ai(query: str) -> str:
+    """
+    Execute CrewAI workflow to process and answer the user query.
+    
+    Args:
+        query (str): User's input query
+        
+    Returns:
+        str: AI-generated response from the researcher agent
+    """
+    try:
+        print(f"Processing query with CrewAI: {query}")
+        
+        # Create the researcher agent
+        researcher_agent = create_researcher_agent()
+        
+        # Create the research task
+        research_task = create_research_task(query, researcher_agent)
+        
+        # Create and configure the crew
+        crew = Crew(
+            agents=[researcher_agent],
+            tasks=[research_task],
+            verbose=True
+        )
+        
+        # Execute the crew workflow
+        result = crew.kickoff()
+        
+        # Extract the response from the result
+        response = str(result)
+        
+        print(f"CrewAI processing completed successfully")
+        return response
+        
+    except Exception as e:
+        print(f"Error in CrewAI processing: {e}")
+        # Return a fallback response in case of errors
+        return f"I apologize, but I encountered an error while processing your query: {str(e)}. Please try again or rephrase your question."
+
+
+def run_resume_enhancement_crew(resume: str, job_description: str) -> str:
+    """
+    Execute CrewAI workflow for resume enhancement with 3-agent chain.
+    
+    Args:
+        resume (str): The candidate's resume content
+        job_description (str): The job description to match against
+        
+    Returns:
+        str: Enhanced resume generated by the 3-agent chain
+    """
+    try:
+        print(f"Starting resume enhancement with CrewAI...")
+        print(f"Resume length: {len(resume)} characters")
+        print(f"Job description length: {len(job_description)} characters")
+        
+        # Create the three agents
+        print("Creating resume enhancement agents...")
+        resume_matcher = create_resume_matcher_agent()
+        resume_improver = create_resume_improver_agent()
+        resume_finalizer = create_resume_finalizer_agent()
+        
+        # Create the three tasks in sequence
+        print("Creating sequential tasks...")
+        matching_task = create_resume_matching_task(resume, job_description, resume_matcher)
+        improvement_task = create_resume_improvement_task(resume_improver)
+        generation_task = create_resume_generation_task(resume, resume_finalizer)
+        
+        # Set up task dependencies (each task uses output from previous)
+        improvement_task.context = [matching_task]
+        generation_task.context = [matching_task, improvement_task]
+        
+        # Create and configure the crew with all agents and tasks
+        print("Configuring crew with sequential execution...")
+        crew = Crew(
+            agents=[resume_matcher, resume_improver, resume_finalizer],
+            tasks=[matching_task, improvement_task, generation_task],
+            verbose=True,
+            process="sequential"  # Ensure tasks run in order
+        )
+        
+        # Execute the crew workflow
+        print("Executing resume enhancement workflow...")
+        result = crew.kickoff()
+        
+        # Extract the final enhanced resume
+        enhanced_resume = str(result)
+        
+        print(f"Resume enhancement completed successfully")
+        print(f"Enhanced resume length: {len(enhanced_resume)} characters")
+        return enhanced_resume
+        
+    except Exception as e:
+        print(f"Error in resume enhancement processing: {e}")
+        # Return a fallback response in case of errors
+        return f"I apologize, but I encountered an error while enhancing your resume: {str(e)}. Please try again with a different resume or job description."
+
+
+# Example usage functions for testing
+async def test_crew_ai():
+    """Test function to verify CrewAI setup is working correctly."""
+    test_query = "What are the benefits of using Python for web development?"
+    response = run_crew_ai(test_query)
+    print(f"Test Query: {test_query}")
+    print(f"Response: {response}")
+    return response
+
+
+async def test_resume_enhancement():
+    """Test function to verify resume enhancement workflow."""
+    test_resume = """
+    John Doe
+    Software Developer
+    Email: john.doe@email.com
+    Phone: (555) 123-4567
+    
+    EXPERIENCE:
+    Software Developer at TechCorp (2020-2023)
+    - Developed web applications
+    - Worked with Python and JavaScript
+    - Collaborated with team members
+    
+    EDUCATION:
+    Bachelor's in Computer Science, University XYZ (2016-2020)
+    
+    SKILLS:
+    Python, JavaScript, HTML, CSS
+    """
+    
+    test_job_description = """
+    Senior Full Stack Developer
+    
+    We are looking for an experienced Full Stack Developer to join our team.
+    
+    Requirements:
+    - 5+ years of experience in web development
+    - Strong proficiency in Python, JavaScript, React, Node.js
+    - Experience with databases (SQL, MongoDB)
+    - Knowledge of cloud platforms (AWS, Azure)
+    - Experience with DevOps practices
+    - Strong problem-solving skills
+    - Bachelor's degree in Computer Science or related field
+    
+    Responsibilities:
+    - Design and develop scalable web applications
+    - Collaborate with cross-functional teams
+    - Implement best practices for code quality
+    - Mentor junior developers
+    """
+    
+    enhanced_resume = run_resume_enhancement_crew(test_resume, test_job_description)
+    print(f"Original Resume Length: {len(test_resume)}")
+    print(f"Enhanced Resume Length: {len(enhanced_resume)}")
+    print(f"Enhanced Resume Preview: {enhanced_resume[:500]}...")
+    return enhanced_resume

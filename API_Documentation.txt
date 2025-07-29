@@ -1,0 +1,386 @@
+JobMitra Backend API Documentation
+==========================================
+
+Base URL: http://localhost:8000
+API Version: v2.0.0
+
+==========================================
+CORE AI ENDPOINTS
+==========================================
+
+1. POST /ask
+   Description: Process user queries using AI agents powered by CrewAI
+   Request Body: {"query": "string"}
+   Response: {"response": "string", "timestamp": "datetime"}
+   Example: POST /ask {"query": "What are Python best practices?"}
+
+2. GET /
+   Description: Health check endpoint for the main application
+   Response: {"message": "string", "version": "string", "status": "string", "timestamp": "datetime"}
+
+3. GET /logs
+   Description: Retrieve recent AI query logs
+   Query Params: ?limit=10
+   Response: {"logs": "array", "count": "number", "timestamp": "datetime"}
+
+==========================================
+USER MANAGEMENT ENDPOINTS
+==========================================
+
+4. POST /api/v1/users
+   Description: Create a new user profile
+   Request Body: {
+     "user_id": "string",
+     "email": "string", 
+     "full_name": "string",
+     "phone": "string (optional)",
+     "current_job_title": "string (optional)",
+     "skills": "array (optional)"
+   }
+   Response: {"message": "string", "user_id": "string"}
+
+5. GET /api/v1/users/{user_id}
+   Description: Get user profile by ID
+   Path Params: user_id (string)
+   Response: {UserProfile object with all profile data}
+
+6. PUT /api/v1/users/{user_id}
+   Description: Update user profile
+   Path Params: user_id (string)
+   Request Body: {
+     "full_name": "string (optional)",
+     "phone": "string (optional)",
+     "current_job_title": "string (optional)",
+     "desired_job_title": "string (optional)", 
+     "skills": "array (optional)",
+     "professional_summary": "string (optional)"
+   }
+   Response: {"message": "string"}
+
+==========================================
+JOB MANAGEMENT ENDPOINTS
+==========================================
+
+7. POST /api/v1/jobs/search
+   Description: Search for jobs with advanced filters
+   Request Body: {
+     "query": "string (optional)",
+     "skills": "array (optional)",
+     "location_type": "string (optional)", // remote, onsite, hybrid
+     "experience_level": "string (optional)", // entry, mid, senior, lead, executive
+     "limit": "number (default: 20)"
+   }
+   Response: {"jobs": "array", "count": "number", "query": "string", "filters": "object"}
+
+8. GET /api/v1/jobs/{job_id}
+   Description: Get specific job details by ID
+   Path Params: job_id (string)
+   Response: {JobListing object with full job details}
+   Note: Currently returns placeholder - implementation needed
+
+==========================================
+APPLICATION MANAGEMENT ENDPOINTS
+==========================================
+
+9. POST /api/v1/applications
+   Description: Create a new job application
+   Request Body: {
+     "user_id": "string",
+     "job_id": "string",
+     "cover_letter": "string (optional)",
+     "custom_answers": "object (optional)" // key-value pairs for custom questions
+   }
+   Response: {"message": "string", "application_id": "string"}
+
+10. GET /api/v1/users/{user_id}/applications
+    Description: Get all applications for a specific user
+    Path Params: user_id (string)
+    Query Params: ?limit=20 (default: 20, max: 100)
+    Response: {"applications": "array", "count": "number", "user_id": "string"}
+
+==========================================
+MOCK INTERVIEW ENDPOINTS
+==========================================
+
+11. POST /api/v1/mock-interviews
+    Description: Create a new mock interview session
+    Request Body: {
+      "user_id": "string",
+      "skill": "string", // e.g., "Python", "JavaScript", "Communication"
+      "difficulty_level": "string" // beginner, intermediate, advanced (default: intermediate)
+    }
+    Response: {"message": "string", "session_id": "string"}
+
+12. GET /api/v1/users/{user_id}/mock-interviews
+    Description: Get mock interview history for a user
+    Path Params: user_id (string)
+    Query Params: ?limit=10 (default: 10, max: 50)
+    Response: {"interviews": "array", "count": "number", "user_id": "string"}
+
+==========================================
+DASHBOARD ENDPOINTS
+==========================================
+
+13. GET /api/v1/users/{user_id}/dashboard
+    Description: Get comprehensive dashboard data for a user
+    Path Params: user_id (string)
+    Response: {
+      "user_id": "string",
+      "stats": "array", // Dashboard statistics
+      "recent_activities": "array", // Recent user activities
+      "applications_count": "number",
+      "interviews_scheduled": "number", 
+      "mock_interviews_completed": "number",
+      "profile_completion": "number", // percentage 0-100
+      "matching_jobs_count": "number",
+      "last_updated": "datetime"
+    }
+
+==========================================
+LEARNING RESOURCES ENDPOINTS
+==========================================
+
+14. GET /api/v1/learning-resources
+    Description: Get learning resources with optional filters
+    Query Params: 
+      ?skill=Python (optional) // Filter by skill name
+      ?level=beginner (optional) // beginner, intermediate, advanced
+      ?limit=20 (default: 20, max: 100)
+    Response: {
+      "resources": "array", // Array of learning resource objects
+      "count": "number",
+      "filters": {"skill": "string", "level": "string"}
+    }
+
+15. GET /api/v1/users/{user_id}/progress
+    Description: Get user learning progress and achievements
+    Path Params: user_id (string)
+    Response: {
+      "user_id": "string",
+      "skill_levels": "object", // skill -> level mapping
+      "completed_resources": "array", // Array of completed resource IDs
+      "bookmarked_resources": "array", // Array of bookmarked resource IDs
+      "assessment_scores": "object", // skill -> latest score mapping
+      "total_assessments": "number",
+      "learning_goals": "array",
+      "target_skills": "array",
+      "total_learning_hours": "number",
+      "streak_days": "number",
+      "last_activity": "datetime"
+    }
+
+==========================================
+ANALYTICS ENDPOINTS
+==========================================
+
+16. GET /api/v1/analytics/summary
+    Description: Get system-wide analytics summary
+    Response: {
+      "total_users": "number",
+      "total_jobs": "number", 
+      "total_applications": "number",
+      "total_mock_interviews": "number",
+      "message": "string"
+    }
+    Note: Currently returns placeholder data - full implementation needed
+
+==========================================
+HEALTH CHECK ENDPOINTS
+==========================================
+
+17. GET /api/v1/health
+    Description: Extended health check for all API features
+    Response: {
+      "status": "string", // healthy, degraded, unhealthy
+      "timestamp": "datetime",
+      "api_version": "string",
+      "features": "array" // List of available features
+    }
+
+==========================================
+HTTP STATUS CODES
+==========================================
+
+200 OK - Successful request
+400 Bad Request - Invalid input or missing required fields
+404 Not Found - Resource not found
+500 Internal Server Error - Server error or processing failure
+
+==========================================
+AUTHENTICATION
+==========================================
+
+Currently: No authentication required (development mode)
+Production: Will require JWT tokens or API keys
+
+==========================================
+RATE LIMITING
+==========================================
+
+Currently: No rate limiting (development mode)
+Production: Will implement rate limiting per user/IP
+
+==========================================
+ERROR RESPONSE FORMAT
+==========================================
+
+All error responses follow this format:
+{
+  "detail": "string" // Error message describing what went wrong
+}
+
+==========================================
+DATA TYPES REFERENCE
+==========================================
+
+UserProfile Object:
+- user_id: string (unique identifier)
+- email: string (email address)
+- full_name: string
+- phone: string (optional)
+- location: Location object (optional)
+- current_job_title: string (optional)
+- desired_job_title: string (optional)
+- experience_years: string (e.g., "2-3", "4-5")
+- skills: array of strings
+- certifications: array of strings
+- area_of_expertise: array of strings
+- professional_summary: string (optional)
+- social_links: SocialLinks object (optional)
+- profile_completion_percentage: number (0-100)
+- profile_views: number
+- last_active: datetime
+- is_active: boolean
+- is_public: boolean
+
+JobListing Object:
+- job_id: string (unique identifier)
+- title: string
+- company: CompanyInfo object
+- location: Location object
+- salary: SalaryRange object (optional)
+- description: string
+- short_description: string
+- requirements: array of JobRequirement objects
+- benefits: array of JobBenefit objects
+- skills: array of strings
+- experience_level: string (entry, mid, senior, lead, executive)
+- employment_type: string (full-time, part-time, contract, internship)
+- department: string
+- hr_contact: HRContact object (optional)
+- posted_date: datetime
+- application_deadline: datetime (optional)
+- is_active: boolean
+- tags: array of strings
+
+JobApplication Object:
+- application_id: string (unique identifier)
+- user_id: string
+- job_id: string
+- cover_letter: string (optional)
+- resume_version: string (optional)
+- custom_answers: object (key-value pairs)
+- current_status: string (draft, submitted, under_review, etc.)
+- status_history: array of ApplicationStatus objects
+- submitted_at: datetime (optional)
+- interview_dates: array of datetimes
+- interview_feedback: string (optional)
+- match_percentage: number (0-100, optional)
+
+MockInterviewSession Object:
+- session_id: string (unique identifier)
+- user_id: string
+- skill: string
+- difficulty_level: string (beginner, intermediate, advanced)
+- duration_minutes: number
+- questions: array of MockInterviewQuestion objects
+- user_responses: object (question_id -> response mapping)
+- overall_score: number (0-100, optional)
+- skill_scores: object (skill -> score mapping)
+- feedback: string (optional)
+- improvement_suggestions: array of strings
+- status: string (scheduled, in_progress, completed, cancelled)
+- started_at: datetime (optional)
+- completed_at: datetime (optional)
+
+LearningResource Object:
+- resource_id: string (unique identifier)
+- title: string
+- description: string
+- url: string (HTTP URL)
+- resource_type: string (video, article, course, tutorial, documentation)
+- skill: string
+- level: string (beginner, intermediate, advanced)
+- duration_minutes: number (optional)
+- provider: string (e.g., "YouTube", "Coursera")
+- rating: number (0-5, optional)
+- language: string (default: "English")
+- view_count: number
+- tags: array of strings
+- prerequisites: array of strings
+
+==========================================
+EXAMPLES
+==========================================
+
+Example 1: Create a user
+POST /api/v1/users
+{
+  "user_id": "john_doe_123",
+  "email": "john@example.com",
+  "full_name": "John Doe",
+  "phone": "+1-555-0123",
+  "current_job_title": "Software Developer",
+  "skills": ["Python", "JavaScript", "React"]
+}
+
+Example 2: Search for jobs
+POST /api/v1/jobs/search
+{
+  "query": "python developer",
+  "skills": ["Python", "Django"],
+  "location_type": "remote",
+  "experience_level": "mid",
+  "limit": 10
+}
+
+Example 3: Create job application
+POST /api/v1/applications
+{
+  "user_id": "john_doe_123",
+  "job_id": "senior-software-engineer",
+  "cover_letter": "I am interested in this position...",
+  "custom_answers": {
+    "why_interested": "I love working with AI technologies",
+    "availability": "I can start in 2 weeks"
+  }
+}
+
+Example 4: Start mock interview
+POST /api/v1/mock-interviews
+{
+  "user_id": "john_doe_123", 
+  "skill": "Python",
+  "difficulty_level": "intermediate"
+}
+
+Example 5: Get learning resources
+GET /api/v1/learning-resources?skill=Python&level=beginner&limit=5
+
+==========================================
+NOTES
+==========================================
+
+1. All datetime fields are in ISO 8601 format (e.g., "2024-01-15T10:30:00")
+2. All endpoints return JSON responses
+3. Content-Type should be "application/json" for POST/PUT requests
+4. The API uses async operations for optimal performance
+5. MongoDB is used as the backend database
+6. CrewAI integration is available through the /ask endpoint
+7. All user data is validated using Pydantic models
+8. Database indexes are automatically created for optimal performance
+9. Sample data can be seeded using the seed_data.py script
+10. Comprehensive testing is available through test_api.py
+
+For interactive API documentation, visit: http://localhost:8000/docs
+For alternative documentation format, visit: http://localhost:8000/redoc
