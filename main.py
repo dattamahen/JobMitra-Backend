@@ -6,13 +6,14 @@ Provides REST API endpoints for query processing with AI agents.
 import os
 from datetime import datetime
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 
 # Import our custom modules
-from crew_agent import run_crew_ai, run_resume_enhancement_crew
-from db import db, log_to_db
+from crew_agent_simple import run_crew_ai, run_resume_enhancement_crew
+from db_simple import db, log_to_db  # Simplified MongoDB database
 from api_routes import router as api_router
 
 
@@ -123,9 +124,108 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:4200",  # Angular default port
+        "http://localhost:3000",  # Alternative frontend port
+        "http://127.0.0.1:4200",  # Alternative localhost format
+        "http://127.0.0.1:3000",  # Alternative localhost format
+    ],
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+    allow_headers=["*"],
+)
+
 # Include additional API routes
 app.include_router(api_router, prefix="/api/v1")
 
+# Simple dashboard endpoint for testing CORS
+@app.get("/api/v1/dashboard", tags=["Dashboard"])
+async def get_dashboard():
+    """Dashboard endpoint that returns data compatible with Angular frontend."""
+    from datetime import datetime
+    
+    return {
+        "stats": [
+            {
+                "id": "applications",
+                "label": "Applications Sent",
+                "value": 12,
+                "icon": "send",
+                "color": "primary",
+                "trend": {
+                    "direction": "up",
+                    "percentage": 15,
+                    "period": "this week"
+                }
+            },
+            {
+                "id": "interviews",
+                "label": "Interviews Scheduled", 
+                "value": 3,
+                "icon": "event",
+                "color": "accent",
+                "trend": {
+                    "direction": "up",
+                    "percentage": 50,
+                    "period": "this week"
+                }
+            },
+            {
+                "id": "total-jobs",
+                "label": "Total Jobs Available",
+                "value": 150,
+                "icon": "work",
+                "color": "info",
+                "trend": {
+                    "direction": "neutral",
+                    "percentage": 0,
+                    "period": "this week"
+                }
+            },
+            {
+                "id": "profile-completion",
+                "label": "Profile Completion",
+                "value": "85%",
+                "icon": "account_circle",
+                "color": "success",
+                "trend": {
+                    "direction": "up",
+                    "percentage": 10,
+                    "period": "this week"
+                }
+            }
+        ],
+        "recentActivities": [
+            {
+                "id": "1",
+                "title": "Applied to Software Engineer position at TechCorp",
+                "icon": "send",
+                "timestamp": datetime.now().isoformat(),
+                "type": "application",
+                "status": "pending"
+            },
+            {
+                "id": "2", 
+                "title": "Completed mock interview for Backend Developer role",
+                "icon": "quiz",
+                "timestamp": datetime.now().isoformat(),
+                "type": "interview",
+                "status": "completed"
+            },
+            {
+                "id": "3",
+                "title": "Updated resume with new skills",
+                "icon": "description",
+                "timestamp": datetime.now().isoformat(), 
+                "type": "resume",
+                "status": "completed"
+            }
+        ],
+        "lastUpdated": datetime.now().isoformat()
+    }
 
 # Health check endpoint
 @app.get("/", tags=["Health"])
@@ -138,9 +238,23 @@ async def root():
     """
     return {
         "message": "JobMitra Backend API is running",
-        "version": "1.0.0",
+        "version": "2.0.0",
         "status": "healthy",
-        "timestamp": datetime.utcnow()
+        "timestamp": datetime.utcnow(),
+        "cors_enabled": True
+    }
+
+
+# CORS test endpoint
+@app.get("/cors-test", tags=["Health"])
+async def cors_test():
+    """
+    Simple endpoint to test CORS configuration.
+    """
+    return {
+        "message": "CORS is working!",
+        "timestamp": datetime.utcnow(),
+        "access_from": "Angular frontend should be able to access this"
     }
 
 
@@ -176,27 +290,30 @@ async def ask_question(request: QueryRequest):
         user_query = request.query.strip()
         print(f"Received query: {user_query}")
         
-        # Process query using CrewAI
+        # Process query using AI agents
         print("Processing query with AI agents...")
         ai_response = run_crew_ai(user_query)
         
-        if not ai_response:
+        if not ai_response or not ai_response.get("answer"):
             raise HTTPException(
                 status_code=500,
                 detail="Failed to generate AI response"
             )
         
+        # Extract the answer from the AI response
+        answer = ai_response.get("answer", "No response generated")
+        
         # Log interaction to database (non-blocking)
         print("Logging interaction to database...")
         try:
-            await log_to_db(user_query, ai_response)
+            await log_to_db(user_query, answer, ai_response.get("metadata", {}))
         except Exception as db_error:
             # Log database error but don't fail the request
             print(f"Database logging failed: {db_error}")
         
         # Return successful response
         response = QueryResponse(
-            response=ai_response,
+            response=answer,
             timestamp=datetime.utcnow()
         )
         
@@ -259,31 +376,31 @@ async def enhance_resume(request: ResumeEnhanceRequest):
         print(f"Resume length: {len(resume_content)} characters")
         print(f"Job description length: {len(job_desc_content)} characters")
         
-        # Process resume enhancement using CrewAI 3-agent workflow
+        # Process resume enhancement using AI agents
         print("Processing resume enhancement with AI agents...")
-        enhanced_resume = run_resume_enhancement_crew(resume_content, job_desc_content)
+        enhancement_result = run_resume_enhancement_crew(resume_content, job_desc_content)
         
-        if not enhanced_resume:
+        if not enhancement_result or not enhancement_result.get("enhanced_resume"):
             raise HTTPException(
                 status_code=500,
                 detail="Failed to generate enhanced resume"
             )
         
+        enhanced_resume = enhancement_result.get("enhanced_resume", "Enhancement failed")
+        
         # Log resume enhancement to database (non-blocking)
         print("Logging resume enhancement to database...")
         try:
-            # Create a log entry for resume enhancement
-            resume_log_data = {
-                "original_resume": resume_content,
-                "job_description": job_desc_content,
-                "enhanced_resume": enhanced_resume,
-                "timestamp": datetime.utcnow(),
-                "process_type": "resume_enhancement"
-            }
-            
-            # Log to resume_logs collection
-            collection = db.database["resume_logs"]
-            await collection.insert_one(resume_log_data)
+            # Use the mock database logging function
+            await log_to_db(
+                f"Resume Enhancement Request", 
+                enhanced_resume,
+                {
+                    "original_resume_length": len(resume_content),
+                    "job_description_length": len(job_desc_content),
+                    "process_type": "resume_enhancement"
+                }
+            )
             
         except Exception as db_error:
             # Log database error but don't fail the request
@@ -328,9 +445,8 @@ async def get_recent_logs(limit: int = 10):
         elif limit < 1:
             limit = 10
             
-        # Import here to avoid circular imports
-        from db import get_query_logs
-        
+        # Import the function from db_simple
+        from db_simple import get_query_logs
         logs = await get_query_logs(limit)
         
         return {
@@ -366,18 +482,16 @@ async def get_recent_resume_logs(limit: int = 10):
         elif limit < 1:
             limit = 10
         
-        # Get resume logs from database
-        collection = db.database["resume_logs"]
-        cursor = collection.find().sort("timestamp", -1).limit(limit)
-        resume_logs = await cursor.to_list(length=limit)
+        # Get all logs and filter for resume enhancement
+        from db_simple import get_query_logs
+        all_logs = await get_query_logs(100)  # Get more logs to filter
         
-        # Convert ObjectId to string for JSON serialization
-        for log in resume_logs:
-            log["_id"] = str(log["_id"])
+        resume_logs = [log for log in all_logs if 
+                      log.get("metadata", {}).get("process_type") == "resume_enhancement"]
         
         return {
-            "resume_logs": resume_logs,
-            "count": len(resume_logs),
+            "resume_logs": resume_logs[-limit:],
+            "count": len(resume_logs[-limit:]),
             "timestamp": datetime.utcnow()
         }
         

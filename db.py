@@ -8,22 +8,24 @@ from datetime import datetime
 from motor.motor_asyncio import AsyncIOMotorClient
 from typing import Optional, Dict, Any, List
 from pymongo import IndexModel
-from schemas import (
-    COLLECTION_NAMES, 
-    get_indexes,
-    UserProfile,
-    JobListing,
-    JobApplication,
-    Resume,
-    MockInterviewSession,
-    LearningResource,
-    SkillAssessment,
-    UserProgress,
-    UserSubscription,
-    UserDashboard,
-    QueryLog,
-    SystemConfig
-)
+
+# Temporarily comment out schemas import to avoid dependency issues
+# from schemas import (
+#     COLLECTION_NAMES, 
+#     get_indexes,
+#     UserProfile,
+#     JobListing,
+#     JobApplication,
+#     Resume,
+#     MockInterviewSession,
+#     LearningResource,
+#     SkillAssessment,
+#     UserProgress,
+#     UserSubscription,
+#     UserDashboard,
+#     QueryLog,
+#     SystemConfig
+# )
 
 
 class Database:
@@ -64,26 +66,8 @@ class Database:
     async def setup_indexes(self):
         """Setup database indexes for performance optimization."""
         try:
-            indexes = get_indexes()
-            
-            for collection_name, index_list in indexes.items():
-                collection = self.database[collection_name]
-                
-                # Create indexes
-                index_models = []
-                for index_spec in index_list:
-                    if isinstance(index_spec[0], tuple):
-                        # Multi-field index
-                        index_models.append(IndexModel(index_spec))
-                    else:
-                        # Single field index
-                        index_models.append(IndexModel([(field, direction) for field, direction in [index_spec]]))
-                
-                if index_models:
-                    await collection.create_indexes(index_models)
-                    print(f"Created {len(index_models)} indexes for {collection_name}")
-            
-            print("Database indexes setup completed")
+            # Temporarily disable index setup due to schemas dependency
+            print("Skipping index setup for now - will be implemented later")
             
         except Exception as e:
             print(f"Error setting up indexes: {e}")

@@ -9,7 +9,7 @@ from fastapi import APIRouter, HTTPException, Query, Depends
 from pydantic import BaseModel
 
 # Import database functions
-from db import (
+from db_simple import (
     create_user_profile, get_user_profile, update_user_profile,
     search_jobs, create_job_listing,
     create_job_application, get_user_applications,
@@ -18,11 +18,11 @@ from db import (
     get_learning_resources, get_user_progress
 )
 
-# Import schemas
-from schemas import (
-    UserProfile, JobListing, JobApplication, MockInterviewSession,
-    LearningResource, UserDashboard, UserProgress
-)
+# Import schemas - commented out for now since using mock data
+# from schemas import (
+#     UserProfile, JobListing, JobApplication, MockInterviewSession,
+#     LearningResource, UserDashboard, UserProgress
+# )
 
 
 # Router for organizing endpoints
