@@ -12,6 +12,7 @@ from db_simple import db
 from endpoints import router as core_router
 from dashboard_endpoints import router as dashboard_router
 from api_routes import router as api_router
+from auth_endpoints import auth_router
 
 
 @asynccontextmanager
@@ -66,6 +67,7 @@ def create_app() -> FastAPI:
     app.include_router(core_router, prefix="")  # Core endpoints (ask, resume-enhance, logs)
     app.include_router(dashboard_router, prefix="/api/v1")  # Dashboard and profile endpoints
     app.include_router(api_router, prefix="/api/v1")  # Additional API routes
+    app.include_router(auth_router, prefix="/api/v1")  # Authentication routes
 
     # Health check endpoint
     @app.get("/", tags=["Health"])

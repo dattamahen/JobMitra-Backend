@@ -8,6 +8,9 @@ from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, HTTPException, Query, Depends
 from pydantic import BaseModel
 
+# Import authentication router
+from auth_endpoints import auth_router
+
 # Import database functions
 from db_simple import (
     create_user_profile, get_user_profile, update_user_profile,
