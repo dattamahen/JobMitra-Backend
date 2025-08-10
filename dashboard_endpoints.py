@@ -3,16 +3,29 @@ Dashboard and Profile API endpoints.
 """
 
 from datetime import datetime
-from fastapi import APIRouter
-
+from fastapi import APIRouter, HTTPException, Depends
+from typing import Optional, List
+from job_db import JobDatabase
 
 # Create router for dashboard and profile endpoints
 router = APIRouter()
+
+# Initialize job database
+job_db = JobDatabase()
 
 
 @router.get("/dashboard", tags=["Dashboard"])
 async def get_dashboard():
     """Dashboard endpoint that returns data compatible with Angular frontend."""
+    
+    try:
+        # Get real job statistics from database
+        total_jobs = await job_db.get_total_job_count()
+        active_jobs = await job_db.get_active_job_count()
+    except Exception as e:
+        # Fallback to mock data if database is not available
+        total_jobs = 150
+        active_jobs = 120
     
     return {
         "stats": [
@@ -43,7 +56,7 @@ async def get_dashboard():
             {
                 "id": "total-jobs",
                 "label": "Total Jobs Available",
-                "value": 150,
+                "value": total_jobs,
                 "icon": "work",
                 "color": "info",
                 "trend": {
@@ -165,6 +178,63 @@ async def get_job_listings(
     job_type: str = None
 ):
     """Get job listings for job search page with pagination and filtering."""
+    
+    try:
+        # Use the real database for job search
+        search_filters = {}
+        
+        if keywords:
+            search_filters["keywords"] = keywords
+        if location and location != "all":
+            search_filters["location"] = location
+        if experience_level and experience_level != "all":
+            search_filters["experience_level"] = experience_level.replace("-", "_")
+        if employment_type and employment_type != "all":
+            search_filters["employment_type"] = employment_type.replace("-", "_")
+        if job_type and job_type != "all":
+            search_filters["job_type"] = job_type.replace("-", "_")
+            
+        # Search jobs using database
+        search_result = await job_db.search_jobs(
+            filters=search_filters,
+            page=page,
+            limit=per_page
+        )
+        
+        return {
+            "jobs": search_result["jobs"],
+            "total_count": search_result["total"],
+            "page": page,
+            "per_page": per_page,
+            "total_pages": (search_result["total"] + per_page - 1) // per_page,
+            "has_next": page * per_page < search_result["total"],
+            "has_prev": page > 1,
+            "filters": {
+                "locations": ["All Locations", "Bangalore", "Mumbai", "Hyderabad", "Remote"],
+                "experience_levels": ["All Levels", "entry", "junior", "mid", "senior", "lead", "executive"],
+                "employment_types": ["All Types", "full_time", "part_time", "contract", "temporary", "internship"],
+                "job_types": ["All Types", "remote", "onsite", "hybrid"],
+                "companies": ["All Companies"],
+                "salary_ranges": [
+                    {"label": "All Ranges", "min": 0, "max": 10000000},
+                    {"label": "₹10-15 LPA", "min": 1000000, "max": 1500000},
+                    {"label": "₹15-20 LPA", "min": 1500000, "max": 2000000},
+                    {"label": "₹20-25 LPA", "min": 2000000, "max": 2500000},
+                    {"label": "₹25+ LPA", "min": 2500000, "max": 10000000}
+                ]
+            }
+        }
+        
+    except Exception as e:
+        print(f"Database error in job search: {e}")
+        # Fallback to mock data if database fails
+        return get_mock_job_listings(page, per_page, keywords, location, experience_level, employment_type, job_type)
+
+
+def get_mock_job_listings(page, per_page, keywords, location, experience_level, employment_type, job_type):
+    """Fallback mock job listings if database is unavailable."""
+def get_mock_job_listings(page, per_page, keywords, location, experience_level, employment_type, job_type):
+    """Fallback mock job listings if database is unavailable."""
     
     # Mock job data (same structure as before but with pagination logic)
     all_jobs = [
