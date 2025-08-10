@@ -70,7 +70,7 @@ def create_app() -> FastAPI:
     app.include_router(dashboard_router, prefix="/api/v1")  # Dashboard and profile endpoints
     app.include_router(api_router, prefix="/api/v1")  # Additional API routes
     app.include_router(auth_router, prefix="/api/v1")  # Authentication routes
-    app.include_router(test_hr_router, prefix="/api/v1")  # Test HR job management routes
+    app.include_router(hr_router, prefix="/api/v1")  # HR job management routes (database-connected)
 
     # Health check endpoint
     @app.get("/", tags=["Health"])

@@ -7,6 +7,9 @@ from fastapi import APIRouter, HTTPException, Depends
 from typing import Optional, List
 from job_db import JobDatabase
 
+# Import HR posted jobs
+from hr_test_endpoints import posted_jobs
+
 # Create router for dashboard and profile endpoints
 router = APIRouter()
 
@@ -201,13 +204,74 @@ async def get_job_listings(
             limit=per_page
         )
         
+        # Convert HR posted jobs to the same format and add them
+        hr_jobs = []
+        for hr_job in posted_jobs:
+            if hr_job.is_active:  # Only include active jobs
+                hr_job_dict = {
+                    "_id": hr_job.id,
+                    "job_id": hr_job.job_id,
+                    "title": hr_job.title,
+                    "company": hr_job.company,
+                    "location": {
+                        "city": hr_job.location.city,
+                        "state": hr_job.location.state,
+                        "country": hr_job.location.country,
+                        "is_remote": hr_job.location.is_remote,
+                        "timezone": hr_job.location.timezone
+                    },
+                    "employment_type": hr_job.employment_type,
+                    "experience_level": hr_job.experience_level,
+                    "salary": {
+                        "min": hr_job.salary.min,
+                        "max": hr_job.salary.max,
+                        "currency": hr_job.salary.currency,
+                        "period": hr_job.salary.period,
+                        "is_negotiable": hr_job.salary.is_negotiable
+                    },
+                    "description": hr_job.description,
+                    "requirements": hr_job.requirements,
+                    "responsibilities": hr_job.responsibilities,
+                    "benefits": hr_job.benefits,
+                    "skills_required": hr_job.skills_required,
+                    "skills_preferred": hr_job.skills_preferred,
+                    "application_deadline": hr_job.application_deadline,
+                    "company_info": {
+                        "company_size": hr_job.company_info.company_size,
+                        "industry": hr_job.company_info.industry,
+                        "website": hr_job.company_info.website,
+                        "description": hr_job.company_info.description
+                    },
+                    "job_type": hr_job.job_type,
+                    "posted_date": hr_job.posted_date,
+                    "updated_date": hr_job.updated_date,
+                    "is_active": hr_job.is_active,
+                    "tags": hr_job.tags,
+                    "views_count": hr_job.views_count,
+                    "applications_count": hr_job.applications_count,
+                    "match_percentage": 85,  # Default match percentage
+                    "hr_contact": {
+                        "name": hr_job.hr_contact.name,
+                        "email": hr_job.hr_contact.email,
+                        "phone": hr_job.hr_contact.phone,
+                        "title": hr_job.hr_contact.title,
+                        "department": hr_job.hr_contact.department
+                    },
+                    "learning_resources": []  # Could be populated if needed
+                }
+                hr_jobs.append(hr_job_dict)
+        
+        # Combine database jobs with HR posted jobs
+        all_jobs = search_result["jobs"] + hr_jobs
+        total_count = search_result["total"] + len(hr_jobs)
+        
         return {
-            "jobs": search_result["jobs"],
-            "total_count": search_result["total"],
+            "jobs": all_jobs,
+            "total_count": total_count,
             "page": page,
             "per_page": per_page,
-            "total_pages": (search_result["total"] + per_page - 1) // per_page,
-            "has_next": page * per_page < search_result["total"],
+            "total_pages": (total_count + per_page - 1) // per_page,
+            "has_next": page * per_page < total_count,
             "has_prev": page > 1,
             "filters": {
                 "locations": ["All Locations", "Bangalore", "Mumbai", "Hyderabad", "Remote"],
