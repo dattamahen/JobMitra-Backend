@@ -24,30 +24,43 @@ async def get_current_hr_user(credentials: HTTPAuthorizationCredentials = Depend
     """Get current authenticated HR user"""
     try:
         token = credentials.credentials
+        print(f"🔍 HR Auth: Received token: {token[:20]}...")
+        
         payload = verify_token(token)
+        print(f"🔍 HR Auth: Token payload: {payload}")
+        
         user_id = payload.get("user_id")
+        print(f"🔍 HR Auth: User ID from token: {user_id}")
         
         if not user_id:
+            print("❌ HR Auth: No user_id in token")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid token"
             )
         
         user = await get_user_by_id(user_id)
+        print(f"🔍 HR Auth: Found user: {user.get('email') if user else 'None'}")
+        
         if not user:
+            print("❌ HR Auth: User not found in database")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="User not found"
             )
         
-        # Check if user has HR role (you can modify this based on your user schema)
-        user_role = user.get("role", "candidate")
-        if user_role not in ["hr", "admin", "recruiter"]:
+        # Check if user has HR role
+        user_type = user.get("user_type", "job_seeker")
+        print(f"🔍 HR Auth: User type: {user_type}")
+        
+        if user_type not in ["hr", "admin"]:
+            print(f"❌ HR Auth: Access denied for user type: {user_type}")
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Access denied. HR privileges required."
             )
         
+        print("✅ HR Auth: Access granted")
         return user
         
     except HTTPException:

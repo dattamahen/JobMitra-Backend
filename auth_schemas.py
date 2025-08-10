@@ -15,12 +15,17 @@ class UserResponse(BaseModel):
     user_id: str
     email: str
     username: str
+    user_type: str = "job_seeker"  # Default to job_seeker
     first_name: str
     last_name: str
+    full_name: Optional[str] = None
+    company_name: Optional[str] = None  # For HR users
     phone: str
     city: str
     state: str
     is_active: bool
+    is_verified: Optional[bool] = False
+    profile_completion: Optional[int] = 0
     created_at: str
 
 class LoginResponse(BaseModel):
@@ -46,12 +51,16 @@ class UserProfileResponse(BaseModel):
     user_id: str
     email: str
     username: str
+    user_type: str = "job_seeker"
+    full_name: Optional[str] = None
+    company_name: Optional[str] = None
     personal_info: Dict[str, Any]
     professional_info: Dict[str, Any]
     preferences: Dict[str, Any]
     social_links: Optional[Dict[str, Any]] = None
     is_active: bool
     is_verified: bool
+    profile_completion: Optional[int] = 0
     created_at: str
     updated_at: str
     last_login: Optional[str]
