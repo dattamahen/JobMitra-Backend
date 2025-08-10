@@ -10,7 +10,7 @@ import jwt
 
 from auth_schemas import (
     LoginRequest, LoginResponse, RegisterRequest, UserResponse,
-    UserProfileUpdateRequest, PasswordChangeRequest
+    UserProfileUpdateRequest, PasswordChangeRequest, UserProfileResponse
 )
 from auth_db import (
     create_user, authenticate_user, get_user_by_id, 
@@ -148,21 +148,23 @@ async def login_user(request: LoginRequest):
             detail="Login failed"
         )
 
-@auth_router.get("/me", response_model=UserResponse)
+@auth_router.get("/me", response_model=UserProfileResponse)
 async def get_current_user_profile(current_user: dict = Depends(get_current_user)):
     """Get current user profile"""
     try:
-        return UserResponse(
+        return UserProfileResponse(
             user_id=current_user["user_id"],
             email=current_user["email"],
             username=current_user["username"],
-            first_name=current_user["personal_info"]["first_name"],
-            last_name=current_user["personal_info"]["last_name"],
-            phone=current_user["personal_info"]["phone"],
-            city=current_user["personal_info"]["location"]["city"],
-            state=current_user["personal_info"]["location"]["state"],
+            personal_info=current_user.get("personal_info", {}),
+            professional_info=current_user.get("professional_info", {}),
+            preferences=current_user.get("preferences", {}),
+            social_links=current_user.get("social_links", {}),
             is_active=current_user["is_active"],
-            created_at=current_user["created_at"]
+            is_verified=current_user.get("is_verified", False),
+            created_at=current_user["created_at"],
+            updated_at=current_user.get("updated_at", current_user["created_at"]),
+            last_login=current_user.get("last_login")
         )
     except Exception as e:
         raise HTTPException(
@@ -203,6 +205,30 @@ async def update_profile(
             update_data["professional_info.current_salary"] = request.current_salary
         if request.expected_salary is not None:
             update_data["professional_info.expected_salary"] = request.expected_salary
+        
+        # Extended Professional Information
+        if request.desired_job_title:
+            update_data["professional_info.desired_job_title"] = request.desired_job_title
+        if request.professional_summary:
+            update_data["professional_info.professional_summary"] = request.professional_summary
+        if request.certifications:
+            update_data["professional_info.certifications"] = request.certifications
+        if request.area_of_expertise:
+            update_data["professional_info.area_of_expertise"] = request.area_of_expertise
+        if request.key_contributions:
+            update_data["professional_info.key_contributions"] = request.key_contributions
+        
+        # Social Links
+        if request.github_url:
+            update_data["social_links.github"] = request.github_url
+        if request.portfolio_url:
+            update_data["social_links.portfolio"] = request.portfolio_url
+        if request.linkedin_url:
+            update_data["social_links.linkedin"] = request.linkedin_url
+        if request.twitter_url:
+            update_data["social_links.twitter"] = request.twitter_url
+        if request.youtube_url:
+            update_data["social_links.youtube"] = request.youtube_url
         
         success = await update_user_profile(current_user["user_id"], update_data)
         
@@ -268,6 +294,25 @@ async def change_password(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to change password"
+        )
+
+@auth_router.post("/logout")
+async def logout_user(current_user: dict = Depends(get_current_user)):
+    """Logout user - invalidates the current session"""
+    try:
+        # In a JWT-based system, logout is mainly handled on the frontend
+        # by removing the token. Here we can log the logout event or 
+        # implement token blacklisting if needed in the future.
+        
+        return {
+            "message": "Logged out successfully",
+            "user_id": current_user["user_id"]
+        }
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Logout failed"
         )
 
 @auth_router.post("/seed-users")

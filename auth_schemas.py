@@ -49,6 +49,7 @@ class UserProfileResponse(BaseModel):
     personal_info: Dict[str, Any]
     professional_info: Dict[str, Any]
     preferences: Dict[str, Any]
+    social_links: Optional[Dict[str, Any]] = None
     is_active: bool
     is_verified: bool
     created_at: str
@@ -57,11 +58,14 @@ class UserProfileResponse(BaseModel):
 
 # User Update Models
 class UserProfileUpdateRequest(BaseModel):
+    # Personal Information
     first_name: Optional[str] = None
     last_name: Optional[str] = None
     phone: Optional[str] = None
     city: Optional[str] = None
     state: Optional[str] = None
+    
+    # Professional Information - Basic
     current_role: Optional[str] = None
     current_company: Optional[str] = None
     total_experience: Optional[str] = None
@@ -69,6 +73,20 @@ class UserProfileUpdateRequest(BaseModel):
     skills: Optional[List[str]] = None
     current_salary: Optional[float] = None
     expected_salary: Optional[float] = None
+    
+    # Professional Information - Extended
+    desired_job_title: Optional[str] = None
+    professional_summary: Optional[str] = None
+    certifications: Optional[List[str]] = None
+    area_of_expertise: Optional[List[str]] = None
+    key_contributions: Optional[str] = None
+    
+    # Social Links
+    github_url: Optional[str] = None
+    portfolio_url: Optional[str] = None
+    linkedin_url: Optional[str] = None
+    twitter_url: Optional[str] = None
+    youtube_url: Optional[str] = None
 
 class PasswordChangeRequest(BaseModel):
     current_password: str
