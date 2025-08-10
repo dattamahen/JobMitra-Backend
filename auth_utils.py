@@ -5,6 +5,7 @@ Authentication utilities for JWT tokens, password hashing, etc.
 import hashlib
 import secrets
 import jwt
+import bcrypt
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
 from fastapi import HTTPException, status
@@ -16,17 +17,21 @@ ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 1440  # 24 hours
 
 def hash_password(password: str) -> str:
-    """Hash password with salt"""
-    salt = secrets.token_hex(16)
-    pwd_hash = hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), salt.encode('utf-8'), 100000)
-    return f"{salt}:{pwd_hash.hex()}"
+    """Hash password with bcrypt"""
+    return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
 
 def verify_password(stored_password: str, provided_password: str) -> bool:
-    """Verify password against stored hash"""
+    """Verify password against stored hash - supports both bcrypt and legacy format"""
     try:
+        # Check if it's a bcrypt hash (starts with $2b$)
+        if stored_password.startswith('$2b$'):
+            return bcrypt.checkpw(provided_password.encode('utf-8'), stored_password.encode('utf-8'))
+        
+        # Legacy format with salt:hash
         salt, pwd_hash = stored_password.split(':')
         return pwd_hash == hashlib.pbkdf2_hmac('sha256', provided_password.encode('utf-8'), salt.encode('utf-8'), 100000).hex()
-    except:
+    except Exception as e:
+        print(f"❌ Password verification error: {e}")
         return False
 
 def create_access_token(data: Dict[str, Any], expires_delta: Optional[timedelta] = None) -> str:

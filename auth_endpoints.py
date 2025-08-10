@@ -84,12 +84,17 @@ async def register_user(request: RegisterRequest):
             user_id=user["user_id"],
             email=user["email"],
             username=user["username"],
+            user_type=user.get("user_type", "job_seeker"),
             first_name=user["personal_info"]["first_name"],
             last_name=user["personal_info"]["last_name"],
+            full_name=f"{user['personal_info']['first_name']} {user['personal_info']['last_name']}",
+            company_name=user.get("company_name"),
             phone=user["personal_info"]["phone"],
             city=user["personal_info"]["location"]["city"],
             state=user["personal_info"]["location"]["state"],
             is_active=user["is_active"],
+            is_verified=user.get("is_verified", False),
+            profile_completion=user.get("profile_completion", 0),
             created_at=user["created_at"]
         )
         
@@ -130,12 +135,17 @@ async def login_user(request: LoginRequest):
                 user_id=user["user_id"],
                 email=user["email"],
                 username=user["username"],
+                user_type=user.get("user_type", "job_seeker"),
                 first_name=user["personal_info"]["first_name"],
                 last_name=user["personal_info"]["last_name"],
+                full_name=f"{user['personal_info']['first_name']} {user['personal_info']['last_name']}",
+                company_name=user.get("company_name"),
                 phone=user["personal_info"]["phone"],
                 city=user["personal_info"]["location"]["city"],
                 state=user["personal_info"]["location"]["state"],
                 is_active=user["is_active"],
+                is_verified=user.get("is_verified", False),
+                profile_completion=user.get("profile_completion", 0),
                 created_at=user["created_at"]
             )
         )
@@ -156,12 +166,16 @@ async def get_current_user_profile(current_user: dict = Depends(get_current_user
             user_id=current_user["user_id"],
             email=current_user["email"],
             username=current_user["username"],
+            user_type=current_user.get("user_type", "job_seeker"),
+            full_name=f"{current_user['personal_info']['first_name']} {current_user['personal_info']['last_name']}",
+            company_name=current_user.get("company_name"),
             personal_info=current_user.get("personal_info", {}),
             professional_info=current_user.get("professional_info", {}),
             preferences=current_user.get("preferences", {}),
             social_links=current_user.get("social_links", {}),
             is_active=current_user["is_active"],
             is_verified=current_user.get("is_verified", False),
+            profile_completion=current_user.get("profile_completion", 0),
             created_at=current_user["created_at"],
             updated_at=current_user.get("updated_at", current_user["created_at"]),
             last_login=current_user.get("last_login")
@@ -245,12 +259,17 @@ async def update_profile(
             user_id=updated_user["user_id"],
             email=updated_user["email"],
             username=updated_user["username"],
+            user_type=updated_user.get("user_type", "job_seeker"),
             first_name=updated_user["personal_info"]["first_name"],
             last_name=updated_user["personal_info"]["last_name"],
+            full_name=f"{updated_user['personal_info']['first_name']} {updated_user['personal_info']['last_name']}",
+            company_name=updated_user.get("company_name"),
             phone=updated_user["personal_info"]["phone"],
             city=updated_user["personal_info"]["location"]["city"],
             state=updated_user["personal_info"]["location"]["state"],
             is_active=updated_user["is_active"],
+            is_verified=updated_user.get("is_verified", False),
+            profile_completion=updated_user.get("profile_completion", 0),
             created_at=updated_user["created_at"]
         )
         
