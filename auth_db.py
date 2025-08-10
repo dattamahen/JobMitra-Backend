@@ -77,30 +77,18 @@ async def create_user(user_data: Dict[str, Any]) -> Dict[str, Any]:
 async def authenticate_user(email: str, password: str) -> Optional[Dict[str, Any]]:
     """Authenticate user with email and password"""
     try:
-        print(f"🔍 Authenticating user: {email}")
         user = await db.database[USERS_COLLECTION].find_one({"email": email})
         
         if not user:
-            print(f"❌ User not found: {email}")
             return None
-        
-        print(f"✅ User found: {email}")
-        print(f"🔍 User has fields: {list(user.keys())}")
         
         # Check both password_hash and password fields for compatibility
         stored_password = user.get("password_hash") or user.get("password")
         if not stored_password:
-            print(f"❌ No password field found for user {email}")
             return None
-        
-        print(f"🔍 Found password field, hash starts with: {stored_password[:20]}...")
-        print(f"🔍 Verifying password: {password}")
         
         if not verify_password(stored_password, password):
-            print(f"❌ Password verification failed for user {email}")
             return None
-        
-        print(f"✅ Password verification successful for user {email}")
             
         # Update last login
         await db.database[USERS_COLLECTION].update_one(

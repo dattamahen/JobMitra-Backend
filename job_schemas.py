@@ -228,6 +228,36 @@ class JobSearchResponse(BaseModel):
     filters: Optional[Dict[str, Any]] = None
 
 
+class HRJobListing(BaseModel):
+    """Simplified schema for HR job listings view"""
+    job_id: str
+    title: str
+    company: str
+    location: str
+    employment_type: str
+    experience_level: str
+    salary_range: Optional[Dict[str, Any]] = None
+    posted_date: datetime
+    application_deadline: Optional[datetime] = None
+    is_active: bool = True
+    applications_count: int = 0
+    views_count: int = 0
+    description: Optional[str] = None
+    requirements: Optional[List[str]] = []
+    skills: Optional[List[str]] = []
+
+
+class HRJobSearchResponse(BaseModel):
+    """Schema for HR job search response with simplified job listings"""
+    jobs: List[HRJobListing]
+    total_count: int
+    page: int
+    per_page: int
+    total_pages: Optional[int] = None
+    has_next: Optional[bool] = None
+    has_prev: Optional[bool] = None
+
+
 class HRJobDashboard(BaseModel):
     """Schema for HR dashboard showing their posted jobs"""
     total_jobs_posted: int

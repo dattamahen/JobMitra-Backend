@@ -102,8 +102,30 @@ class JobDatabase:
             
             jobs = []
             async for job in cursor:
-                job["_id"] = str(job["_id"])
-                jobs.append(job)
+                # Transform job data to match HRJobListing schema
+                hr_job = {
+                    "_id": str(job["_id"]),  # Include the MongoDB _id
+                    "job_id": str(job["_id"]),
+                    "title": job.get("title", ""),
+                    "company": job.get("company", ""),
+                    "location": job.get("location", ""),  # Keep as string for simplicity
+                    "employment_type": job.get("employment_type", "full_time"),
+                    "experience_level": job.get("experience_level", "mid"),
+                    "job_type": job.get("job_type", "onsite"),
+                    "salary_range": job.get("salary_range", {}),
+                    "posted_date": job.get("posted_date", datetime.utcnow()).isoformat() if isinstance(job.get("posted_date"), datetime) else str(job.get("posted_date", datetime.utcnow())),
+                    "application_deadline": job.get("application_deadline"),
+                    "is_active": job.get("is_active", True),
+                    "applications_count": job.get("applications_count", 0),
+                    "views_count": job.get("views_count", 0),
+                    "description": job.get("description", ""),
+                    "requirements": job.get("requirements", []),
+                    "skills": job.get("skills", job.get("skills_required", [])),  # Try both field names
+                    "responsibilities": job.get("responsibilities", []),
+                    "tags": job.get("tags", []),
+                    "posted_by_hr_id": job.get("posted_by_hr_id", hr_user_id)
+                }
+                jobs.append(hr_job)
             
             return {
                 "jobs": jobs,
@@ -117,6 +139,8 @@ class JobDatabase:
             
         except Exception as e:
             print(f"❌ Error getting HR jobs: {e}")
+            import traceback
+            traceback.print_exc()
             return {"jobs": [], "total_count": 0, "page": page, "per_page": per_page}
     
     async def search_jobs(self, filters: JobSearchFilters, page: int = 1, per_page: int = 10) -> Dict[str, Any]:
@@ -247,12 +271,16 @@ class JobDatabase:
     async def get_hr_dashboard(self, hr_user_id: str) -> HRJobDashboard:
         """Get dashboard stats for HR user"""
         try:
+            print(f"🔍 Getting HR dashboard for user: {hr_user_id}")
+            
             # Get all jobs by this HR
             all_jobs = await db.database[self.jobs_collection].find({
                 "posted_by_hr_id": hr_user_id
             }).to_list(None)
             
-            # Calculate stats
+            print(f"📊 Found {len(all_jobs)} jobs for HR user")
+            
+            # Calculate stats from jobs
             total_jobs = len(all_jobs)
             active_jobs = len([job for job in all_jobs if job.get("is_active", True)])
             inactive_jobs = total_jobs - active_jobs
@@ -260,18 +288,24 @@ class JobDatabase:
             
             # Jobs expiring soon (within 7 days)
             cutoff_date = datetime.utcnow() + timedelta(days=7)
-            jobs_expiring_soon = len([
-                job for job in all_jobs 
-                if job.get("application_deadline") and 
-                   datetime.fromisoformat(str(job["application_deadline"])) <= cutoff_date
-            ])
+            jobs_expiring_soon = 0
+            for job in all_jobs:
+                if job.get("application_deadline"):
+                    try:
+                        deadline = job["application_deadline"]
+                        if isinstance(deadline, str):
+                            deadline = datetime.fromisoformat(deadline.replace('Z', '+00:00'))
+                        if deadline <= cutoff_date:
+                            jobs_expiring_soon += 1
+                    except:
+                        continue
             
             # Recent jobs (last 5)
             recent_jobs = sorted(all_jobs, key=lambda x: x.get("posted_date", datetime.min), reverse=True)[:5]
             for job in recent_jobs:
                 job["_id"] = str(job["_id"])
             
-            return HRJobDashboard(
+            result = HRJobDashboard(
                 total_jobs_posted=total_jobs,
                 active_jobs=active_jobs,
                 inactive_jobs=inactive_jobs,
@@ -280,8 +314,13 @@ class JobDatabase:
                 recent_jobs=recent_jobs
             )
             
+            print(f"✅ Dashboard stats: {total_jobs} total, {active_jobs} active, {total_applications} applications")
+            return result
+            
         except Exception as e:
             print(f"❌ Error getting HR dashboard: {e}")
+            import traceback
+            traceback.print_exc()
             return HRJobDashboard(
                 total_jobs_posted=0,
                 active_jobs=0,
