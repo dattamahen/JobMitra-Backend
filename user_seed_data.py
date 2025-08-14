@@ -25,9 +25,9 @@ INDIAN_USERS = [
     {
         "user_id": "user_001",
         "email": "arjun.sharma@email.com",
-        "password": "TechLead@123",  # Will be hashed
+        "password": "JobSeeker@123",  # Will be hashed
         "username": "arjun_sharma",
-        "user_type": "job_seeker",
+        "user_type": "candidate",
         "personal_info": {
             "first_name": "Arjun",
             "last_name": "Sharma",
@@ -61,7 +61,7 @@ INDIAN_USERS = [
         "email": "priya.patel@email.com",
         "password": "DataScience@456",
         "username": "priya_patel",
-        "user_type": "job_seeker",
+        "user_type": "candidate",
         "personal_info": {
             "first_name": "Priya",
             "last_name": "Patel",
@@ -95,7 +95,7 @@ INDIAN_USERS = [
         "email": "rajesh.kumar@email.com", 
         "password": "ProductMgr@789",
         "username": "rajesh_kumar",
-        "user_type": "job_seeker",
+        "user_type": "candidate",
         "personal_info": {
             "first_name": "Rajesh",
             "last_name": "Kumar",
@@ -129,7 +129,7 @@ INDIAN_USERS = [
         "email": "sneha.reddy@email.com",
         "password": "Designer@321",
         "username": "sneha_reddy",
-        "user_type": "job_seeker",
+        "user_type": "candidate",
         "personal_info": {
             "first_name": "Sneha",
             "last_name": "Reddy",
@@ -163,7 +163,7 @@ INDIAN_USERS = [
         "email": "vikram.singh@email.com",
         "password": "DevOps@654",
         "username": "vikram_singh",
-        "user_type": "job_seeker",
+        "user_type": "candidate",
         "personal_info": {
             "first_name": "Vikram",
             "last_name": "Singh",
@@ -197,7 +197,7 @@ INDIAN_USERS = [
         "email": "anita.joshi@email.com",
         "password": "Finance@987",
         "username": "anita_joshi",
-        "user_type": "job_seeker",
+        "user_type": "candidate",
         "personal_info": {
             "first_name": "Anita",
             "last_name": "Joshi",
@@ -231,7 +231,7 @@ INDIAN_USERS = [
         "email": "rohit.gupta@email.com",
         "password": "Marketing@147",
         "username": "rohit_gupta",
-        "user_type": "job_seeker",
+        "user_type": "candidate",
         "personal_info": {
             "first_name": "Rohit",
             "last_name": "Gupta",
@@ -263,9 +263,9 @@ INDIAN_USERS = [
     {
         "user_id": "user_008",
         "email": "kavya.nair@email.com",
-        "password": "HR@25890",
+        "password": "HRUser@12345",
         "username": "kavya_nair",
-        "user_type": "hr",
+        "user_type": "hire",
         "company_name": "Wipro Limited",
         "personal_info": {
             "first_name": "Kavya",
@@ -304,7 +304,7 @@ def get_hashed_users():
         user_copy = user.copy()
         user_copy["password_hash"] = hash_password(user["password"])
         del user_copy["password"]  # Remove plain text password
-        user_copy["user_type"] = user.get("user_type", "job_seeker")  # Ensure user_type is included
+        user_copy["user_type"] = user.get("user_type", "candidate")  # Ensure user_type is included
         user_copy["created_at"] = datetime.now().isoformat()
         user_copy["updated_at"] = datetime.now().isoformat()
         user_copy["is_active"] = True

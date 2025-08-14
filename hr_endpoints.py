@@ -9,7 +9,8 @@ from datetime import datetime
 
 from job_schemas import (
     JobPostRequest, JobPostResponse, JobListing, JobUpdateRequest, 
-    JobSearchFilters, JobSearchResponse, HRJobDashboard, JobApplicationStats
+    JobSearchFilters, JobSearchResponse, HRJobDashboard, JobApplicationStats,
+    HRJobSearchResponse
 )
 from job_db import job_db
 from auth_utils import verify_token
@@ -24,26 +25,17 @@ async def get_current_hr_user(credentials: HTTPAuthorizationCredentials = Depend
     """Get current authenticated HR user"""
     try:
         token = credentials.credentials
-        print(f"🔍 HR Auth: Received token: {token[:20]}...")
-        
         payload = verify_token(token)
-        print(f"🔍 HR Auth: Token payload: {payload}")
         
         user_id = payload.get("user_id")
-        print(f"🔍 HR Auth: User ID from token: {user_id}")
-        
         if not user_id:
-            print("❌ HR Auth: No user_id in token")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid token"
             )
         
         user = await get_user_by_id(user_id)
-        print(f"🔍 HR Auth: Found user: {user.get('email') if user else 'None'}")
-        
         if not user:
-            print("❌ HR Auth: User not found in database")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="User not found"
@@ -51,16 +43,12 @@ async def get_current_hr_user(credentials: HTTPAuthorizationCredentials = Depend
         
         # Check if user has HR role
         user_type = user.get("user_type", "job_seeker")
-        print(f"🔍 HR Auth: User type: {user_type}")
-        
-        if user_type not in ["hr", "admin"]:
-            print(f"❌ HR Auth: Access denied for user type: {user_type}")
+        if user_type not in ["hire", "hr", "admin"]:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Access denied. HR privileges required."
             )
         
-        print("✅ HR Auth: Access granted")
         return user
         
     except HTTPException:
@@ -98,7 +86,7 @@ async def post_job(
         )
 
 
-@hr_router.get("/jobs", response_model=JobSearchResponse)
+@hr_router.get("/jobs", response_model=HRJobSearchResponse)
 async def get_my_jobs(
     page: int = 1,
     per_page: int = 10,
@@ -109,7 +97,7 @@ async def get_my_jobs(
         hr_user_id = current_user["user_id"]
         result = await job_db.get_jobs_by_hr(hr_user_id, page, per_page)
         
-        return JobSearchResponse(
+        return HRJobSearchResponse(
             jobs=result["jobs"],
             total_count=result["total_count"],
             page=result["page"],
