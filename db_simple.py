@@ -10,9 +10,9 @@ from typing import Optional, Dict, Any, List
 try:
     from motor.motor_asyncio import AsyncIOMotorClient
     MONGODB_AVAILABLE = True
-    print("✅ MongoDB drivers available")
+    print("MongoDB drivers available")
 except ImportError:
-    print("⚠️  MongoDB drivers not available - using fallback mode")
+    print("MongoDB drivers not available - using fallback mode")
     MONGODB_AVAILABLE = False
     AsyncIOMotorClient = None
 
@@ -66,7 +66,7 @@ class Database:
     async def connect_to_mongo(self):
         """Establish connection to MongoDB or use fallback mode."""
         if not MONGODB_AVAILABLE:
-            print("📝 Using fallback mode - data will not persist")
+            print("Using fallback mode - data will not persist")
             return
             
         try:
@@ -86,12 +86,12 @@ class Database:
             
             # Test the connection
             await self.client.admin.command('ping')
-            print(f"✅ Successfully connected to MongoDB: {db_name}")
+            print(f"Successfully connected to MongoDB: {db_name}")
             self.fallback_mode = False
             
         except Exception as e:
-            print(f"⚠️  MongoDB connection failed: {e}")
-            print("📝 Switching to fallback mode - data will not persist")
+            print(f"MongoDB connection failed: {e}")
+            print("Switching to fallback mode - data will not persist")
             self.fallback_mode = True
     
     async def close_mongo_connection(self):
@@ -138,17 +138,17 @@ async def log_to_db(query: str, response: str, metadata: Dict[str, Any] = None):
             # Keep only last 100 logs
             if len(db.fallback_data["query_logs"]) > 100:
                 db.fallback_data["query_logs"] = db.fallback_data["query_logs"][-100:]
-            print("📝 Log saved to fallback storage")
+            print("Log saved to fallback storage")
         else:
             # Use MongoDB
             collection = db.database[COLLECTIONS["query_logs"]]
             result = await collection.insert_one(log_entry)
-            print(f"✅ Log entry saved with ID: {result.inserted_id}")
+            print(f"Log entry saved with ID: {result.inserted_id}")
         
         return True
         
     except Exception as e:
-        print(f"❌ Error logging to database: {e}")
+        print(f"Error logging to database: {e}")
         return False
 
 
@@ -180,7 +180,7 @@ async def get_query_logs(limit: int = 10, user_id: Optional[str] = None):
             return logs
         
     except Exception as e:
-        print(f"❌ Error retrieving logs: {e}")
+        print(f"Error retrieving logs: {e}")
         return []
 
 
@@ -195,7 +195,7 @@ async def create_user_profile(user_data: Dict[str, Any]) -> Optional[str]:
         result = await collection.insert_one(user_data)
         return str(result.inserted_id)
     except Exception as e:
-        print(f"❌ Error creating user profile: {e}")
+        print(f"Error creating user profile: {e}")
         return None
 
 
@@ -208,7 +208,7 @@ async def get_user_profile(user_id: str) -> Optional[Dict[str, Any]]:
             user["_id"] = str(user["_id"])
         return user
     except Exception as e:
-        print(f"❌ Error getting user profile: {e}")
+        print(f"Error getting user profile: {e}")
         return None
 
 
@@ -223,7 +223,7 @@ async def update_user_profile(user_id: str, update_data: Dict[str, Any]) -> bool
         )
         return result.modified_count > 0
     except Exception as e:
-        print(f"❌ Error updating user profile: {e}")
+        print(f"Error updating user profile: {e}")
         return False
 
 
@@ -238,7 +238,7 @@ async def create_job_listing(job_data: Dict[str, Any]) -> Optional[str]:
         result = await collection.insert_one(job_data)
         return str(result.inserted_id)
     except Exception as e:
-        print(f"❌ Error creating job listing: {e}")
+        print(f"Error creating job listing: {e}")
         return None
 
 
@@ -278,7 +278,7 @@ async def search_jobs(query: str = "", filters: Dict[str, Any] = None, limit: in
         return jobs
         
     except Exception as e:
-        print(f"❌ Error searching jobs: {e}")
+        print(f"Error searching jobs: {e}")
         return []
 
 
@@ -293,7 +293,7 @@ async def create_job_application(app_data: Dict[str, Any]) -> Optional[str]:
         result = await collection.insert_one(app_data)
         return str(result.inserted_id)
     except Exception as e:
-        print(f"❌ Error creating application: {e}")
+        print(f"Error creating application: {e}")
         return None
 
 
@@ -312,7 +312,7 @@ async def get_user_applications(user_id: str, limit: int = 20) -> List[Dict[str,
         return applications
         
     except Exception as e:
-        print(f"❌ Error getting user applications: {e}")
+        print(f"Error getting user applications: {e}")
         return []
 
 
@@ -327,7 +327,7 @@ async def create_mock_interview(interview_data: Dict[str, Any]) -> Optional[str]
         result = await collection.insert_one(interview_data)
         return str(result.inserted_id)
     except Exception as e:
-        print(f"❌ Error creating mock interview: {e}")
+        print(f"Error creating mock interview: {e}")
         return None
 
 
@@ -346,7 +346,7 @@ async def get_user_mock_interviews(user_id: str, limit: int = 10) -> List[Dict[s
         return interviews
         
     except Exception as e:
-        print(f"❌ Error getting mock interviews: {e}")
+        print(f"Error getting mock interviews: {e}")
         return []
 
 
@@ -378,7 +378,7 @@ async def get_user_dashboard(user_id: str) -> Optional[Dict[str, Any]]:
         return dashboard
         
     except Exception as e:
-        print(f"❌ Error getting dashboard: {e}")
+        print(f"Error getting dashboard: {e}")
         return None
 
 
@@ -395,7 +395,7 @@ async def update_user_dashboard(user_id: str, dashboard_data: Dict[str, Any]) ->
         )
         return result.modified_count > 0 or result.upserted_id is not None
     except Exception as e:
-        print(f"❌ Error updating dashboard: {e}")
+        print(f"Error updating dashboard: {e}")
         return False
 
 
@@ -447,7 +447,7 @@ async def get_learning_resources(skill: str = None, level: str = None, limit: in
         return resources
         
     except Exception as e:
-        print(f"❌ Error getting learning resources: {e}")
+        print(f"Error getting learning resources: {e}")
         return []
 
 
@@ -478,5 +478,5 @@ async def get_user_progress(user_id: str) -> Optional[Dict[str, Any]]:
         return progress
         
     except Exception as e:
-        print(f"❌ Error getting user progress: {e}")
+        print(f"Error getting user progress: {e}")
         return None

@@ -104,23 +104,23 @@ class JobDatabase:
             async for job in cursor:
                 # Transform job data to match HRJobListing schema
                 hr_job = {
-                    "_id": str(job["_id"]),  # Include the MongoDB _id
-                    "job_id": str(job["_id"]),
+                    "_id": str(job["_id"]),
+                    "job_id": job.get("job_id", str(job["_id"])),
                     "title": job.get("title", ""),
                     "company": job.get("company", ""),
-                    "location": job.get("location", ""),  # Keep as string for simplicity
+                    "location": self._format_location(job.get("location", "")),
                     "employment_type": job.get("employment_type", "full_time"),
                     "experience_level": job.get("experience_level", "mid"),
                     "job_type": job.get("job_type", "onsite"),
-                    "salary_range": job.get("salary_range", {}),
-                    "posted_date": job.get("posted_date", datetime.utcnow()).isoformat() if isinstance(job.get("posted_date"), datetime) else str(job.get("posted_date", datetime.utcnow())),
+                    "salary_range": job.get("salary", {}),
+                    "posted_date": job.get("posted_date", datetime.utcnow()),
                     "application_deadline": job.get("application_deadline"),
                     "is_active": job.get("is_active", True),
                     "applications_count": job.get("applications_count", 0),
                     "views_count": job.get("views_count", 0),
                     "description": job.get("description", ""),
                     "requirements": job.get("requirements", []),
-                    "skills": job.get("skills", job.get("skills_required", [])),  # Try both field names
+                    "skills": job.get("skills_required", []),
                     "responsibilities": job.get("responsibilities", []),
                     "tags": job.get("tags", []),
                     "posted_by_hr_id": job.get("posted_by_hr_id", hr_user_id)
@@ -141,7 +141,7 @@ class JobDatabase:
             print(f"❌ Error getting HR jobs: {e}")
             import traceback
             traceback.print_exc()
-            return {"jobs": [], "total_count": 0, "page": page, "per_page": per_page}
+            raise Exception(f"Database error: {str(e)}")
     
     async def search_jobs(self, filters: JobSearchFilters, page: int = 1, per_page: int = 10) -> Dict[str, Any]:
         """Search jobs with filters - replaces the mock data in dashboard_endpoints.py"""
@@ -364,6 +364,25 @@ class JobDatabase:
         random_suffix = ''.join(secrets.choice(string.ascii_lowercase + string.digits) for _ in range(6))
         
         return f"{title_part}-{company_part}-{random_suffix}"
+    
+    def _format_location(self, location) -> str:
+        """Format location object to string"""
+        if isinstance(location, str):
+            return location
+        
+        if isinstance(location, dict):
+            city = location.get("city", "")
+            state = location.get("state", "")
+            country = location.get("country", "")
+            is_remote = location.get("is_remote", False)
+            
+            if is_remote:
+                return "Remote"
+            
+            parts = [part for part in [city, state, country] if part]
+            return ", ".join(parts) if parts else "Not specified"
+        
+        return "Not specified"
     
     async def _get_filter_options(self) -> Dict[str, List[str]]:
         """Get available filter options from existing jobs"""
