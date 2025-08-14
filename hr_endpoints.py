@@ -43,7 +43,7 @@ async def get_current_hr_user(credentials: HTTPAuthorizationCredentials = Depend
         
         # Check if user has HR role
         user_type = user.get("user_type", "job_seeker")
-        if user_type not in ["hr", "admin"]:
+        if user_type not in ["hire", "hr", "admin"]:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Access denied. HR privileges required."

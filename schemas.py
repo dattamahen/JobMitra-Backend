@@ -4,7 +4,11 @@ Defines data models and validation schemas for all collections.
 """
 
 from datetime import datetime
-from typing import List, Optional, Dict, Any, Literal
+try:
+    from typing import Literal
+except ImportError:
+    from typing_extensions import Literal
+from typing import List, Optional, Dict, Any
 from pydantic import BaseModel, Field, EmailStr, HttpUrl
 from bson import ObjectId
 
@@ -61,51 +65,110 @@ class Location(BaseModel):
 class SocialLinks(BaseModel):
     """Social media and professional links."""
     github: Optional[HttpUrl] = None
-    portfolio: Optional[HttpUrl] = None
     youtube: Optional[HttpUrl] = None
     linkedin: Optional[HttpUrl] = None
-    twitter: Optional[HttpUrl] = None
+    playstore: Optional[HttpUrl] = None
 
+
+class PreviousOrganization(BaseModel):
+    """Previous organization information."""
+    company_name: str
+    position: str
+    duration: str
+    description: Optional[str] = None
+
+class Certification(BaseModel):
+    """Certification information."""
+    name: str
+    issuer: str
+    issue_date: Optional[datetime] = None
+    expiry_date: Optional[datetime] = None
+    credential_id: Optional[str] = None
+
+class CommunicationSkill(BaseModel):
+    """Communication skill information."""
+    skill: str
+    level: Literal["beginner", "intermediate", "advanced", "expert"] = "intermediate"
+
+class RecentActivity(BaseModel):
+    """Recent user activity."""
+    activity_type: Literal["application", "interview", "profile_update", "skill_assessment", "mock_interview", "resume_update"]
+    description: str
+    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+class SocialLinks(BaseModel):
+    """Social media and professional links."""
+    github: Optional[HttpUrl] = None
+    youtube: Optional[HttpUrl] = None
+    linkedin: Optional[HttpUrl] = None
+    playstore: Optional[HttpUrl] = None
 
 class UserProfile(BaseDocument):
-    """User profile information."""
-    # Basic Information
+    """Comprehensive user profile information."""
+    # Core Identity
     user_id: str = Field(..., index=True, unique=True)
     email: EmailStr = Field(..., index=True, unique=True)
-    full_name: str
+    password_hash: str = Field(..., exclude=True)  # Excluded from serialization
+    
+    # Basic Personal Information
+    first_name: str
+    last_name: str
+    date_of_birth: Optional[datetime] = None
     phone: Optional[str] = None
     location: Optional[Location] = None
     avatar_url: Optional[HttpUrl] = None
     
     # Professional Information
-    current_job_title: Optional[str] = None
-    desired_job_title: Optional[str] = None
-    experience_years: Optional[str] = None  # e.g., "2-3", "4-5"
+    overall_experience_years: Optional[int] = Field(None, ge=0)
+    highest_qualification: Optional[str] = None
+    previous_organizations: List[PreviousOrganization] = Field(default_factory=list)
     skills: List[str] = Field(default_factory=list)
-    certifications: List[str] = Field(default_factory=list)
-    area_of_expertise: List[str] = Field(default_factory=list)
-    professional_summary: Optional[str] = None
-    key_contributions: Optional[str] = None
-    
-    # Preferences
-    expected_salary: Optional[SalaryRange] = None
-    preferred_work_types: List[Literal["remote", "hybrid", "onsite"]] = Field(default_factory=list)
-    preferred_employment_types: List[Literal["full-time", "part-time", "contract", "freelance"]] = Field(default_factory=list)
-    preferred_locations: List[str] = Field(default_factory=list)
+    certifications: List[Certification] = Field(default_factory=list)
+    contributions: Optional[str] = None
+    communication_skills: List[CommunicationSkill] = Field(default_factory=list)
+    ai_tools: List[str] = Field(default_factory=list)
     
     # Social Links
     social_links: Optional[SocialLinks] = None
     
-    # Profile Metrics
-    profile_completion_percentage: int = Field(default=0, ge=0, le=100)
-    profile_views: int = Field(default=0, ge=0)
+    # Job Application Tracking
+    overall_jobs_applied: List[str] = Field(default_factory=list)  # Array of job IDs
+    
+    # User Classification
+    user_type: Literal["candidate", "hire"] = "candidate"
+    user_status: Literal["active", "inactive"] = "active"
+    user_plan: Literal["free", "subscribed", "pro"] = "free"
+    
+    # Preferences
+    job_preferences: List[Literal["remote", "hybrid", "on-site"]] = Field(default_factory=list)
+    employment_type: List[Literal["full-time", "part-time", "freelancing", "contract"]] = Field(default_factory=list)
+    
+    # Timestamps
+    profile_created_on: datetime = Field(default_factory=datetime.utcnow)
     last_active: datetime = Field(default_factory=datetime.utcnow)
     
-    # Settings
+    # Analytics and Metrics
+    match_analysis_count: int = Field(default=0, ge=0)
+    match_tailored_count: int = Field(default=0, ge=0)
+    mock_interview_count: int = Field(default=0, ge=0)
+    profile_completion_count: int = Field(default=0, ge=0, le=100)
+    profile_visits: int = Field(default=0, ge=0)
+    recent_activity: List[RecentActivity] = Field(default_factory=list)
+    
+    # Legacy Settings (maintained for backward compatibility)
     is_active: bool = Field(default=True)
     is_public: bool = Field(default=True)
     email_notifications: bool = Field(default=True)
     profile_searchable: bool = Field(default=True)
+    
+    @property
+    def full_name(self) -> str:
+        """Computed property for full name."""
+        return f"{self.first_name} {self.last_name}".strip()
+    
+    class Config:
+        use_enum_values = True
 
 
 # Company and Job Schemas

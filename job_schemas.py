@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field, validator
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 from enum import Enum
+from validation_constants import JobValidation
 
 
 class ExperienceLevel(str, Enum):
@@ -98,17 +99,17 @@ class LearningResource(BaseModel):
 
 class JobPostRequest(BaseModel):
     """Schema for job posting request from HR"""
-    title: str = Field(..., min_length=5, max_length=100)
-    company: str = Field(..., min_length=2, max_length=100)
+    title: str = Field(..., min_length=JobValidation.TITLE_MIN_LENGTH, max_length=JobValidation.TITLE_MAX_LENGTH)
+    company: str = Field(..., min_length=JobValidation.COMPANY_MIN_LENGTH, max_length=JobValidation.COMPANY_MAX_LENGTH)
     location: JobLocation
     employment_type: EmploymentType
     experience_level: ExperienceLevel
     job_type: JobType
     salary: Optional[SalaryInfo] = None
-    description: str = Field(..., min_length=50, max_length=2000)
-    requirements: List[str] = Field(..., min_items=3, max_items=15)
-    responsibilities: List[str] = Field(..., min_items=3, max_items=15)
-    skills_required: List[str] = Field(..., min_items=2, max_items=10)
+    description: str = Field(..., min_length=JobValidation.DESCRIPTION_MIN_LENGTH, max_length=JobValidation.DESCRIPTION_MAX_LENGTH)
+    requirements: List[str] = Field(..., min_items=JobValidation.REQUIREMENTS_MIN_ITEMS, max_items=JobValidation.REQUIREMENTS_MAX_ITEMS)
+    responsibilities: List[str] = Field(..., min_items=JobValidation.RESPONSIBILITIES_MIN_ITEMS, max_items=JobValidation.RESPONSIBILITIES_MAX_ITEMS)
+    skills_required: List[str] = Field(..., min_items=JobValidation.SKILLS_REQUIRED_MIN_ITEMS, max_items=JobValidation.SKILLS_REQUIRED_MAX_ITEMS)
     skills_preferred: Optional[List[str]] = []
     benefits: Optional[List[str]] = []
     company_info: CompanyInfo
@@ -121,21 +122,27 @@ class JobPostRequest(BaseModel):
 
     @validator('requirements')
     def validate_requirements(cls, v):
-        if not v or len(v) < 3:
-            raise ValueError('At least 3 requirements are needed')
-        return v
+        # Filter out empty strings
+        valid_items = [item.strip() for item in v if item and item.strip()]
+        if len(valid_items) < JobValidation.REQUIREMENTS_MIN_ITEMS:
+            raise ValueError(f'At least {JobValidation.REQUIREMENTS_MIN_ITEMS} requirements are needed')
+        return valid_items
 
     @validator('responsibilities')
     def validate_responsibilities(cls, v):
-        if not v or len(v) < 3:
-            raise ValueError('At least 3 responsibilities are needed')
-        return v
+        # Filter out empty strings
+        valid_items = [item.strip() for item in v if item and item.strip()]
+        if len(valid_items) < JobValidation.RESPONSIBILITIES_MIN_ITEMS:
+            raise ValueError(f'At least {JobValidation.RESPONSIBILITIES_MIN_ITEMS} responsibilities are needed')
+        return valid_items
 
     @validator('skills_required')
     def validate_skills_required(cls, v):
-        if not v or len(v) < 2:
-            raise ValueError('At least 2 required skills are needed')
-        return v
+        # Filter out empty strings
+        valid_items = [item.strip() for item in v if item and item.strip()]
+        if len(valid_items) < JobValidation.SKILLS_REQUIRED_MIN_ITEMS:
+            raise ValueError(f'At least {JobValidation.SKILLS_REQUIRED_MIN_ITEMS} required skills are needed')
+        return valid_items
 
 
 class JobPostResponse(BaseModel):

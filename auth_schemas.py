@@ -2,9 +2,48 @@
 Authentication and User Management Schemas
 """
 
-from pydantic import BaseModel, EmailStr, Field
-from typing import Optional, Dict, Any, List
+from pydantic import BaseModel, EmailStr, Field, field_validator
 from datetime import datetime
+try:
+    from typing import Literal
+except ImportError:
+    from typing_extensions import Literal
+from typing import Optional, Dict, Any, List, Union
+
+# New helper models for user data
+class PreviousOrganization(BaseModel):
+    """Previous organization information."""
+    company_name: str
+    position: str
+    duration: str
+    description: Optional[str] = None
+
+class Certification(BaseModel):
+    """Certification information."""
+    name: str
+    issuer: str
+    issue_date: Optional[datetime] = None
+    expiry_date: Optional[datetime] = None
+    credential_id: Optional[str] = None
+
+class CommunicationSkill(BaseModel):
+    """Communication skill information."""
+    skill: str
+    level: Literal["beginner", "intermediate", "advanced", "expert"] = "intermediate"
+
+class RecentActivity(BaseModel):
+    """Recent user activity."""
+    activity_type: Literal["application", "interview", "profile_update", "skill_assessment", "mock_interview", "resume_update"]
+    description: str
+    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+class SocialLinks(BaseModel):
+    """Social media links."""
+    github: Optional[str] = None
+    youtube: Optional[str] = None
+    linkedin: Optional[str] = None
+    playstore: Optional[str] = None
 
 # Authentication Request/Response Models
 class LoginRequest(BaseModel):
@@ -12,21 +51,66 @@ class LoginRequest(BaseModel):
     password: str
 
 class UserResponse(BaseModel):
+    """Updated user response with comprehensive fields."""
     user_id: str
     email: str
-    username: str
-    user_type: str = "job_seeker"  # Default to job_seeker
+    
+    # Basic Personal Information
     first_name: str
     last_name: str
+    date_of_birth: Optional[datetime] = None
+    phone: Optional[str] = None
+    
+    # Professional Information
+    overall_experience_years: Optional[int] = None
+    highest_qualification: Optional[str] = None
+    previous_organizations: List[PreviousOrganization] = Field(default_factory=list)
+    skills: List[str] = Field(default_factory=list)
+    certifications: List[Certification] = Field(default_factory=list)
+    contributions: Optional[str] = None
+    communication_skills: List[CommunicationSkill] = Field(default_factory=list)
+    ai_tools: List[str] = Field(default_factory=list)
+    
+    # Social Links
+    github_link: Optional[str] = None
+    youtube_link: Optional[str] = None
+    linkedin_link: Optional[str] = None
+    playstore_link: Optional[str] = None
+    
+    # Job Application Tracking
+    overall_jobs_applied: List[str] = Field(default_factory=list)
+    
+    # User Classification
+    user_type: Literal["candidate", "hire"] = "candidate"
+    user_status: Literal["active", "inactive"] = "active"
+    user_plan: Literal["free", "subscribed", "pro"] = "free"
+    
+    # Preferences
+    job_preferences: List[Literal["remote", "hybrid", "on-site"]] = Field(default_factory=list)
+    employment_type: List[Literal["full-time", "part-time", "freelancing", "contract"]] = Field(default_factory=list)
+    
+    # Timestamps
+    profile_created_on: datetime
+    last_active: datetime
+    
+    # Analytics and Metrics
+    match_analysis_count: int = 0
+    match_tailored_count: int = 0
+    mock_interview_count: int = 0
+    profile_completion_count: int = 0
+    profile_visits: int = 0
+    recent_activity: List[RecentActivity] = Field(default_factory=list)
+    
+    # Legacy compatibility
+    username: Optional[str] = None
     full_name: Optional[str] = None
-    company_name: Optional[str] = None  # For HR users
-    phone: str
-    city: str
-    state: str
-    is_active: bool
+    company_name: Optional[str] = None
+    is_active: bool = True
     is_verified: Optional[bool] = False
     profile_completion: Optional[int] = 0
     created_at: str
+    city: Optional[str] = None
+    state: Optional[str] = None
 
 class LoginResponse(BaseModel):
     access_token: str
@@ -34,68 +118,173 @@ class LoginResponse(BaseModel):
     user: UserResponse
 
 class RegisterRequest(BaseModel):
+    """Updated registration request with required fields."""
     email: EmailStr
     password: str = Field(..., min_length=8)
-    username: str = Field(..., min_length=3, max_length=50)
     first_name: str = Field(..., min_length=1, max_length=100)
     last_name: str = Field(..., min_length=1, max_length=100)
-    phone: str
-    city: str
-    state: str
+    date_of_birth: Optional[datetime] = None
+    phone: Optional[str] = None
+    user_type: Literal["candidate", "hire"] = "candidate"
+    
+    # Optional fields for initial registration
+    overall_experience_years: Optional[int] = Field(None, ge=0)
+    highest_qualification: Optional[str] = None
+    skills: List[str] = Field(default_factory=list)
+    job_preferences: List[Literal["remote", "hybrid", "on-site"]] = Field(default_factory=list)
+    employment_type: List[Literal["full-time", "part-time", "freelancing", "contract"]] = Field(default_factory=list)
+    
+    # Legacy compatibility
+    username: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
 
 class TokenData(BaseModel):
     user_id: Optional[str] = None
     email: Optional[str] = None
 
 class UserProfileResponse(BaseModel):
+    """Comprehensive user profile response."""
     user_id: str
     email: str
-    username: str
-    user_type: str = "job_seeker"
+    
+    # Basic Personal Information
+    first_name: str
+    last_name: str
+    date_of_birth: Optional[datetime] = None
+    phone: Optional[str] = None
+    
+    # Professional Information
+    overall_experience_years: Optional[int] = None
+    highest_qualification: Optional[str] = None
+    previous_organizations: List[PreviousOrganization] = Field(default_factory=list)
+    skills: List[str] = Field(default_factory=list)
+    certifications: List[Certification] = Field(default_factory=list)
+    contributions: Optional[str] = None
+    communication_skills: List[CommunicationSkill] = Field(default_factory=list)
+    ai_tools: List[str] = Field(default_factory=list)
+    
+    # Social Links
+    social_links: Optional[SocialLinks] = None
+    
+    # Job Application Tracking
+    overall_jobs_applied: List[str] = Field(default_factory=list)
+    
+    # User Classification
+    user_type: Literal["candidate", "hire"] = "candidate"
+    user_status: Literal["active", "inactive"] = "active"
+    user_plan: Literal["free", "subscribed", "pro"] = "free"
+    
+    # Preferences
+    job_preferences: List[Literal["remote", "hybrid", "on-site"]] = Field(default_factory=list)
+    employment_type: List[Literal["full-time", "part-time", "freelancing", "contract"]] = Field(default_factory=list)
+    
+    # Timestamps
+    profile_created_on: datetime
+    last_active: datetime
+    
+    # Analytics and Metrics
+    match_analysis_count: int = 0
+    match_tailored_count: int = 0
+    mock_interview_count: int = 0
+    profile_completion_count: int = 0
+    profile_visits: int = 0
+    recent_activity: List[RecentActivity] = Field(default_factory=list)
+    
+    # Legacy compatibility
+    username: Optional[str] = None
     full_name: Optional[str] = None
     company_name: Optional[str] = None
-    personal_info: Dict[str, Any]
-    professional_info: Dict[str, Any]
-    preferences: Dict[str, Any]
-    social_links: Optional[Dict[str, Any]] = None
-    is_active: bool
-    is_verified: bool
+    personal_info: Optional[Dict[str, Any]] = None
+    professional_info: Optional[Dict[str, Any]] = None
+    preferences: Optional[Dict[str, Any]] = None
+    is_active: bool = True
+    is_verified: bool = False
     profile_completion: Optional[int] = 0
     created_at: str
     updated_at: str
-    last_login: Optional[str]
+    last_login: Optional[str] = None
 
 # User Update Models
 class UserProfileUpdateRequest(BaseModel):
-    # Personal Information
+    """Comprehensive user profile update request."""
+    # Basic Personal Information
     first_name: Optional[str] = None
     last_name: Optional[str] = None
+    date_of_birth: Optional[datetime] = None
     phone: Optional[str] = None
+    
+    # Professional Information
+    overall_experience_years: Optional[int] = Field(None, ge=0)
+    highest_qualification: Optional[str] = None
+    previous_organizations: Optional[List[PreviousOrganization]] = None
+    skills: Optional[List[str]] = None
+    certifications: Optional[List[Union[Certification, str]]] = None
+    contributions: Optional[str] = None
+    communication_skills: Optional[List[CommunicationSkill]] = None
+    ai_tools: Optional[List[str]] = None
+    
+    # Social Links
+    github_link: Optional[str] = None
+    youtube_link: Optional[str] = None
+    linkedin_link: Optional[str] = None
+    playstore_link: Optional[str] = None
+    
+    # User Classification
+    user_status: Optional[Literal["active", "inactive"]] = None
+    user_plan: Optional[Literal["free", "subscribed", "pro"]] = None
+    
+    # Preferences
+    job_preferences: Optional[List[Literal["remote", "hybrid", "on-site"]]] = None
+    employment_type: Optional[List[Literal["full-time", "part-time", "freelancing", "contract"]]] = None
+    
+    # Legacy compatibility fields
     city: Optional[str] = None
     state: Optional[str] = None
-    
-    # Professional Information - Basic
     current_role: Optional[str] = None
     current_company: Optional[str] = None
     total_experience: Optional[str] = None
     industry: Optional[str] = None
-    skills: Optional[List[str]] = None
     current_salary: Optional[float] = None
     expected_salary: Optional[float] = None
-    
-    # Professional Information - Extended
     desired_job_title: Optional[str] = None
     professional_summary: Optional[str] = None
-    certifications: Optional[List[str]] = None
     area_of_expertise: Optional[List[str]] = None
     key_contributions: Optional[str] = None
-    
-    # Social Links
     github_url: Optional[str] = None
     portfolio_url: Optional[str] = None
     linkedin_url: Optional[str] = None
     twitter_url: Optional[str] = None
     youtube_url: Optional[str] = None
+    
+    @field_validator('certifications')
+    @classmethod
+    def validate_certifications(cls, v):
+        """Handle both string and Certification object formats for certifications"""
+        if v is None:
+            return v
+        
+        processed_certs = []
+        for cert in v:
+            if isinstance(cert, str):
+                # Skip invalid string representations
+                if cert in ["[object Object]", ""]:
+                    continue
+                # Convert valid strings to Certification objects
+                processed_certs.append(Certification(
+                    name=cert,
+                    issuer="Unknown",
+                    issue_date=None,
+                    expiry_date=None,
+                    credential_id=None
+                ))
+            elif isinstance(cert, Certification):
+                processed_certs.append(cert)
+            elif isinstance(cert, dict):
+                # Handle dict format
+                processed_certs.append(Certification(**cert))
+        
+        return processed_certs
 
 class PasswordChangeRequest(BaseModel):
     current_password: str

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Check what users exist in database
+Fix HR users type from 'hire' to 'hr'
 """
 
 import asyncio
@@ -11,8 +11,8 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 
-async def check_users():
-    """Check what users exist in database"""
+async def fix_hr_users():
+    """Fix HR users type from 'hire' to 'hr'"""
     
     # Get MongoDB URI from environment
     mongo_uri = os.getenv('MONGO_URI', 'mongodb://localhost:27017/jobmitra')
@@ -24,11 +24,19 @@ async def check_users():
         
         print("Connecting to MongoDB...")
         
-        # Get all users
-        users = await db.users.find({}, {"email": 1, "user_type": 1, "first_name": 1, "last_name": 1}).to_list(length=None)
+        # Update all users with user_type 'hire' to 'hr'
+        result = await db.users.update_many(
+            {"user_type": "hire"},
+            {"$set": {"user_type": "hr"}}
+        )
         
-        print(f"Found {len(users)} users:")
-        for user in users:
+        print(f"Updated {result.modified_count} users from 'hire' to 'hr'")
+        
+        # Verify the update
+        hr_users = await db.users.find({"user_type": "hr"}, {"email": 1, "user_type": 1, "first_name": 1, "last_name": 1}).to_list(length=None)
+        
+        print(f"HR users after update:")
+        for user in hr_users:
             print(f"- {user.get('email', 'No email')} | Type: {user.get('user_type', 'No type')} | Name: {user.get('first_name', '')} {user.get('last_name', '')}")
             
     except Exception as e:
@@ -37,4 +45,4 @@ async def check_users():
         client.close()
 
 if __name__ == "__main__":
-    asyncio.run(check_users())
+    asyncio.run(fix_hr_users())

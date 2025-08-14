@@ -7,6 +7,8 @@ import uvicorn
 from app import create_app
 from config import settings
 
+# Create the app instance for uvicorn
+app = create_app()
 
 def main():
     """
