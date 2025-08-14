@@ -2,25 +2,10 @@
 Dashboard and Profile API endpoints.
 """
 
-from datetime import datetime
-from fastapi import APIRouter, HTTPException, Depends
-from typing import Optional, List
-from job_db import JobDatabase
-
-# Create router for dashboard and profile endpoints
-router = APIRouter()
-
-# Initialize job database
-job_db = JobDatabase()
-
-
-"""
-Dashboard and Profile API endpoints.
-"""
-
 from datetime import datetime, timedelta
 from fastapi import APIRouter, HTTPException, Depends
 from typing import Optional, List, Dict, Any
+from pydantic import BaseModel
 from job_db import JobDatabase
 from auth_endpoints import get_current_user
 from db_simple import (
@@ -34,6 +19,20 @@ router = APIRouter()
 
 # Initialize job database
 job_db = JobDatabase()
+
+
+class JobSearchRequest(BaseModel):
+    """Request body schema for job search with user skills."""
+    page: int = 1
+    per_page: int = 10
+    keywords: Optional[str] = None
+    location: Optional[str] = None
+    experience_level: Optional[str] = None
+    employment_type: Optional[str] = None
+    job_type: Optional[str] = None
+    user_skills: List[str] = []
+    user_certifications: List[str] = []
+    user_experience_keywords: List[str] = []
 
 
 @router.get("/dashboard", tags=["Dashboard"])
@@ -146,9 +145,9 @@ async def get_dashboard(current_user: dict = Depends(get_current_user)):
                 client = AsyncIOMotorClient("mongodb://localhost:27017")
                 db_hr = client.jobmitra
                 
-                hr_jobs_count = await db_hr.jobs.count_documents({"posted_by": user_id})
-                hr_active_jobs = await db_hr.jobs.count_documents({"posted_by": user_id, "is_active": True})
-                hr_applications_received = await db_hr.applications.count_documents({"job_posted_by": user_id})
+                hr_jobs_count = await db_hr.jobs.count_documents({"posted_by_hr_id": user_id})
+                hr_active_jobs = await db_hr.jobs.count_documents({"posted_by_hr_id": user_id, "is_active": True})
+                hr_applications_received = await db_hr.job_applications.count_documents({"hr_user_id": user_id})
                 
                 client.close()
                 
@@ -580,52 +579,216 @@ async def get_learning_progress_endpoint(current_user: dict = Depends(get_curren
         raise HTTPException(status_code=500, detail="Failed to get learning progress")
 
 
-@router.get("/jobs", tags=["Jobs"])
+def calculate_job_match_score(job, user_skills, user_certifications, user_experience_keywords):
+    """
+    Calculate job matching score based on user skills vs job requirements.
+    Focus on skills matching between user and HR job postings.
+    
+    Returns score between 0.0 and 1.0
+    """
+    # Normalize user inputs
+    user_skills_lower = [skill.lower().strip() for skill in user_skills if skill and skill.strip()]
+    user_certs_lower = [cert.lower().strip() for cert in user_certifications if cert and cert.strip()]
+    user_exp_keywords = [kw.lower().strip() for kw in user_experience_keywords if len(kw) > 3]
+    
+    if not user_skills_lower:
+        return 0.0
+    
+    # Get job requirements
+    job_skills_required = job.get("skills_required", [])
+    job_skills_preferred = job.get("skills_preferred", [])
+    job_skills = job.get("skills", [])  # Generic skills field
+    
+    # Combine all job skill requirements
+    all_job_skills = []
+    all_job_skills.extend(job_skills_required)
+    all_job_skills.extend(job_skills_preferred) 
+    all_job_skills.extend(job_skills)
+    
+    # Remove duplicates and normalize
+    job_skills_lower = list(set([skill.lower().strip() for skill in all_job_skills if skill and skill.strip()]))
+    
+    if not job_skills_lower:
+        return 0.0
+    
+    print(f"👤 User Skills: {user_skills_lower}")
+    print(f"🏢 Job Skills Required: {job_skills_lower}")
+    
+    # CORE SKILLS MATCHING: User Skills vs Job Requirements
+    skills_matched = 0
+    matched_skills = []
+    
+    for user_skill in user_skills_lower:
+        for job_skill in job_skills_lower:
+            # Exact match or partial match
+            if (user_skill == job_skill or 
+                user_skill in job_skill or 
+                job_skill in user_skill or
+                # Handle common variations (e.g., "js" vs "javascript")
+                (user_skill == "js" and "javascript" in job_skill) or
+                (user_skill == "javascript" and "js" in job_skill) or
+                (user_skill == "react" and "reactjs" in job_skill) or
+                (user_skill == "node" and "nodejs" in job_skill)):
+                
+                skills_matched += 1
+                matched_skills.append(f"{user_skill} ↔ {job_skill}")
+                break  # Only count each user skill once
+    
+    # Calculate match percentage based on user's skills
+    user_skills_match_percentage = skills_matched / len(user_skills_lower)
+    
+    print(f"🎯 Skills Matched: {skills_matched}/{len(user_skills_lower)} = {user_skills_match_percentage:.2%}")
+    print(f"✅ Matched Skills: {matched_skills}")
+    
+    # BONUS SCORING
+    bonus_score = 0.0
+    
+    # Certification bonus
+    if user_certs_lower and job_skills_lower:
+        cert_matches = 0
+        for cert in user_certs_lower:
+            for job_skill in job_skills_lower:
+                if cert in job_skill or job_skill in cert:
+                    cert_matches += 1
+                    break
+        if cert_matches > 0:
+            bonus_score += 0.1  # 10% bonus for certification matches
+            print(f"🏆 Certification bonus: +10% ({cert_matches} matches)")
+    
+    # Experience keywords bonus (from job description)
+    if user_exp_keywords and job.get("description"):
+        description = job["description"].lower()
+        exp_matches = 0
+        for keyword in user_exp_keywords[:10]:  # Limit to top 10 keywords
+            if keyword in description:
+                exp_matches += 1
+        if exp_matches >= 3:  # Need at least 3 experience matches
+            bonus_score += 0.05  # 5% bonus for experience alignment
+            print(f"� Experience bonus: +5% ({exp_matches} keyword matches)")
+    
+    # Calculate final score
+    final_score = user_skills_match_percentage + bonus_score
+    final_score = min(final_score, 1.0)  # Cap at 100%
+    
+    # Apply minimum threshold: include if user has 20-30% skill match
+    if user_skills_match_percentage >= 0.20:
+        print(f"✨ Final Score: {final_score:.2%} (QUALIFIED)")
+        return final_score
+    else:
+        print(f"❌ Final Score: {final_score:.2%} (BELOW THRESHOLD)")
+        return 0.0
+
+
+@router.post("/jobs", tags=["Jobs"])
 async def get_job_listings(
-    page: int = 1, 
-    per_page: int = 10,
-    keywords: str = None,
-    location: str = None,
-    experience_level: str = None,
-    employment_type: str = None,
-    job_type: str = None
+    request: JobSearchRequest,
+    current_user: dict = Depends(get_current_user)
 ):
-    """Get job listings for job search page with pagination and filtering."""
+    """Get job listings with intelligent matching based on user skills sent in request body."""
     
     try:
-        # Use the real database for job search
-        search_filters = {}
+        # Extract parameters from request body
+        page = request.page
+        per_page = request.per_page
+        keywords = request.keywords
+        location = request.location
+        experience_level = request.experience_level
+        employment_type = request.employment_type
+        job_type = request.job_type
         
+        # Get user skills from request body (primary source)
+        user_skills = request.user_skills
+        user_certifications = request.user_certifications
+        user_experience_keywords = request.user_experience_keywords
+        
+        # Fallback to user profile if skills not provided in request
+        user_id = current_user["user_id"]
+        if not user_skills:
+            user_profile = await get_user_profile(user_id)
+            if user_profile:
+                user_skills = user_profile.get("skills", [])
+                user_certifications = [cert.get("name", "") for cert in user_profile.get("certifications", []) if isinstance(cert, dict)]
+                user_certifications.extend([cert for cert in user_profile.get("certifications", []) if isinstance(cert, str)])
+                
+                # Get experience keywords from professional info
+                prof_info = user_profile.get("professional_info", {})
+                if prof_info.get("professional_summary"):
+                    user_experience_keywords.extend(prof_info["professional_summary"].lower().split())
+                if prof_info.get("key_contributions"):
+                    user_experience_keywords.extend(prof_info["key_contributions"].lower().split())
+        
+        print(f"🔍 Received User Skills: {user_skills}")
+        print(f"🏆 Received User Certifications: {user_certifications}")
+        print(f"💼 Request Source: {'Request Body' if user_skills else 'User Profile'}")
+        
+        # Build basic MongoDB query
+        query = {"is_active": True}
+        
+        # Keywords search (maintain existing functionality)
         if keywords:
-            search_filters["keywords"] = keywords
-        if location and location != "all":
-            search_filters["location"] = location
-        if experience_level and experience_level != "all":
-            search_filters["experience_level"] = experience_level.replace("-", "_")
-        if employment_type and employment_type != "all":
-            search_filters["employment_type"] = employment_type.replace("-", "_")
-        if job_type and job_type != "all":
-            search_filters["job_type"] = job_type.replace("-", "_")
-            
-        # Search jobs using database
-        search_result = await job_db.search_jobs(
-            filters=search_filters,
-            page=page,
-            limit=per_page
-        )
+            keyword_regex = {"$regex": keywords, "$options": "i"}
+            query["$or"] = [
+                {"title": keyword_regex},
+                {"company": keyword_regex},
+                {"description": keyword_regex},
+                {"skills_required": keyword_regex},
+                {"skills_preferred": keyword_regex}
+            ]
         
-        # Return database results directly
-        all_jobs = search_result["jobs"]
-        total_count = search_result["total"]
+        # Apply filters (ignoring location, salary as per requirement)
+        if experience_level and experience_level not in ["all", "All Levels"]:
+            query["experience_level"] = experience_level.replace("-", "_")
+        
+        if employment_type and employment_type not in ["all", "All Types"]:
+            query["employment_type"] = employment_type.replace("-", "_")
+        
+        if job_type and job_type not in ["all", "All Types"]:
+            query["job_type"] = job_type.replace("-", "_")
+        
+        # Get ALL matching jobs for intelligent scoring (we'll paginate after scoring)
+        collection = db.database["jobs"]
+        cursor = collection.find(query).sort("posted_date", -1)
+        
+        all_jobs = []
+        async for job in cursor:
+            job["_id"] = str(job["_id"])
+            
+            # Calculate intelligent matching score
+            match_score = calculate_job_match_score(job, user_skills, user_certifications, user_experience_keywords)
+            job["match_score"] = match_score
+            job["match_percentage"] = round(match_score * 100, 1)
+            
+            # Include jobs that meet ANY of the matching criteria (OR logic)
+            if match_score > 0.0:
+                all_jobs.append(job)
+        
+        # Sort by match score (highest first)
+        all_jobs.sort(key=lambda x: x["match_score"], reverse=True)
+        
+        print(f"🎯 Found {len(all_jobs)} jobs with matching criteria (OR logic)")
+        
+        # Apply pagination to scored and filtered results
+        total_count = len(all_jobs)
+        start_idx = (page - 1) * per_page
+        end_idx = start_idx + per_page
+        paginated_jobs = all_jobs[start_idx:end_idx]
         
         return {
-            "jobs": all_jobs,
+            "jobs": paginated_jobs,
             "total_count": total_count,
             "page": page,
             "per_page": per_page,
             "total_pages": (total_count + per_page - 1) // per_page,
-            "has_next": page * per_page < total_count,
+            "has_next": end_idx < total_count,
             "has_prev": page > 1,
+            "matching_info": {
+                "user_skills_provided": len(user_skills),
+                "user_skills": user_skills,
+                "total_jobs_before_matching": await collection.count_documents(query),
+                "jobs_after_skill_matching": total_count,
+                "matching_criteria": "User skills vs Job requirements (20%+ threshold)",
+                "data_source": "Request Body" if user_skills else "User Profile"
+            },
             "filters": {
                 "locations": ["All Locations", "Bangalore", "Mumbai", "Hyderabad", "Remote"],
                 "experience_levels": ["All Levels", "entry", "junior", "mid", "senior", "lead", "executive"],
@@ -643,7 +806,10 @@ async def get_job_listings(
         }
         
     except Exception as e:
-        print(f"Database error in job search: {e}")
+        print(f"❌ Database error in job search: {e}")
+        import traceback
+        traceback.print_exc()
+        
         # Return empty results if database fails
         return {
             "jobs": [],
@@ -653,7 +819,7 @@ async def get_job_listings(
             "total_pages": 0,
             "has_next": False,
             "has_prev": False,
-            "error": "Failed to load jobs from database",
+            "error": f"Failed to load jobs from database: {str(e)}",
             "filters": {
                 "locations": ["All Locations"],
                 "experience_levels": ["All Levels"],

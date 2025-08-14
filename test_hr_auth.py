@@ -1,139 +1,54 @@
-#!/usr/bin/env python3
 """
-Test HR authentication flow step by step
+Test HR authentication and token generation
 """
 
-import json
-import requests
-import time
+import asyncio
+import sys
+sys.path.append('.')
 
-def test_hr_authentication():
-    """Test the complete HR authentication flow"""
+from auth_db import get_user_by_id, create_user
+from auth_utils import create_access_token
+from db_simple import db
+
+async def test_hr_auth():
+    print("=== Testing HR Authentication ===")
     
-    print("🔐 Testing HR Authentication Flow...")
-    
-    # Step 1: Login
-    print("\n1️⃣ Testing Login...")
-    login_data = {
-        "email": "hr@company.com",
-        "password": "password123"
-    }
+    await db.connect_to_mongo()
     
     try:
-        login_response = requests.post(
-            "http://localhost:8000/api/v1/auth/login",
-            json=login_data,
-            headers={"Content-Type": "application/json"},
-            timeout=10
-        )
-        
-        print(f"Login Status: {login_response.status_code}")
-        
-        if login_response.status_code == 200:
-            login_result = login_response.json()
-            print("✅ Login successful!")
-            print(f"Token Type: {login_result.get('token_type')}")
-            print(f"User Type: {login_result.get('user', {}).get('user_type')}")
-            print(f"User Email: {login_result.get('user', {}).get('email')}")
-            
-            access_token = login_result.get('access_token')
-            print(f"Access Token (first 20 chars): {access_token[:20]}...")
-            
-            # Step 2: Test HR Dashboard
-            print("\n2️⃣ Testing HR Dashboard Access...")
-            
-            headers = {
-                "Authorization": f"Bearer {access_token}",
-                "Content-Type": "application/json"
+        # Check if HR user exists
+        hr_user = await get_user_by_id("hr001")
+        if not hr_user:
+            print("HR user not found, creating...")
+            # Create HR user
+            user_data = {
+                "user_id": "hr001",
+                "email": "hr001@test.com", 
+                "password": "test1234",
+                "full_name": "HR Manager",
+                "user_type": "hire"
             }
-            
-            dashboard_response = requests.get(
-                "http://localhost:8000/api/v1/hr/dashboard",
-                headers=headers,
-                timeout=10
-            )
-            
-            print(f"Dashboard Status: {dashboard_response.status_code}")
-            
-            if dashboard_response.status_code == 200:
-                print("✅ HR Dashboard access successful!")
-                dashboard_data = dashboard_response.json()
-                print(f"Dashboard Data: {json.dumps(dashboard_data, indent=2)}")
-            else:
-                print("❌ HR Dashboard access failed!")
-                try:
-                    error_data = dashboard_response.json()
-                    print(f"Error: {error_data}")
-                except:
-                    print(f"Error: {dashboard_response.text}")
-            
-            # Step 3: Test HR Jobs
-            print("\n3️⃣ Testing HR Jobs Access...")
-            
-            jobs_response = requests.get(
-                "http://localhost:8000/api/v1/hr/jobs",
-                headers=headers,
-                timeout=10
-            )
-            
-            print(f"Jobs Status: {jobs_response.status_code}")
-            
-            if jobs_response.status_code == 200:
-                print("✅ HR Jobs access successful!")
-                jobs_data = jobs_response.json()
-                print(f"Jobs Data: {json.dumps(jobs_data, indent=2)}")
-            else:
-                print("❌ HR Jobs access failed!")
-                try:
-                    error_data = jobs_response.json()
-                    print(f"Error: {error_data}")
-                except:
-                    print(f"Error: {jobs_response.text}")
-                    
-        else:
-            print("❌ Login failed!")
-            try:
-                error_data = login_response.json()
-                print(f"Error: {error_data}")
-            except:
-                print(f"Error: {login_response.text}")
-                
-    except requests.exceptions.ConnectionError:
-        print("❌ Cannot connect to server - is it running on localhost:8000?")
-    except Exception as e:
-        print(f"❌ Unexpected error: {e}")
-
-def test_job_seeker_authentication():
-    """Test job seeker authentication for comparison"""
-    
-    print("\n\n👤 Testing Job Seeker Authentication...")
-    
-    login_data = {
-        "email": "arjun.sharma@email.com",
-        "password": "TechLead@123"
-    }
-    
-    try:
-        login_response = requests.post(
-            "http://localhost:8000/api/v1/auth/login",
-            json=login_data,
-            headers={"Content-Type": "application/json"},
-            timeout=10
-        )
+            result = await create_user(user_data)
+            print(f"HR user created: {result}")
+            hr_user = await get_user_by_id("hr001")
         
-        print(f"Login Status: {login_response.status_code}")
-        
-        if login_response.status_code == 200:
-            login_result = login_response.json()
-            print("✅ Job Seeker login successful!")
-            print(f"User Type: {login_result.get('user', {}).get('user_type')}")
-            print(f"User Email: {login_result.get('user', {}).get('email')}")
-        else:
-            print("❌ Job Seeker login failed!")
+        if hr_user:
+            print(f"HR user found: {hr_user['email']} (Type: {hr_user['user_type']})")
             
+            # Generate token
+            token = create_access_token({"user_id": hr_user["user_id"]})
+            print(f"Generated token: {token}")
+            
+            print("\nTo test the API, use this curl command:")
+            print(f'curl -X GET "http://localhost:8000/api/v1/hr/jobs" -H "Authorization: Bearer {token}"')
+        
     except Exception as e:
-        print(f"❌ Error: {e}")
+        print(f"Error: {e}")
+        import traceback
+        traceback.print_exc()
+    
+    finally:
+        await db.close_mongo_connection()
 
 if __name__ == "__main__":
-    test_hr_authentication()
-    test_job_seeker_authentication()
+    asyncio.run(test_hr_auth())

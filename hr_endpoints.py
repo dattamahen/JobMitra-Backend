@@ -12,7 +12,9 @@ from job_schemas import (
     JobSearchFilters, JobSearchResponse, HRJobDashboard, JobApplicationStats,
     HRJobSearchResponse
 )
+from job_application_schemas import JobApplicationsResponse, ApplicationStatus
 from job_db import job_db
+from job_application_db import job_application_db
 from auth_utils import verify_token
 from auth_db import get_user_by_id
 
@@ -315,4 +317,61 @@ async def get_job_stats(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to retrieve job stats: {str(e)}"
+        )
+
+
+@hr_router.get("/jobs/{job_id}/applications", response_model=JobApplicationsResponse)
+async def get_job_applications(
+    job_id: str,
+    current_user: dict = Depends(get_current_hr_user)
+):
+    """Get all applications for a specific job"""
+    try:
+        hr_user_id = current_user["user_id"]
+        applications = await job_application_db.get_job_applications(job_id, hr_user_id)
+        return applications
+        
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve applications: {str(e)}"
+        )
+
+
+@hr_router.put("/applications/{application_id}/status")
+async def update_application_status(
+    application_id: str,
+    status: ApplicationStatus,
+    notes: Optional[str] = None,
+    current_user: dict = Depends(get_current_hr_user)
+):
+    """Update application status"""
+    try:
+        hr_user_id = current_user["user_id"]
+        success = await job_application_db.update_application_status(
+            application_id, status, hr_user_id, notes
+        )
+        
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Application not found or access denied"
+            )
+        
+        return {"message": "Application status updated successfully"}
+        
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to update application status: {str(e)}"
         )
