@@ -13,6 +13,7 @@ from db_simple import (
     get_user_dashboard, update_user_dashboard, get_learning_resources,
     get_user_progress
 )
+from activity_tracker import log_user_activity
 
 # Create router for dashboard and profile endpoints
 router = APIRouter()
@@ -43,30 +44,28 @@ async def get_dashboard(current_user: dict = Depends(get_current_user)):
         user_id = current_user["user_id"]
         user_type = current_user.get("user_type", "candidate")
         
-        # Get user applications from database
-        user_applications = await get_user_applications(user_id, limit=50)
+        # Get user data directly from users collection
+        user_profile = await db.database["users"].find_one({"user_id": user_id})
+        profile_completion = user_profile.get("profile_completion_count", 0) if user_profile else 0
+        
+        # Debug: Print the entire user profile to see what fields exist
+        print(f"🔍 Debug - User ID: {user_id}")
+        print(f"🔍 Debug - User Profile Keys: {list(user_profile.keys()) if user_profile else 'None'}")
+        print(f"🔍 Debug - overall_jobs_applied field: {user_profile.get('overall_jobs_applied') if user_profile else 'No profile'}")
+        
+        # Get applications count from user's overall_jobs_applied field (only is_applied=True)
+        overall_jobs_applied = user_profile.get("overall_jobs_applied", []) if user_profile else []
+        total_applications = sum(1 for app in overall_jobs_applied if isinstance(app, dict) and app.get("is_applied", False))
+        print(f"🔍 Debug - Total Applications Count: {total_applications}")
         
         # Get user mock interviews from database
         user_interviews = await get_user_mock_interviews(user_id, limit=20)
         
-        # Get user profile data
-        user_profile = await get_user_profile(user_id)
-        profile_completion = user_profile.get("profile_completion_count", 0) if user_profile else 0
+        # Calculate interviews scheduled (from mock interviews)
+        interviews_scheduled = len(user_interviews)
         
-        # Calculate application statistics
-        total_applications = len(user_applications)
-        
-        # Calculate interviews scheduled (from applications or separate interview records)
-        interviews_scheduled = len([app for app in user_applications 
-                                  if app.get("status") == "interview_scheduled"]) + len(user_interviews)
-        
-        # Get recent applications for trend calculation
-        week_ago = datetime.utcnow() - timedelta(days=7)
-        recent_applications = [app for app in user_applications 
-                             if datetime.fromisoformat(app.get("created_at", "").replace("Z", "+00:00")) > week_ago]
-        
-        # Calculate trend percentages
-        apps_trend = len(recent_applications) if total_applications > 0 else 0
+        # Calculate trend percentages (simplified since we're using overall_jobs_applied)
+        apps_trend = min(total_applications, 5) if total_applications > 0 else 0
         
         # Get total job count from database
         try:
@@ -208,20 +207,23 @@ async def get_dashboard(current_user: dict = Depends(get_current_user)):
                 }
             ]
         
-        # Build recent activities from real data
+        # Build recent activities from tracked activities
         recent_activities = []
         
-        # Add application activities (most recent first)
-        for app in user_applications[:5]:  # Limit to 5 most recent
-            activity = {
-                "id": app.get("_id", ""),
-                "title": f"Applied to {app.get('job_title', 'Unknown Position')} at {app.get('company', 'Unknown Company')}",
-                "icon": "send",
-                "timestamp": app.get("created_at", datetime.now().isoformat()),
-                "type": "application",
-                "status": app.get("status", "pending")
-            }
-            recent_activities.append(activity)
+        # Get recent activities from user profile
+        tracked_activities = user_profile.get("recent_activity", []) if user_profile else []
+        
+        for activity in tracked_activities:
+            if isinstance(activity, dict) and "activity_type" in activity and "description" in activity:
+                activity_item = {
+                    "id": f"{activity['activity_type']}_{activity.get('timestamp', 'unknown')}",
+                    "title": activity["description"],
+                    "icon": "send" if activity["activity_type"] == "job_application" else "account_circle",
+                    "timestamp": activity.get("timestamp", datetime.now().isoformat()),
+                    "type": activity["activity_type"],
+                    "status": "completed"
+                }
+                recent_activities.append(activity_item)
         
         # Add mock interview activities
         for interview in user_interviews[:3]:  # Limit to 3 most recent
@@ -235,8 +237,17 @@ async def get_dashboard(current_user: dict = Depends(get_current_user)):
             }
             recent_activities.append(activity)
         
-        # Sort activities by timestamp (most recent first)
-        recent_activities.sort(key=lambda x: x["timestamp"], reverse=True)
+        # Sort activities by timestamp (most recent first) - handle mixed datetime/string types
+        def get_timestamp_for_sort(activity):
+            timestamp = activity.get("timestamp", "")
+            if isinstance(timestamp, str):
+                return timestamp
+            elif hasattr(timestamp, 'isoformat'):
+                return timestamp.isoformat()
+            else:
+                return str(timestamp)
+        
+        recent_activities.sort(key=get_timestamp_for_sort, reverse=True)
         recent_activities = recent_activities[:10]  # Limit to 10 total activities
         
         # If no real activities, add some default ones
@@ -745,6 +756,11 @@ async def get_job_listings(
         if job_type and job_type not in ["all", "All Types"]:
             query["job_type"] = job_type.replace("-", "_")
         
+        # Get current user's applied jobs
+        user_profile = await db.database["users"].find_one({"user_id": user_id})
+        applied_jobs_records = user_profile.get("overall_jobs_applied", []) if user_profile else []
+        user_applied_jobs = [app.get("job_id") if isinstance(app, dict) else app for app in applied_jobs_records]
+        
         # Get ALL matching jobs for intelligent scoring (we'll paginate after scoring)
         collection = db.database["jobs"]
         cursor = collection.find(query).sort("posted_date", -1)
@@ -756,7 +772,21 @@ async def get_job_listings(
             # Calculate intelligent matching score
             match_score = calculate_job_match_score(job, user_skills, user_certifications, user_experience_keywords)
             job["match_score"] = match_score
-            job["match_percentage"] = round(match_score * 100, 1)
+            # Don't show match_percentage by default - only after analysis
+            
+            # Check if user already applied and add application state
+            job_id = job.get("job_id")
+            job["already_applied"] = job_id in user_applied_jobs
+            
+            # Add application state if user has applied
+            if job_id in user_applied_jobs:
+                app_record = next((app for app in applied_jobs_records if isinstance(app, dict) and app.get("job_id") == job_id), None)
+                if app_record:
+                    job["match_analysis_done"] = app_record.get("match_analysis_done", False)
+                    job["tailor_resume_done"] = app_record.get("tailor_resume_done", False)
+                    # Only show match percentage if analysis or tailor resume was done
+                    if app_record.get("match_analysis_done") or app_record.get("tailor_resume_done"):
+                        job["match_percentage"] = app_record.get("match_percentage", 0)
             
             # Include jobs that meet ANY of the matching criteria (OR logic)
             if match_score > 0.0:
@@ -831,104 +861,4 @@ async def get_job_listings(
         }
 
 
-@router.get("/applications", tags=["Applications"])
-async def get_applications(
-    page: int = 1, 
-    per_page: int = 10,
-    status: Optional[str] = None,
-    current_user: dict = Depends(get_current_user)
-):
-    """Get user applications with pagination from database."""
-    try:
-        user_id = current_user["user_id"]
-        
-        # Get user applications from database
-        all_applications = await get_user_applications(user_id, limit=1000)  # Get all for filtering
-        
-        # Filter by status if provided
-        if status and status != "all":
-            filtered_applications = [app for app in all_applications if app.get("status") == status]
-        else:
-            filtered_applications = all_applications
-        
-        # Sort by creation date (most recent first)
-        filtered_applications.sort(
-            key=lambda x: x.get("created_at", ""), 
-            reverse=True
-        )
-        
-        # Calculate pagination
-        total_count = len(filtered_applications)
-        start_idx = (page - 1) * per_page
-        end_idx = start_idx + per_page
-        paginated_applications = filtered_applications[start_idx:end_idx]
-        
-        # Enhance application data with additional fields if needed
-        enhanced_applications = []
-        for app in paginated_applications:
-            enhanced_app = app.copy()
-            
-            # Ensure required fields are present
-            enhanced_app.setdefault("application_id", app.get("_id", ""))
-            enhanced_app.setdefault("user_id", user_id)
-            enhanced_app.setdefault("status", "pending")
-            enhanced_app.setdefault("applied_date", app.get("created_at"))
-            enhanced_app.setdefault("last_updated", app.get("updated_at", app.get("created_at")))
-            enhanced_app.setdefault("priority", "medium")
-            enhanced_app.setdefault("progress_percentage", 25)
-            enhanced_app.setdefault("interview_stages", [])
-            enhanced_app.setdefault("follow_up_dates", [])
-            enhanced_app.setdefault("notes", "")
-            enhanced_app.setdefault("tags", [])
-            
-            # Calculate progress percentage based on status
-            status_progress = {
-                "applied": 25,
-                "under_review": 50,
-                "interview_scheduled": 75,
-                "interview_completed": 85,
-                "offer_received": 100,
-                "accepted": 100,
-                "rejected": 100,
-                "withdrawn": 100
-            }
-            enhanced_app["progress_percentage"] = status_progress.get(
-                enhanced_app["status"], 25
-            )
-            
-            enhanced_applications.append(enhanced_app)
-        
-        # Note: No fallback sample data - return empty list if no real applications
-        
-        return {
-            "applications": enhanced_applications,
-            "total_count": total_count,
-            "page": page,
-            "per_page": per_page,
-            "total_pages": (total_count + per_page - 1) // per_page,
-            "has_next": end_idx < total_count,
-            "has_prev": page > 1,
-            "filters": {
-                "status": status,
-                "available_statuses": [
-                    "all", "applied", "under_review", "interview_scheduled",
-                    "interview_completed", "offer_received", "accepted", "rejected", "withdrawn"
-                ]
-            },
-            "generated_at": datetime.now().isoformat()
-        }
-        
-    except Exception as e:
-        print(f"❌ Error getting applications: {e}")
-        # Return empty result with error info
-        return {
-            "applications": [],
-            "total_count": 0,
-            "page": page,
-            "per_page": per_page,
-            "total_pages": 0,
-            "has_next": False,
-            "has_prev": False,
-            "error": "Failed to load applications from database",
-            "generated_at": datetime.now().isoformat()
-        }
+

@@ -27,8 +27,9 @@ class PyObjectId(ObjectId):
         return ObjectId(v)
     
     @classmethod
-    def __modify_schema__(cls, field_schema):
+    def __get_pydantic_json_schema__(cls, field_schema):
         field_schema.update(type="string")
+        return field_schema
 
 
 # Base Models
@@ -90,6 +91,19 @@ class CommunicationSkill(BaseModel):
     skill: str
     level: Literal["beginner", "intermediate", "advanced", "expert"] = "intermediate"
 
+class JobApplicationRecord(BaseModel):
+    """Job application record in user profile."""
+    job_id: str
+    application_id: str
+    status: Literal["applied", "under_review", "interview_scheduled", "interviewed", "offer_received", "rejected", "withdrawn"] = "applied"
+    applied_date: datetime = Field(default_factory=datetime.utcnow)
+    last_updated: datetime = Field(default_factory=datetime.utcnow)
+    notes: Optional[str] = None
+    match_analysis_done: bool = False
+    match_percentage: Optional[int] = None
+    tailor_resume_done: bool = False
+    is_applied: bool = False
+
 class RecentActivity(BaseModel):
     """Recent user activity."""
     activity_type: Literal["application", "interview", "profile_update", "skill_assessment", "mock_interview", "resume_update"]
@@ -133,7 +147,7 @@ class UserProfile(BaseDocument):
     social_links: Optional[SocialLinks] = None
     
     # Job Application Tracking
-    overall_jobs_applied: List[str] = Field(default_factory=list)  # Array of job IDs
+    overall_jobs_applied: List[JobApplicationRecord] = Field(default_factory=list)  # Array of application records
     
     # User Classification
     user_type: Literal["candidate", "hire"] = "candidate"

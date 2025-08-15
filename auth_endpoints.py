@@ -17,6 +17,7 @@ from auth_db import (
     update_user_profile, change_user_password, seed_users_data, list_all_users
 )
 from auth_utils import create_access_token, verify_token, SECRET_KEY
+from activity_tracker import log_user_activity
 
 # Create router
 auth_router = APIRouter(prefix="/auth", tags=["Authentication"])
@@ -390,6 +391,13 @@ async def update_profile(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Failed to update profile"
             )
+        
+        # Log activity
+        await log_user_activity(
+            current_user["user_id"],
+            "profile_update",
+            "Updated profile information"
+        )
         
         print(f"✅ Profile update successful for user: {current_user.get('user_id')}")
         
