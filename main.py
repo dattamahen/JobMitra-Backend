@@ -6,9 +6,22 @@ import uvicorn
 
 from app import create_app
 from config import settings
+from db_simple import db
 
 # Create the app instance for uvicorn
 app = create_app()
+
+@app.on_event("startup")
+async def startup_event():
+    """Connect to database on startup"""
+    print("Connecting to database...")
+    await db.connect_to_mongo()
+    print(f"Database connected: {db.database is not None}")
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Close database connection on shutdown"""
+    await db.close_mongo_connection()
 
 def main():
     """
@@ -22,8 +35,7 @@ def main():
     # Start the server
     print(f"Starting {settings.APP_NAME} server...")
     uvicorn.run(
-        "app:create_app",
-        factory=True,
+        "main:app",
         host=settings.HOST,
         port=settings.PORT,
         reload=settings.RELOAD,

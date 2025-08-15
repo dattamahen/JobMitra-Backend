@@ -1,62 +1,31 @@
 """
-Configuration settings for JobMitra Backend.
+Configuration settings for JobMitra Backend
+Optimized for 10K+ daily users
 """
-
 import os
-from dotenv import load_dotenv
-
-# Load environment variables from .env file
-load_dotenv()
-
-
+from typing import Optional
 class Settings:
-    """Application settings and configuration."""
-    
-    # API Configuration
-    APP_NAME: str = "JobMitra Backend API"
-    VERSION: str = "2.0.0"
-    DESCRIPTION: str = """
-    A comprehensive REST API for JobMitra that processes user queries using AI agents powered by CrewAI.
-    
-    Features:
-    - AI-powered query processing
-    - User profile management
-    - Job search and application tracking
-    - Mock interview system
-    - Learning resources and progress tracking
-    - Dashboard analytics
-    - MongoDB integration for data persistence
-    - OpenAI integration via CrewAI
-    """
-    
-    # Server Configuration
-    HOST: str = "0.0.0.0"
-    PORT: int = 8000
-    RELOAD: bool = True
-    LOG_LEVEL: str = "info"
-    
-    # CORS Configuration
-    CORS_ORIGINS: list = [
-        "http://localhost:4200",  # Angular default port
-        "http://localhost:3000",  # Alternative frontend port
-        "http://127.0.0.1:4200",  # Alternative localhost format
-        "http://127.0.0.1:3000",  # Alternative localhost format
-    ]
-    
-    # Environment Variables
-    OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
-    MONGO_URI: str = os.getenv("MONGO_URI", "")
-    
-    @property
-    def required_env_vars(self) -> list:
-        """List of required environment variables."""
-        return ["OPENAI_API_KEY", "MONGO_URI"]
-    
-    @property
-    def missing_env_vars(self) -> list:
-        """List of missing environment variables."""
-        return [var for var in self.required_env_vars if not os.getenv(var)]
+    APP_NAME = "JobMitra Backend API"
+    DESCRIPTION = "AI-powered job search and career development platform"
+    VERSION = "1.0.0"
+    CORS_ORIGINS = ["http://localhost:4200", "*"]
+    HOST = "0.0.0.0"
+    PORT = 8000
+    RELOAD = True
+    LOG_LEVEL = "info"
+    missing_env_vars = []
+    MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017/jobmitra")
+    MONGO_MAX_POOL_SIZE = 100
+    MONGO_MIN_POOL_SIZE = 10
+    REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
+    CACHE_TTL = 300
+    SESSION_TTL = 86400
+    RATE_LIMIT_PER_MINUTE = 100
+    RATE_LIMIT_BURST = 200
+    SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key")
+    ACCESS_TOKEN_EXPIRE_MINUTES = 30
+    MAX_WORKERS = 4
+    KEEP_ALIVE_TIMEOUT = 5
+    ENABLE_METRICS = True
 
-
-# Create settings instance
 settings = Settings()

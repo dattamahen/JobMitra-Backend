@@ -45,6 +45,7 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
         
         user = await get_user_by_id(user_id)
         if user is None:
+            print(f"❌ User not found for ID: {user_id}")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="User not found"
@@ -58,6 +59,7 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
             detail="Token has expired"
         )
     except Exception as e:
+        print(f"❌ Error getting user by ID: {e}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Authentication failed"

@@ -46,23 +46,20 @@ def create_access_token(data: Dict[str, Any], expires_delta: Optional[timedelta]
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
-def verify_token(token: str) -> Dict[str, Any]:
+def verify_token(token: str) -> Optional[Dict[str, Any]]:
     """Verify and decode JWT token"""
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         return payload
     except jwt.ExpiredSignatureError:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token has expired",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    except jwt.JWTError:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Could not validate credentials",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+        print("❌ Token has expired")
+        return None
+    except jwt.JWTError as e:
+        print(f"❌ JWT validation error: {e}")
+        return None
+    except Exception as e:
+        print(f"❌ Token verification error: {e}")
+        return None
 
 def generate_reset_token() -> str:
     """Generate password reset token"""
