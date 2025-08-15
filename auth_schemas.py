@@ -2,7 +2,7 @@
 Authentication and User Management Schemas
 """
 
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from pydantic import BaseModel, EmailStr, Field, validator
 from datetime import datetime
 try:
     from typing import Literal
@@ -257,7 +257,7 @@ class UserProfileUpdateRequest(BaseModel):
     twitter_url: Optional[str] = None
     youtube_url: Optional[str] = None
     
-    @field_validator('certifications')
+    @validator('certifications')
     @classmethod
     def validate_certifications(cls, v):
         """Handle both string and Certification object formats for certifications"""

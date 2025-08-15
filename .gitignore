@@ -133,3 +133,13 @@ dmypy.json
 
 # PyCharm
 .idea/
+
+# Debug and test files
+debug_*.py
+test_*.py
+check_*.py
+fix_*.py
+create_test_*.py
+update_*.py
+reset_*.py
+migrate_*.py

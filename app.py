@@ -32,8 +32,11 @@ async def lifespan(app: FastAPI):
     try:
         await db.connect_to_mongo()
         print("Database connection established successfully")
+        print(f"Database object: {db.database}")
+        print(f"Fallback mode: {db.fallback_mode}")
     except Exception as e:
         print(f"Failed to connect to database: {e}")
+        print(f"Database object after error: {db.database}")
         # You might want to exit here in production
         
     yield
