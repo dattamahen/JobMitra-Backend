@@ -33,7 +33,7 @@ class CommunicationSkill(BaseModel):
 
 class RecentActivity(BaseModel):
     """Recent user activity."""
-    activity_type: Literal["application", "interview", "profile_update", "skill_assessment", "mock_interview", "resume_update"]
+    activity_type: Literal["application", "job_application", "interview", "profile_update", "skill_assessment", "mock_interview", "resume_update"]
     description: str
     timestamp: datetime = Field(default_factory=datetime.utcnow)
     metadata: Dict[str, Any] = Field(default_factory=dict)
@@ -78,7 +78,7 @@ class UserResponse(BaseModel):
     playstore_link: Optional[str] = None
     
     # Job Application Tracking
-    overall_jobs_applied: List[str] = Field(default_factory=list)
+    overall_jobs_applied: List[Dict[str, Any]] = Field(default_factory=list)
     
     # User Classification
     user_type: Literal["candidate", "hire"] = "candidate"
@@ -168,7 +168,7 @@ class UserProfileResponse(BaseModel):
     social_links: Optional[SocialLinks] = None
     
     # Job Application Tracking
-    overall_jobs_applied: List[str] = Field(default_factory=list)
+    overall_jobs_applied: List[Dict[str, Any]] = Field(default_factory=list)
     
     # User Classification
     user_type: Literal["candidate", "hire"] = "candidate"

@@ -1,40 +1,38 @@
 #!/usr/bin/env python3
 """
-Check what users exist in database
+Check users in database
 """
 
 import asyncio
-from motor.motor_asyncio import AsyncIOMotorClient
-import os
-from dotenv import load_dotenv
-
-# Load environment variables
-load_dotenv()
+from db_simple import db
 
 async def check_users():
-    """Check what users exist in database"""
-    
-    # Get MongoDB URI from environment
-    mongo_uri = os.getenv('MONGO_URI', 'mongodb://localhost:27017/jobmitra')
-    
+    """Check users in database"""
     try:
-        # Connect to MongoDB
-        client = AsyncIOMotorClient(mongo_uri)
-        db = client.get_database()
-        
-        print("Connecting to MongoDB...")
+        await db.connect_to_mongo()
+        print("Connected to database")
         
         # Get all users
-        users = await db.users.find({}, {"email": 1, "user_type": 1, "first_name": 1, "last_name": 1}).to_list(length=None)
+        users_cursor = db.database["users"].find({})
+        users = []
+        async for user in users_cursor:
+            users.append(user)
         
         print(f"Found {len(users)} users:")
+        
         for user in users:
-            print(f"- {user.get('email', 'No email')} | Type: {user.get('user_type', 'No type')} | Name: {user.get('first_name', '')} {user.get('last_name', '')}")
-            
+            user_id = user.get("user_id")
+            email = user.get("email")
+            password = user.get("password", "No password field")
+            print(f"  User ID: {user_id}")
+            print(f"  Email: {email}")
+            print(f"  Password: {password}")
+            print("  ---")
+        
+        await db.close_mongo_connection()
+        
     except Exception as e:
         print(f"Error: {e}")
-    finally:
-        client.close()
 
 if __name__ == "__main__":
     asyncio.run(check_users())
