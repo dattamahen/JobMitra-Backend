@@ -184,7 +184,7 @@ class JobListing(BaseModel):
     is_active: bool = True
     posted_by_hr_id: str  # Reference to HR user who posted this job
     views_count: int = 0
-    applications_count: int = 0
+    applications_count: List[str] = []  # Array of user IDs who applied
     source: str = "internal"  # internal, external, etc.
     
     # Auto-calculated fields

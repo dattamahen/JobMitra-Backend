@@ -16,6 +16,8 @@ from auth_endpoints import auth_router
 from hr_endpoints import hr_router
 from hr_test_endpoints import test_hr_router
 from job_application_endpoints import application_router
+from apply_endpoints import apply_router
+from match_analysis_endpoints import match_router
 
 
 @asynccontextmanager
@@ -73,6 +75,8 @@ def create_app() -> FastAPI:
     app.include_router(auth_router, prefix="/api/v1")  # Authentication routes
     app.include_router(hr_router, prefix="/api/v1")  # HR job management routes (database-connected)
     app.include_router(application_router, prefix="/api/v1")  # Job application routes
+    app.include_router(apply_router, prefix="")  # Apply for job routes (includes /api/v1 prefix)
+    app.include_router(match_router, prefix="")  # Match analysis routes (includes /api/v1 prefix)
 
     # Health check endpoint
     @app.get("/", tags=["Health"])

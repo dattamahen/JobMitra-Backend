@@ -354,21 +354,118 @@ async def get_user_mock_interviews(user_id: str, limit: int = 10) -> List[Dict[s
 async def get_user_dashboard(user_id: str) -> Optional[Dict[str, Any]]:
     """Get user dashboard data."""
     try:
+        # Get user profile to check user type
+        user_profile = await get_user_profile(user_id)
+        user_type = user_profile.get("user_type", "candidate") if user_profile else "candidate"
+        
         # Get or create dashboard
         collection = db.database[COLLECTIONS["dashboards"]]
         dashboard = await collection.find_one({"user_id": user_id})
         
         if not dashboard:
-            # Create default dashboard
-            dashboard_data = {
-                "user_id": user_id,
-                "total_applications": 0,
-                "total_interviews": 0,
-                "profile_completion": 75,
-                "recent_activity": [],
-                "created_at": datetime.utcnow(),
-                "updated_at": datetime.utcnow()
-            }
+            # Create default dashboard based on user type
+            if user_type == "hire":
+                # For HR users, count applications received for their job postings
+                jobs_collection = db.database[COLLECTIONS["jobs"]]
+                applications_collection = db.database[COLLECTIONS["applications"]]
+                
+                print(f"🔍 DEBUG: HR user_id: {user_id}")
+                print(f"🔍 DEBUG: user_type: {user_type}")
+                
+                # First check if HR has any jobs and their applications_received values
+                print(f"🔍 DEBUG: Searching for jobs with posted_by_hr_id: {user_id}")
+                hr_jobs = await jobs_collection.find({"posted_by_hr_id": user_id}).to_list(None)
+                print(f"🔍 DEBUG: HR jobs found: {len(hr_jobs)}")
+                
+                # Also check total jobs in collection
+                total_jobs = await jobs_collection.count_documents({})
+                print(f"🔍 DEBUG: Total jobs in collection: {total_jobs}")
+                
+                # Show all job IDs found
+                job_ids_found = [job.get('job_id', 'unknown') for job in hr_jobs]
+                print(f"🔍 DEBUG: Job IDs found: {job_ids_found}")
+                
+                for job in hr_jobs:
+                    print(f"🔍 DEBUG: Job {job.get('job_id', 'unknown')}: posted_by_hr_id = {job.get('posted_by_hr_id')}, applications_received = {job.get('applications_received', 0)}")
+                
+                # Check total applications in system
+                total_apps = await applications_collection.count_documents({})
+                print(f"🔍 DEBUG: Total applications in system: {total_apps}")
+                
+
+                
+                # Count applications from job_applications collection for HR's jobs
+                hr_job_ids = [job.get('job_id') for job in hr_jobs if job.get('job_id')]
+                print(f"🔍 DEBUG: HR job IDs: {hr_job_ids}")
+                
+                if hr_job_ids:
+                    applications_received = await applications_collection.count_documents({"job_id": {"$in": hr_job_ids}})
+                else:
+                    applications_received = 0
+                    
+                print(f"🔍 DEBUG: Applications found in job_applications collection: {applications_received}")
+                
+                print(f"🔍 DEBUG: Total applications received: {applications_received}")
+                
+                dashboard_data = {
+                    "user_id": user_id,
+                    "applications_count": applications_received,
+                    "total_job_postings": len(hr_jobs),
+                    "total_interviews": 0,
+                    "profile_completion": 75,
+                    "recent_activity": [],
+                    "stats": [
+                        {
+                            "id": "applications-received",
+                            "label": "Applications Received",
+                            "value": applications_received,
+                            "icon": "inbox",
+                            "color": "accent",
+                            "trend": {
+                                "direction": "neutral",
+                                "percentage": 15,
+                                "period": "this week"
+                            }
+                        }
+                    ],
+                    "created_at": datetime.utcnow(),
+                    "updated_at": datetime.utcnow()
+                }
+            else:
+                # For candidates, count applications sent
+                applications_collection = db.database[COLLECTIONS["applications"]]
+                applications_sent = await applications_collection.count_documents({"user_id": user_id})
+                print(f"🔍 DEBUG: Candidate applications sent: {applications_sent}")
+                
+                # Also check overall_jobs_applied array in user profile
+                if applications_sent == 0 and "overall_jobs_applied" in user_profile:
+                    applications_sent = len(user_profile["overall_jobs_applied"])
+                    print(f"🔍 DEBUG: Using overall_jobs_applied array: {applications_sent}")
+                
+                dashboard_data = {
+                    "user_id": user_id,
+                    "applications_count": applications_sent,
+                    "total_interviews": 0,
+                    "profile_completion": 75,
+                    "recent_activity": [],
+                    "stats": [
+                        {
+                            "id": "applications-sent",
+                            "label": "Applications Sent",
+                            "value": applications_sent,
+                            "icon": "send",
+                            "color": "primary",
+                            "trend": {
+                                "direction": "neutral",
+                                "percentage": 0,
+                                "period": "this week"
+                            }
+                        }
+                    ],
+                    "created_at": datetime.utcnow(),
+                    "updated_at": datetime.utcnow()
+                }
+            
             result = await collection.insert_one(dashboard_data)
             dashboard = await collection.find_one({"_id": result.inserted_id})
         

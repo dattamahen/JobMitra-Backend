@@ -20,6 +20,7 @@ from db_simple import (
     get_user_dashboard, update_user_dashboard,
     get_learning_resources, get_user_progress
 )
+from activity_tracker import log_user_activity
 
 # Import schemas - commented out for now since using mock data
 # from schemas import (
@@ -121,6 +122,12 @@ async def update_user(user_id: str, update_data: UserProfileUpdate):
         success = await update_user_profile(user_id, update_dict)
         
         if success:
+            # Log activity
+            await log_user_activity(
+                user_id,
+                "profile_update",
+                "Updated profile information"
+            )
             return {"message": "User updated successfully"}
         else:
             raise HTTPException(status_code=404, detail="User not found or no changes made")

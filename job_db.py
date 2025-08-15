@@ -57,7 +57,7 @@ class JobDatabase:
                 "is_active": True,
                 "posted_by_hr_id": hr_user_id,
                 "views_count": 0,
-                "applications_count": 0,
+                "applications_count": [],
                 "source": "internal",
                 "job_score": None,
                 "match_percentage": None
@@ -116,7 +116,7 @@ class JobDatabase:
                     "posted_date": job.get("posted_date", datetime.utcnow()),
                     "application_deadline": job.get("application_deadline"),
                     "is_active": job.get("is_active", True),
-                    "applications_count": job.get("applications_count", 0),
+                    "applications_count": len(job.get("applications_count", [])),
                     "views_count": job.get("views_count", 0),
                     "description": job.get("description", ""),
                     "requirements": job.get("requirements", []),
@@ -284,7 +284,7 @@ class JobDatabase:
             total_jobs = len(all_jobs)
             active_jobs = len([job for job in all_jobs if job.get("is_active", True)])
             inactive_jobs = total_jobs - active_jobs
-            total_applications = sum(job.get("applications_count", 0) for job in all_jobs)
+            total_applications = sum(len(job.get("applications_count", [])) for job in all_jobs)
             
             # Jobs expiring soon (within 7 days)
             cutoff_date = datetime.utcnow() + timedelta(days=7)
@@ -342,16 +342,23 @@ class JobDatabase:
             print(f"❌ Error incrementing job views: {e}")
             return False
     
-    async def increment_job_applications(self, job_id: str) -> bool:
-        """Increment application count for a job"""
+    async def add_job_application(self, job_id: str, user_id: str) -> bool:
+        """Add user to job applications array"""
         try:
+            # First, ensure applications_count is an array (handle legacy integer format)
+            await db.database[self.jobs_collection].update_one(
+                {"job_id": job_id, "applications_count": {"$type": "number"}},
+                {"$set": {"applications_count": []}}
+            )
+            
+            # Now add user to the array
             result = await db.database[self.jobs_collection].update_one(
                 {"job_id": job_id},
-                {"$inc": {"applications_count": 1}}
+                {"$addToSet": {"applications_count": user_id}}
             )
             return result.modified_count > 0
         except Exception as e:
-            print(f"❌ Error incrementing job applications: {e}")
+            print(f"❌ Error adding job application: {e}")
             return False
     
     def _generate_job_id(self, title: str, company: str) -> str:
