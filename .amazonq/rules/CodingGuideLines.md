@@ -6,6 +6,7 @@ FRONTEND:
 - No setTimeout/setInterval — use signals/animations.
 - Strict typing, remove unused code, optimize performance (OnPush, trackBy, memoization, lazy routes).
 - Accessibility and security must be ensured.
+- Recheck before concluding whether there are build errors and run time errors
 
 BACKEND:
 - Use MongoDB Atlas with connection pooling and proper indexing.

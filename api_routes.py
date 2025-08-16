@@ -307,6 +307,196 @@ async def get_user_progress_endpoint(user_id: str):
         raise HTTPException(status_code=500, detail=f"Error getting user progress: {str(e)}")
 
 
+# Resume Management Endpoints
+class ResumeCreate(BaseModel):
+    """Request model for creating resume."""
+    user_id: str
+    title: str
+    template_id: Optional[str] = "modern"
+    sections: Dict[str, Any] = {}
+
+class ResumeUpdate(BaseModel):
+    """Request model for updating resume."""
+    title: Optional[str] = None
+    sections: Optional[Dict[str, Any]] = None
+    is_primary: Optional[bool] = None
+
+@router.post("/resumes", tags=["Resume Management"])
+async def create_resume(resume_data: ResumeCreate):
+    """Create a new resume."""
+    try:
+        resume_dict = resume_data.dict()
+        resume_dict["resume_id"] = f"resume_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}_{resume_dict['user_id']}"
+        resume_dict["version"] = "1.0"
+        
+        # Mock implementation - would use actual DB function
+        resume_id = resume_dict["resume_id"]
+        
+        return {"message": "Resume created successfully", "resume_id": resume_id}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error creating resume: {str(e)}")
+
+@router.get("/users/{user_id}/resumes", tags=["Resume Management"])
+async def get_user_resumes(user_id: str):
+    """Get all resumes for a user."""
+    try:
+        # Mock data - would fetch from database
+        resumes = [
+            {
+                "resume_id": f"resume_001_{user_id}",
+                "title": "Software Engineer Resume",
+                "is_primary": True,
+                "created_at": datetime.utcnow().isoformat(),
+                "updated_at": datetime.utcnow().isoformat()
+            }
+        ]
+        
+        return {"resumes": resumes, "count": len(resumes)}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error getting resumes: {str(e)}")
+
+@router.get("/resumes/{resume_id}", tags=["Resume Management"])
+async def get_resume(resume_id: str):
+    """Get specific resume details."""
+    try:
+        # Mock resume data
+        resume = {
+            "resume_id": resume_id,
+            "title": "Software Engineer Resume",
+            "sections": {
+                "personal_info": {
+                    "full_name": "John Doe",
+                    "email": "john.doe@email.com",
+                    "phone": "+1 (555) 123-4567",
+                    "location": "San Francisco, CA",
+                    "linkedin": "linkedin.com/in/johndoe",
+                    "portfolio": "johndoe.dev"
+                },
+                "summary": "Experienced software engineer with 5+ years in full-stack development...",
+                "experience": [
+                    {
+                        "company": "Tech Corp",
+                        "position": "Senior Software Engineer",
+                        "duration": "2021 - Present",
+                        "description": "Led development of microservices architecture...",
+                        "achievements": ["Improved system performance by 40%", "Led team of 5 developers"]
+                    }
+                ],
+                "education": [
+                    {
+                        "institution": "University of Technology",
+                        "degree": "Bachelor of Computer Science",
+                        "year": "2019",
+                        "gpa": "3.8/4.0"
+                    }
+                ],
+                "skills": {
+                    "technical": ["Python", "JavaScript", "React", "Node.js", "MongoDB"],
+                    "soft": ["Leadership", "Communication", "Problem Solving"]
+                },
+                "projects": [
+                    {
+                        "name": "E-commerce Platform",
+                        "description": "Built scalable e-commerce solution",
+                        "technologies": ["React", "Node.js", "MongoDB"],
+                        "url": "github.com/johndoe/ecommerce"
+                    }
+                ],
+                "certifications": [
+                    {
+                        "name": "AWS Solutions Architect",
+                        "issuer": "Amazon Web Services",
+                        "date": "2023"
+                    }
+                ]
+            },
+            "ats_score": 85,
+            "suggestions": [
+                "Add more quantifiable achievements",
+                "Include relevant keywords for ATS optimization",
+                "Expand on leadership experience"
+            ]
+        }
+        
+        return resume
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error getting resume: {str(e)}")
+
+@router.put("/resumes/{resume_id}", tags=["Resume Management"])
+async def update_resume(resume_id: str, update_data: ResumeUpdate):
+    """Update resume."""
+    try:
+        update_dict = update_data.dict(exclude_unset=True)
+        
+        if not update_dict:
+            raise HTTPException(status_code=400, detail="No data provided for update")
+        
+        return {"message": "Resume updated successfully", "resume_id": resume_id}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error updating resume: {str(e)}")
+
+@router.post("/resumes/{resume_id}/optimize", tags=["Resume Management"])
+async def optimize_resume(resume_id: str, job_description: Optional[str] = None):
+    """AI-optimize resume for better ATS score."""
+    try:
+        # Mock AI optimization
+        optimizations = {
+            "original_score": 75,
+            "optimized_score": 92,
+            "changes_made": [
+                "Added industry-specific keywords",
+                "Improved achievement quantification",
+                "Enhanced skill section formatting",
+                "Optimized section ordering"
+            ],
+            "suggestions": [
+                "Consider adding more technical certifications",
+                "Include metrics for project impact"
+            ]
+        }
+        
+        return optimizations
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error optimizing resume: {str(e)}")
+
+@router.get("/resume-templates", tags=["Resume Management"])
+async def get_resume_templates():
+    """Get available resume templates."""
+    try:
+        templates = [
+            {
+                "template_id": "modern",
+                "name": "Modern Professional",
+                "description": "Clean, modern design perfect for tech roles",
+                "preview_url": "/templates/modern-preview.png",
+                "category": "professional"
+            },
+            {
+                "template_id": "creative",
+                "name": "Creative Designer",
+                "description": "Colorful template for creative professionals",
+                "preview_url": "/templates/creative-preview.png",
+                "category": "creative"
+            },
+            {
+                "template_id": "executive",
+                "name": "Executive",
+                "description": "Professional template for senior positions",
+                "preview_url": "/templates/executive-preview.png",
+                "category": "executive"
+            }
+        ]
+        
+        return {"templates": templates, "count": len(templates)}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error getting templates: {str(e)}")
+
 # Analytics Endpoints
 @router.get("/analytics/summary", tags=["Analytics"])
 async def get_analytics_summary():
@@ -341,6 +531,7 @@ async def health_check():
             "mock_interviews",
             "learning_resources",
             "dashboard",
-            "analytics"
+            "analytics",
+            "resume_builder"
         ]
     }
