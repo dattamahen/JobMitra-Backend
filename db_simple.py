@@ -109,7 +109,7 @@ db = Database()
 
 # Collection names
 COLLECTIONS = {
-    "users": "user_profiles",
+    "users": "users",
     "jobs": "job_listings", 
     "applications": "job_applications",
     "mock_interviews": "mock_interview_sessions",
@@ -298,18 +298,49 @@ async def create_job_application(app_data: Dict[str, Any]) -> Optional[str]:
 
 
 async def get_user_applications(user_id: str, limit: int = 20) -> List[Dict[str, Any]]:
-    """Get applications for a user."""
+    """Get applications for a user from user profile's overall_jobs_applied array."""
     try:
-        collection = db.database[COLLECTIONS["applications"]]
-        cursor = collection.find({"user_id": user_id}).sort("created_at", -1).limit(limit)
-        applications = await cursor.to_list(length=limit)
+        # Get user profile to access overall_jobs_applied array (same as dashboard)
+        user_profile = await get_user_profile(user_id)
+        if not user_profile:
+            return []
         
-        # Convert ObjectId to string
-        for app in applications:
-            if "_id" in app:
-                app["_id"] = str(app["_id"])
+        # Get applications from overall_jobs_applied array
+        overall_jobs_applied = user_profile.get("overall_jobs_applied", [])
         
-        return applications
+        # Filter only applied jobs (is_applied=True) and get job details
+        applications = []
+        jobs_collection = db.database["jobs"]
+        
+        for app_record in overall_jobs_applied:
+            if isinstance(app_record, dict) and app_record.get("is_applied", False):
+                job_id = app_record.get("job_id")
+                if job_id:
+                    # Get job details
+                    job = await jobs_collection.find_one({"job_id": job_id})
+                    if job:
+                        # Convert to application format
+                        application = {
+                            "_id": str(job.get("_id", "")),
+                            "application_id": f"app_{job_id}_{user_id}",
+                            "job_id": job_id,
+                            "user_id": user_id,
+                            "job_title": job.get("title", ""),
+                            "company": job.get("company", ""),
+                            "status": app_record.get("status", "applied"),
+                            "applied_date": app_record.get("applied_date", app_record.get("timestamp", "")),
+                            "match_percentage": app_record.get("match_percentage", 0),
+                            "match_analysis_done": app_record.get("match_analysis_done", False),
+                            "tailor_resume_done": app_record.get("tailor_resume_done", False),
+                            "created_at": app_record.get("timestamp", ""),
+                            "updated_at": app_record.get("timestamp", "")
+                        }
+                        applications.append(application)
+        
+        # Sort by applied date (most recent first)
+        applications.sort(key=lambda x: x.get("applied_date", ""), reverse=True)
+        
+        return applications[:limit]
         
     except Exception as e:
         print(f"Error getting user applications: {e}")
@@ -352,127 +383,82 @@ async def get_user_mock_interviews(user_id: str, limit: int = 10) -> List[Dict[s
 
 # Dashboard Functions
 async def get_user_dashboard(user_id: str) -> Optional[Dict[str, Any]]:
-    """Get user dashboard data."""
+    """Get user dashboard data without creating persistent dashboard entries."""
     try:
         # Get user profile to check user type
         user_profile = await get_user_profile(user_id)
-        user_type = user_profile.get("user_type", "candidate") if user_profile else "candidate"
-        
-        # Get or create dashboard
-        collection = db.database[COLLECTIONS["dashboards"]]
-        dashboard = await collection.find_one({"user_id": user_id})
-        
-        if not dashboard:
-            # Create default dashboard based on user type
-            if user_type == "hire":
-                # For HR users, count applications received for their job postings
-                jobs_collection = db.database[COLLECTIONS["jobs"]]
-                applications_collection = db.database[COLLECTIONS["applications"]]
-                
-                print(f"🔍 DEBUG: HR user_id: {user_id}")
-                print(f"🔍 DEBUG: user_type: {user_type}")
-                
-                # First check if HR has any jobs and their applications_received values
-                print(f"🔍 DEBUG: Searching for jobs with posted_by_hr_id: {user_id}")
-                hr_jobs = await jobs_collection.find({"posted_by_hr_id": user_id}).to_list(None)
-                print(f"🔍 DEBUG: HR jobs found: {len(hr_jobs)}")
-                
-                # Also check total jobs in collection
-                total_jobs = await jobs_collection.count_documents({})
-                print(f"🔍 DEBUG: Total jobs in collection: {total_jobs}")
-                
-                # Show all job IDs found
-                job_ids_found = [job.get('job_id', 'unknown') for job in hr_jobs]
-                print(f"🔍 DEBUG: Job IDs found: {job_ids_found}")
-                
-                for job in hr_jobs:
-                    print(f"🔍 DEBUG: Job {job.get('job_id', 'unknown')}: posted_by_hr_id = {job.get('posted_by_hr_id')}, applications_received = {job.get('applications_received', 0)}")
-                
-                # Check total applications in system
-                total_apps = await applications_collection.count_documents({})
-                print(f"🔍 DEBUG: Total applications in system: {total_apps}")
-                
-
-                
-                # Count applications from job_applications collection for HR's jobs
-                hr_job_ids = [job.get('job_id') for job in hr_jobs if job.get('job_id')]
-                print(f"🔍 DEBUG: HR job IDs: {hr_job_ids}")
-                
-                if hr_job_ids:
-                    applications_received = await applications_collection.count_documents({"job_id": {"$in": hr_job_ids}})
-                else:
-                    applications_received = 0
-                    
-                print(f"🔍 DEBUG: Applications found in job_applications collection: {applications_received}")
-                
-                print(f"🔍 DEBUG: Total applications received: {applications_received}")
-                
-                dashboard_data = {
-                    "user_id": user_id,
-                    "applications_count": applications_received,
-                    "total_job_postings": len(hr_jobs),
-                    "total_interviews": 0,
-                    "profile_completion": 75,
-                    "recent_activity": [],
-                    "stats": [
-                        {
-                            "id": "applications-received",
-                            "label": "Applications Received",
-                            "value": applications_received,
-                            "icon": "inbox",
-                            "color": "accent",
-                            "trend": {
-                                "direction": "neutral",
-                                "percentage": 15,
-                                "period": "this week"
-                            }
-                        }
-                    ],
-                    "created_at": datetime.utcnow(),
-                    "updated_at": datetime.utcnow()
-                }
-            else:
-                # For candidates, count applications sent
-                applications_collection = db.database[COLLECTIONS["applications"]]
-                applications_sent = await applications_collection.count_documents({"user_id": user_id})
-                print(f"🔍 DEBUG: Candidate applications sent: {applications_sent}")
-                
-                # Also check overall_jobs_applied array in user profile
-                if applications_sent == 0 and "overall_jobs_applied" in user_profile:
-                    applications_sent = len(user_profile["overall_jobs_applied"])
-                    print(f"🔍 DEBUG: Using overall_jobs_applied array: {applications_sent}")
-                
-                dashboard_data = {
-                    "user_id": user_id,
-                    "applications_count": applications_sent,
-                    "total_interviews": 0,
-                    "profile_completion": 75,
-                    "recent_activity": [],
-                    "stats": [
-                        {
-                            "id": "applications-sent",
-                            "label": "Applications Sent",
-                            "value": applications_sent,
-                            "icon": "send",
-                            "color": "primary",
-                            "trend": {
-                                "direction": "neutral",
-                                "percentage": 0,
-                                "period": "this week"
-                            }
-                        }
-                    ],
-                    "created_at": datetime.utcnow(),
-                    "updated_at": datetime.utcnow()
-                }
+        if not user_profile:
+            return None
             
-            result = await collection.insert_one(dashboard_data)
-            dashboard = await collection.find_one({"_id": result.inserted_id})
+        user_type = user_profile.get("user_type", "candidate")
         
-        if dashboard and "_id" in dashboard:
-            dashboard["_id"] = str(dashboard["_id"])
+        # Generate dashboard data dynamically without storing in database
+        if user_type == "hire":
+            # For HR users, count applications received for their job postings
+            jobs_collection = db.database[COLLECTIONS["jobs"]]
+            applications_collection = db.database[COLLECTIONS["applications"]]
+            
+            hr_jobs = await jobs_collection.find({"posted_by_hr_id": user_id}).to_list(None)
+            hr_job_ids = [job.get('job_id') for job in hr_jobs if job.get('job_id')]
+            
+            if hr_job_ids:
+                applications_received = await applications_collection.count_documents({"job_id": {"$in": hr_job_ids}})
+            else:
+                applications_received = 0
+            
+            dashboard_data = {
+                "user_id": user_id,
+                "applications_count": applications_received,
+                "total_job_postings": len(hr_jobs),
+                "total_interviews": 0,
+                "profile_completion": 75,
+                "recent_activity": [],
+                "stats": [
+                    {
+                        "id": "applications-received",
+                        "label": "Applications Received",
+                        "value": applications_received,
+                        "icon": "inbox",
+                        "color": "accent",
+                        "trend": {
+                            "direction": "neutral",
+                            "percentage": 15,
+                            "period": "this week"
+                        }
+                    }
+                ],
+                "created_at": datetime.utcnow(),
+                "updated_at": datetime.utcnow()
+            }
+        else:
+            # For candidates, count applications from overall_jobs_applied array
+            applications_sent = len(user_profile.get("overall_jobs_applied", []))
+            
+            dashboard_data = {
+                "user_id": user_id,
+                "applications_count": applications_sent,
+                "total_interviews": 0,
+                "profile_completion": 75,
+                "recent_activity": [],
+                "stats": [
+                    {
+                        "id": "applications-sent",
+                        "label": "Applications Sent",
+                        "value": applications_sent,
+                        "icon": "send",
+                        "color": "primary",
+                        "trend": {
+                            "direction": "neutral",
+                            "percentage": 0,
+                            "period": "this week"
+                        }
+                    }
+                ],
+                "created_at": datetime.utcnow(),
+                "updated_at": datetime.utcnow()
+            }
         
-        return dashboard
+        return dashboard_data
         
     except Exception as e:
         print(f"Error getting dashboard: {e}")

@@ -20,10 +20,10 @@ class ApplicationStatus(str, Enum):
 
 class ProfileMatchAnalysis(BaseModel):
     """Profile match analysis for job application"""
-    overall_match_percentage: float = Field(..., ge=0, le=100)
-    skills_match_percentage: float = Field(..., ge=0, le=100)
-    experience_match_percentage: float = Field(..., ge=0, le=100)
-    education_match_percentage: float = Field(..., ge=0, le=100)
+    overall_match: float = Field(..., ge=0, le=100)
+    skills_match: float = Field(..., ge=0, le=100)
+    experience_match: float = Field(..., ge=0, le=100)
+    education_match: float = Field(..., ge=0, le=100)
     
     matched_skills: List[str] = []
     missing_skills: List[str] = []

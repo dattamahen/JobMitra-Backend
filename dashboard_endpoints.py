@@ -46,17 +46,55 @@ async def get_dashboard(current_user: dict = Depends(get_current_user)):
         
         # Get user data directly from users collection
         user_profile = await db.database["users"].find_one({"user_id": user_id})
-        profile_completion = user_profile.get("profile_completion_count", 0) if user_profile else 0
         
-        # Debug: Print the entire user profile to see what fields exist
-        print(f"🔍 Debug - User ID: {user_id}")
-        print(f"🔍 Debug - User Profile Keys: {list(user_profile.keys()) if user_profile else 'None'}")
-        print(f"🔍 Debug - overall_jobs_applied field: {user_profile.get('overall_jobs_applied') if user_profile else 'No profile'}")
+        # Calculate profile completion dynamically
+        def calculate_profile_completion(profile):
+            if not profile:
+                return 0
+            
+            completion_score = 0
+            total_fields = 10  # Total weighted fields
+            
+            # Basic info (20%)
+            if profile.get("first_name") and profile.get("last_name"):
+                completion_score += 2
+            if profile.get("email"):
+                completion_score += 1
+            if profile.get("phone"):
+                completion_score += 1
+            
+            # Professional info (40%)
+            if profile.get("skills") and len(profile.get("skills", [])) > 0:
+                completion_score += 2
+            if profile.get("overall_experience_years") is not None:
+                completion_score += 1
+            if profile.get("highest_qualification"):
+                completion_score += 1
+            
+            # Additional details (40%)
+            prof_info = profile.get("professional_info", {})
+            if prof_info.get("current_role"):
+                completion_score += 1
+            if prof_info.get("professional_summary"):
+                completion_score += 1
+            # Check certifications (filter out invalid entries)
+            certs = profile.get("certifications", [])
+            valid_certs = []
+            for cert in certs:
+                if isinstance(cert, dict) and cert.get("name") and cert.get("name") != "[object Object]":
+                    valid_certs.append(cert)
+                elif isinstance(cert, str) and cert and cert != "[object Object]":
+                    valid_certs.append(cert)
+            if valid_certs:
+                completion_score += 1
+            
+            return min(int((completion_score / total_fields) * 100), 100)
+        
+        profile_completion = calculate_profile_completion(user_profile)
         
         # Get applications count from user's overall_jobs_applied field (only is_applied=True)
         overall_jobs_applied = user_profile.get("overall_jobs_applied", []) if user_profile else []
         total_applications = sum(1 for app in overall_jobs_applied if isinstance(app, dict) and app.get("is_applied", False))
-        print(f"🔍 Debug - Total Applications Count: {total_applications}")
         
         # Get user mock interviews from database
         user_interviews = await get_user_mock_interviews(user_id, limit=20)
@@ -146,7 +184,12 @@ async def get_dashboard(current_user: dict = Depends(get_current_user)):
                 
                 hr_jobs_count = await db_hr.jobs.count_documents({"posted_by_hr_id": user_id})
                 hr_active_jobs = await db_hr.jobs.count_documents({"posted_by_hr_id": user_id, "is_active": True})
-                hr_applications_received = await db_hr.job_applications.count_documents({"hr_user_id": user_id})
+                # Count applications from applications_received field in job documents
+                hr_jobs = await db_hr.jobs.find({"posted_by_hr_id": user_id}).to_list(None)
+                hr_applications_received = 0
+                for job in hr_jobs:
+                    applications_received = job.get("applications_received", [])
+                    hr_applications_received += len(applications_received)
                 
                 client.close()
                 
@@ -716,6 +759,7 @@ async def get_job_listings(
         user_id = current_user["user_id"]
         if not user_skills:
             user_profile = await get_user_profile(user_id)
+            print(f"🔍 User profile from get_user_profile: skills = {user_profile.get('skills', []) if user_profile else 'No profile'}")
             if user_profile:
                 user_skills = user_profile.get("skills", [])
                 user_certifications = [cert.get("name", "") for cert in user_profile.get("certifications", []) if isinstance(cert, dict)]
@@ -728,7 +772,7 @@ async def get_job_listings(
                 if prof_info.get("key_contributions"):
                     user_experience_keywords.extend(prof_info["key_contributions"].lower().split())
         
-        print(f"🔍 Received User Skills: {user_skills}")
+        print(f"🔍 Final User Skills for job matching: {user_skills}")
         print(f"🏆 Received User Certifications: {user_certifications}")
         print(f"💼 Request Source: {'Request Body' if user_skills else 'User Profile'}")
         
