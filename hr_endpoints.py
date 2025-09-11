@@ -6,6 +6,7 @@ from fastapi import APIRouter, HTTPException, Depends, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from typing import List, Optional
 from datetime import datetime
+from db_simple import db
 
 from job_schemas import (
     JobPostRequest, JobPostResponse, JobListing, JobUpdateRequest, 
@@ -14,7 +15,10 @@ from job_schemas import (
 )
 from job_application_schemas import JobApplicationsResponse, ApplicationStatus
 from job_db import job_db
-from job_application_db import job_application_db
+from job_application_db import JobApplicationDatabase
+
+# Initialize job application database
+job_application_db = JobApplicationDatabase()
 from auth_utils import verify_token
 from auth_db import get_user_by_id
 
@@ -113,6 +117,27 @@ async def get_my_jobs(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to retrieve jobs: {str(e)}"
+        )
+
+
+@hr_router.get("/jobs-with-applications")
+async def get_jobs_with_applications(
+    current_user: dict = Depends(get_current_hr_user)
+):
+    """Get all jobs posted by HR with application counts"""
+    try:
+        hr_email = current_user["email"]
+        jobs = await job_application_db.get_hr_jobs_with_applications(hr_email)
+        
+        return {
+            "jobs": jobs,
+            "total_count": len(jobs)
+        }
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve jobs with applications: {str(e)}"
         )
 
 
@@ -317,6 +342,60 @@ async def get_job_stats(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to retrieve job stats: {str(e)}"
+        )
+
+
+@hr_router.get("/applications")
+async def get_all_applications(
+    job_id: Optional[str] = None,
+    current_user: dict = Depends(get_current_hr_user)
+):
+    """Get all applications for HR user's jobs or specific job"""
+    try:
+        hr_user_id = current_user["user_id"]
+        
+        # Get HR jobs
+        if job_id:
+            jobs = await db.database["jobs"].find({"job_id": job_id, "posted_by_hr_id": hr_user_id}).to_list(None)
+        else:
+            jobs = await db.database["jobs"].find({"posted_by_hr_id": hr_user_id}).to_list(None)
+        
+        all_applications = []
+        
+        for job in jobs:
+            applications_received = job.get("applications_received", [])
+            for app in applications_received:
+                # Get user details
+                user = await db.database["users"].find_one({"user_id": app["user_id"]})
+                if user:
+                    application_data = {
+                        "job_id": job["job_id"],
+                        "job_title": job["title"],
+                        "company": job["company"],
+                        "user_id": app["user_id"],
+                        "full_name": f"{user.get('first_name', '')} {user.get('last_name', '')}".strip(),
+                        "email": user["email"],
+                        "phone": user.get("phone", ""),
+                        "experience_years": user.get("overall_experience_years", 0),
+                        "skills": user.get("skills", []),
+                        "highest_qualification": user.get("highest_qualification", ""),
+                        "current_role": user.get("professional_info", {}).get("current_role", ""),
+                        "applied_date": app["applied_date"],
+                        "status": app["status"],
+                        "match_percentage": app.get("match_percentage", 0),
+                        "ats_score": app.get("ats_score", 0)
+                    }
+                    all_applications.append(application_data)
+        
+        return {
+            "applications": all_applications,
+            "total_count": len(all_applications)
+        }
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve applications: {str(e)}"
         )
 
 

@@ -213,17 +213,19 @@ class JobApplicationDatabase:
             
             # Recommendation
             if overall_match >= 80:
-                recommendation = "Highly recommended candidate"
+                recommendation = "Highly Recommended"
             elif overall_match >= 60:
-                recommendation = "Good candidate, consider for interview"
+                recommendation = "Recommended"
+            elif overall_match >= 40:
+                recommendation = "Consider"
             else:
-                recommendation = "May not be the best fit for this role"
+                recommendation = "Not Recommended"
             
             return ProfileMatchAnalysis(
-                overall_match_percentage=round(overall_match, 1),
-                skills_match_percentage=round(skills_match, 1),
-                experience_match_percentage=round(experience_match, 1),
-                education_match_percentage=round(education_match, 1),
+                overall_match=int(overall_match),
+                skills_match=int(skills_match),
+                experience_match=int(experience_match),
+                education_match=int(education_match),
                 matched_skills=matched_skills,
                 missing_skills=missing_skills,
                 strengths=strengths,
@@ -234,6 +236,44 @@ class JobApplicationDatabase:
         except Exception as e:
             print(f"Error calculating profile match: {e}")
             return None
-
-# Global instance
-job_application_db = JobApplicationDatabase()
+    
+    async def get_hr_jobs_with_applications(self, hr_email: str) -> List[Dict[str, Any]]:
+        """Get all jobs posted by HR user with application counts"""
+        try:
+            # Get HR user by email
+            hr_user = await db.database[self.users_collection].find_one({"email": hr_email})
+            
+            if not hr_user:
+                return []
+            
+            hr_user_id = hr_user["user_id"]
+            
+            # Get all jobs posted by this HR
+            jobs_cursor = db.database[self.jobs_collection].find({
+                "posted_by_hr_id": hr_user_id
+            }).sort("posted_date", -1)
+            
+            jobs_with_applications = []
+            async for job in jobs_cursor:
+                # Use the existing applications_count from job document
+                # This should already be updated when applications are created
+                job_data = dict(job)
+                
+                # Convert ObjectId to string for JSON serialization
+                if "_id" in job_data:
+                    job_data["_id"] = str(job_data["_id"])
+                
+                # Convert datetime objects to ISO strings
+                for key, value in job_data.items():
+                    if hasattr(value, 'isoformat'):
+                        job_data[key] = value.isoformat()
+                
+                jobs_with_applications.append(job_data)
+            
+            return jobs_with_applications
+            
+        except Exception as e:
+            print(f"Error getting HR jobs with applications: {e}")
+            import traceback
+            traceback.print_exc()
+            raise e

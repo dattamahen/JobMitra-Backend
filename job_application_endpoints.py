@@ -7,7 +7,10 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from typing import Optional
 from pydantic import BaseModel
 
-from job_application_db import job_application_db
+from job_application_db import JobApplicationDatabase
+
+# Initialize job application database
+job_application_db = JobApplicationDatabase()
 from auth_utils import verify_token
 from auth_db import get_user_by_id
 

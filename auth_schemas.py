@@ -22,9 +22,10 @@ class Certification(BaseModel):
     """Certification information."""
     name: str
     issuer: str
-    issue_date: Optional[datetime] = None
-    expiry_date: Optional[datetime] = None
+    issue_date: Optional[str] = None
+    expiry_date: Optional[str] = None
     credential_id: Optional[str] = None
+    link: Optional[str] = None
 
 class CommunicationSkill(BaseModel):
     """Communication skill information."""
@@ -118,26 +119,12 @@ class LoginResponse(BaseModel):
     user: UserResponse
 
 class RegisterRequest(BaseModel):
-    """Updated registration request with required fields."""
+    """Minimal registration request with only required fields."""
     email: EmailStr
     password: str = Field(..., min_length=8)
     first_name: str = Field(..., min_length=1, max_length=100)
     last_name: str = Field(..., min_length=1, max_length=100)
-    date_of_birth: Optional[datetime] = None
-    phone: Optional[str] = None
     user_type: Literal["candidate", "hire"] = "candidate"
-    
-    # Optional fields for initial registration
-    overall_experience_years: Optional[int] = Field(None, ge=0)
-    highest_qualification: Optional[str] = None
-    skills: List[str] = Field(default_factory=list)
-    job_preferences: List[Literal["remote", "hybrid", "on-site"]] = Field(default_factory=list)
-    employment_type: List[Literal["full-time", "part-time", "freelancing", "contract"]] = Field(default_factory=list)
-    
-    # Legacy compatibility
-    username: Optional[str] = None
-    city: Optional[str] = None
-    state: Optional[str] = None
 
 class TokenData(BaseModel):
     user_id: Optional[str] = None
@@ -219,7 +206,7 @@ class UserProfileUpdateRequest(BaseModel):
     highest_qualification: Optional[str] = None
     previous_organizations: Optional[List[PreviousOrganization]] = None
     skills: Optional[List[str]] = None
-    certifications: Optional[List[Union[Certification, str]]] = None
+    certifications: Optional[List[Certification]] = None
     contributions: Optional[str] = None
     communication_skills: Optional[List[CommunicationSkill]] = None
     ai_tools: Optional[List[str]] = None

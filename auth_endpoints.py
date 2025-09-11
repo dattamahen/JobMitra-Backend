@@ -67,25 +67,14 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
 
 @auth_router.post("/register", response_model=UserResponse)
 async def register_user(request: RegisterRequest):
-    """Register a new user with comprehensive profile"""
+    """Register a new user with minimal required fields"""
     try:
         user_data = {
             "email": request.email,
             "password": request.password,
             "first_name": request.first_name,
             "last_name": request.last_name,
-            "date_of_birth": request.date_of_birth,
-            "phone": request.phone,
-            "user_type": request.user_type or "candidate",
-            "overall_experience_years": request.overall_experience_years,
-            "highest_qualification": request.highest_qualification,
-            "skills": request.skills or [],
-            "job_preferences": request.job_preferences or [],
-            "employment_type": request.employment_type or [],
-            # Legacy compatibility
-            "username": request.username,
-            "city": request.city,
-            "state": request.state
+            "user_type": request.user_type
         }
         
         user = await create_user(user_data)
@@ -96,16 +85,9 @@ async def register_user(request: RegisterRequest):
             email=user["email"],
             first_name=user["first_name"],
             last_name=user["last_name"],
-            date_of_birth=user.get("date_of_birth"),
-            phone=user.get("phone"),
-            overall_experience_years=user.get("overall_experience_years"),
-            highest_qualification=user.get("highest_qualification"),
-            skills=user.get("skills", []),
             user_type=user.get("user_type", "candidate"),
             user_status=user.get("user_status", "active"),
             user_plan=user.get("user_plan", "free"),
-            job_preferences=user.get("job_preferences", []),
-            employment_type=user.get("employment_type", []),
             profile_created_on=user["profile_created_on"],
             last_active=user["last_active"],
             match_analysis_count=user.get("match_analysis_count", 0),
@@ -113,16 +95,10 @@ async def register_user(request: RegisterRequest):
             mock_interview_count=user.get("mock_interview_count", 0),
             profile_completion_count=user.get("profile_completion_count", 0),
             profile_visits=user.get("profile_visits", 0),
-            # Legacy compatibility
-            username=user.get("username"),
             full_name=f"{user['first_name']} {user['last_name']}",
-            company_name=user.get("company_name"),
             is_active=user.get("is_active", True),
             is_verified=user.get("is_verified", False),
-            profile_completion=user.get("profile_completion_count", 0),
-            created_at=user["profile_created_on"].isoformat(),
-            city=request.city,
-            state=request.state
+            created_at=user["profile_created_on"].isoformat()
         )
         
     except ValueError as e:
@@ -205,6 +181,7 @@ async def get_current_user_profile(current_user: dict = Depends(get_current_user
     try:
         print(f"🔍 /auth/me endpoint called for user: {current_user.get('user_id')}")
         print(f"📝 Current user data keys: {list(current_user.keys())}")
+        print(f"📝 Current user skills: {current_user.get('skills', [])}")
         
         return UserProfileResponse(
             user_id=current_user["user_id"],
@@ -217,6 +194,7 @@ async def get_current_user_profile(current_user: dict = Depends(get_current_user
             highest_qualification=current_user.get("highest_qualification"),
             previous_organizations=current_user.get("previous_organizations", []),
             skills=current_user.get("skills", []),
+
             certifications=current_user.get("certifications", []),
             contributions=current_user.get("contributions"),
             communication_skills=current_user.get("communication_skills", []),
@@ -290,10 +268,11 @@ async def update_profile(
         if request.previous_organizations:
             update_data["previous_organizations"] = [org.dict() for org in request.previous_organizations]
         if request.skills:
+            print(f"🔧 Processing skills: {request.skills}")
             update_data["skills"] = request.skills
         if request.certifications:
-            # Pydantic validator has already processed certifications
-            update_data["certifications"] = [cert.dict() if hasattr(cert, 'dict') else cert for cert in request.certifications]
+            # Process certifications as objects
+            update_data["certifications"] = [cert.dict() for cert in request.certifications]
         if request.contributions:
             update_data["contributions"] = request.contributions
         if request.communication_skills:
@@ -387,6 +366,8 @@ async def update_profile(
         
         success = await update_user_profile(current_user["user_id"], update_data)
         
+        print(f"🔍 Database update success: {success}")
+        
         if not success:
             print(f"❌ Profile update failed for user: {current_user.get('user_id')}")
             raise HTTPException(
@@ -405,6 +386,7 @@ async def update_profile(
         
         # Get updated user
         updated_user = await get_user_by_id(current_user["user_id"])
+        print(f"🔍 Updated user skills from DB: {updated_user.get('skills', [])}")
         
         return UserResponse(
             user_id=updated_user["user_id"],
@@ -416,6 +398,7 @@ async def update_profile(
             overall_experience_years=updated_user.get("overall_experience_years"),
             highest_qualification=updated_user.get("highest_qualification"),
             skills=updated_user.get("skills", []),
+            certifications=updated_user.get("certifications", []),
             user_type=updated_user.get("user_type", "candidate"),
             user_status=updated_user.get("user_status", "active"),
             user_plan=updated_user.get("user_plan", "free"),
