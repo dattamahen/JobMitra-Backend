@@ -415,6 +415,8 @@ async def update_profile(
             username=updated_user.get("username"),
             full_name=f"{updated_user['first_name']} {updated_user['last_name']}",
             company_name=updated_user.get("company_name"),
+            city=updated_user.get("city"),
+            state=updated_user.get("state"),
             is_active=updated_user.get("is_active", True),
             is_verified=updated_user.get("is_verified", False),
             profile_completion=updated_user.get("profile_completion_count", 0),
