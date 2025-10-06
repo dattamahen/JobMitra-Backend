@@ -45,13 +45,44 @@ class UserProfileCreate(BaseModel):
 
 
 class UserProfileUpdate(BaseModel):
-    """Request model for updating user profile."""
-    full_name: Optional[str] = None
+    """Request model for updating user profile - comprehensive."""
+    # Basic Information
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    email: Optional[str] = None
     phone: Optional[str] = None
-    current_job_title: Optional[str] = None
-    desired_job_title: Optional[str] = None
-    skills: Optional[List[str]] = None
+    location: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    date_of_birth: Optional[str] = None
+    
+    # Professional Information
     professional_summary: Optional[str] = None
+    current_role: Optional[str] = None
+    current_company: Optional[str] = None
+    overall_experience_years: Optional[int] = None
+    highest_qualification: Optional[str] = None
+    linkedin_link: Optional[str] = None
+    github_link: Optional[str] = None
+    portfolio_link: Optional[str] = None
+    
+    # Skills and Experience (arrays)
+    skills: Optional[List[Dict[str, Any]]] = None
+    work_experience: Optional[List[Dict[str, Any]]] = None
+    education: Optional[List[Dict[str, Any]]] = None
+    projects: Optional[List[Dict[str, Any]]] = None
+    certifications: Optional[List[Dict[str, Any]]] = None
+    
+    # Career Preferences
+    desired_job_title: Optional[str] = None
+    job_preferences: Optional[List[str]] = None
+    employment_type: Optional[List[str]] = None
+    expected_salary: Optional[float] = None
+    currency: Optional[str] = None
+    
+    # Legacy compatibility
+    full_name: Optional[str] = None
+    current_job_title: Optional[str] = None
 
 
 class JobSearchRequest(BaseModel):

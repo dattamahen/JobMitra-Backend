@@ -131,17 +131,38 @@ class UserProfile(BaseDocument):
     date_of_birth: Optional[datetime] = None
     phone: Optional[str] = None
     location: Optional[Location] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
     avatar_url: Optional[HttpUrl] = None
     
     # Professional Information
     overall_experience_years: Optional[int] = Field(None, ge=0)
     highest_qualification: Optional[str] = None
-    previous_organizations: List[PreviousOrganization] = Field(default_factory=list)
+    professional_summary: Optional[str] = None
+    current_role: Optional[str] = None
+    current_company: Optional[str] = None
+    
+    # Skills and Experience
     skills: List[str] = Field(default_factory=list)
-    certifications: List[Certification] = Field(default_factory=list)
+    technical_skills: List[Dict[str, Any]] = Field(default_factory=list)
+    work_experience: List[Dict[str, Any]] = Field(default_factory=list)
+    education: List[Dict[str, Any]] = Field(default_factory=list)
+    projects: List[Dict[str, Any]] = Field(default_factory=list)
+    certifications: List[Dict[str, Any]] = Field(default_factory=list)
+    
+    # Legacy fields
+    previous_organizations: List[PreviousOrganization] = Field(default_factory=list)
     contributions: Optional[str] = None
     communication_skills: List[CommunicationSkill] = Field(default_factory=list)
     ai_tools: List[str] = Field(default_factory=list)
+    
+    # Additional professional fields
+    linkedin_link: Optional[str] = None
+    github_link: Optional[str] = None
+    portfolio_link: Optional[str] = None
+    desired_job_title: Optional[str] = None
+    expected_salary: Optional[float] = None
+    currency: Optional[str] = "USD"
     
     # Social Links
     social_links: Optional[SocialLinks] = None
