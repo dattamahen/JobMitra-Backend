@@ -175,68 +175,39 @@ async def login_user(request: LoginRequest):
             detail="Login failed"
         )
 
-@auth_router.get("/me", response_model=UserProfileResponse)
+@auth_router.get("/me")
 async def get_current_user_profile(current_user: dict = Depends(get_current_user)):
     """Get current user profile"""
     try:
-        print(f"🔍 /auth/me endpoint called for user: {current_user.get('user_id')}")
-        print(f"📝 Current user data keys: {list(current_user.keys())}")
-        print(f"📝 Current user skills: {current_user.get('skills', [])}")
         
-        return UserProfileResponse(
-            user_id=current_user["user_id"],
-            email=current_user["email"],
-            first_name=current_user["first_name"],
-            last_name=current_user["last_name"],
-            date_of_birth=current_user.get("date_of_birth"),
-            phone=current_user.get("phone"),
-            overall_experience_years=current_user.get("overall_experience_years"),
-            highest_qualification=current_user.get("highest_qualification"),
-            previous_organizations=current_user.get("previous_organizations", []),
-            skills=current_user.get("skills", []),
-
-            certifications=current_user.get("certifications", []),
-            contributions=current_user.get("contributions"),
-            communication_skills=current_user.get("communication_skills", []),
-            ai_tools=current_user.get("ai_tools", []),
-            social_links=current_user.get("social_links"),
-            overall_jobs_applied=current_user.get("overall_jobs_applied", []),
-            user_type=current_user.get("user_type", "candidate"),
-            user_status=current_user.get("user_status", "active"),
-            user_plan=current_user.get("user_plan", "free"),
-            job_preferences=current_user.get("job_preferences", []),
-            employment_type=current_user.get("employment_type", []),
-            profile_created_on=current_user["profile_created_on"],
-            last_active=current_user["last_active"],
-            match_analysis_count=current_user.get("match_analysis_count", 0),
-            match_tailored_count=current_user.get("match_tailored_count", 0),
-            mock_interview_count=current_user.get("mock_interview_count", 0),
-            profile_completion_count=current_user.get("profile_completion_count", 0),
-            profile_visits=current_user.get("profile_visits", 0),
-            recent_activity=current_user.get("recent_activity", []),
-            # Legacy compatibility
-            username=current_user.get("username"),
-            full_name=f"{current_user['first_name']} {current_user['last_name']}",
-            company_name=current_user.get("company_name"),
-            personal_info=current_user.get("personal_info", {}),
-            professional_info=current_user.get("professional_info", {}),
-            preferences=current_user.get("preferences", {}),
-            is_active=current_user.get("is_active", True),
-            is_verified=current_user.get("is_verified", False),
-            profile_completion=current_user.get("profile_completion_count", 0),
-            created_at=current_user["profile_created_on"].isoformat() if hasattr(current_user["profile_created_on"], 'isoformat') else str(current_user["profile_created_on"]),
-            updated_at=(current_user.get("updated_at", current_user["profile_created_on"]).isoformat() if hasattr(current_user.get("updated_at", current_user["profile_created_on"]), 'isoformat') else str(current_user.get("updated_at", current_user["profile_created_on"]))),
-            last_login=current_user.get("last_login")
-        )
+        return {
+            "user_id": current_user["user_id"],
+            "email": current_user["email"],
+            "first_name": current_user["first_name"],
+            "last_name": current_user["last_name"],
+            "phone": current_user.get("phone"),
+            "skills": current_user.get("skills", []),
+            "technical_skills": current_user.get("technical_skills", []),
+            "work_experience": current_user.get("work_experience", []),
+            "education": current_user.get("education", []),
+            "projects": current_user.get("projects", []),
+            "certifications": current_user.get("certifications", []),
+            "professional_summary": current_user.get("professional_summary"),
+            "current_role": current_user.get("current_role"),
+            "current_company": current_user.get("current_company"),
+            "desired_job_title": current_user.get("desired_job_title"),
+            "expected_salary": current_user.get("expected_salary"),
+            "linkedin_link": current_user.get("linkedin_link"),
+            "github_link": current_user.get("github_link"),
+            "city": current_user.get("city"),
+            "state": current_user.get("state"),
+            "job_preferences": current_user.get("job_preferences", []),
+            "employment_type": current_user.get("employment_type", []),
+            "overall_experience_years": current_user.get("overall_experience_years")
+        }
     except Exception as e:
-        print(f"❌ Error in /auth/me endpoint: {str(e)}")
-        print(f"❌ Error type: {type(e)}")
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get user profile: {str(e)}"
-        )
+        print(f"❌ Error in /auth/me: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to get profile")
 
 @auth_router.put("/profile", response_model=UserResponse)
 async def update_profile(
@@ -270,15 +241,49 @@ async def update_profile(
         if request.skills:
             print(f"🔧 Processing skills: {request.skills}")
             update_data["skills"] = request.skills
+        if request.technical_skills:
+            print(f"🔧 Processing technical_skills: {request.technical_skills}")
+            update_data["technical_skills"] = request.technical_skills
+        if request.work_experience:
+            print(f"🔧 Processing work_experience: {request.work_experience}")
+            update_data["work_experience"] = request.work_experience
+        if request.education:
+            print(f"🔧 Processing education: {request.education}")
+            update_data["education"] = request.education
+        if request.projects:
+            print(f"🔧 Processing projects: {request.projects}")
+            update_data["projects"] = request.projects
         if request.certifications:
             # Process certifications as objects
-            update_data["certifications"] = [cert.dict() for cert in request.certifications]
+            update_data["certifications"] = request.certifications
         if request.contributions:
             update_data["contributions"] = request.contributions
         if request.communication_skills:
             update_data["communication_skills"] = [skill.dict() for skill in request.communication_skills]
         if request.ai_tools:
             update_data["ai_tools"] = request.ai_tools
+        if request.professional_summary:
+            update_data["professional_summary"] = request.professional_summary
+        if request.current_role:
+            update_data["current_role"] = request.current_role
+        if request.current_company:
+            update_data["current_company"] = request.current_company
+        if request.portfolio_link:
+            update_data["portfolio_link"] = request.portfolio_link
+        if request.desired_job_title:
+            update_data["desired_job_title"] = request.desired_job_title
+        if request.expected_salary is not None:
+            update_data["expected_salary"] = request.expected_salary
+        if request.currency:
+            update_data["currency"] = request.currency
+        if request.linkedin_link:
+            update_data["linkedin_link"] = request.linkedin_link
+        if request.github_link:
+            update_data["github_link"] = request.github_link
+        if request.city:
+            update_data["city"] = request.city
+        if request.state:
+            update_data["state"] = request.state
             
         # Social Links - handle both new schema and legacy URL fields
         social_links_update = {}
@@ -368,6 +373,13 @@ async def update_profile(
         
         print(f"🔍 Database update success: {success}")
         
+        # Debug: Check what was actually saved
+        if success:
+            saved_user = await get_user_by_id(current_user["user_id"])
+            print(f"🔍 Data saved in DB - work_experience: {saved_user.get('work_experience', [])}")
+            print(f"🔍 Data saved in DB - education: {saved_user.get('education', [])}")
+            print(f"🔍 Data saved in DB - certifications: {saved_user.get('certifications', [])}")
+        
         if not success:
             print(f"❌ Profile update failed for user: {current_user.get('user_id')}")
             raise HTTPException(
@@ -386,7 +398,13 @@ async def update_profile(
         
         # Get updated user
         updated_user = await get_user_by_id(current_user["user_id"])
-        print(f"🔍 Updated user skills from DB: {updated_user.get('skills', [])}")
+        print(f"🔍 Updated user from DB:")
+        print(f"  - skills: {updated_user.get('skills', [])}")
+        print(f"  - work_experience: {updated_user.get('work_experience', [])}")
+        print(f"  - education: {updated_user.get('education', [])}")
+        print(f"  - certifications: {updated_user.get('certifications', [])}")
+        print(f"  - technical_skills: {updated_user.get('technical_skills', [])}")
+        print(f"  - projects: {updated_user.get('projects', [])}")
         
         return UserResponse(
             user_id=updated_user["user_id"],

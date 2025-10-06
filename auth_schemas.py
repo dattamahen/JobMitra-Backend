@@ -67,7 +67,7 @@ class UserResponse(BaseModel):
     highest_qualification: Optional[str] = None
     previous_organizations: List[PreviousOrganization] = Field(default_factory=list)
     skills: List[str] = Field(default_factory=list)
-    certifications: List[Certification] = Field(default_factory=list)
+    certifications: List[Dict[str, Any]] = Field(default_factory=list)
     contributions: Optional[str] = None
     communication_skills: List[CommunicationSkill] = Field(default_factory=list)
     ai_tools: List[str] = Field(default_factory=list)
@@ -146,10 +146,25 @@ class UserProfileResponse(BaseModel):
     highest_qualification: Optional[str] = None
     previous_organizations: List[PreviousOrganization] = Field(default_factory=list)
     skills: List[str] = Field(default_factory=list)
-    certifications: List[Certification] = Field(default_factory=list)
+    technical_skills: List[Dict[str, Any]] = Field(default_factory=list)
+    work_experience: List[Dict[str, Any]] = Field(default_factory=list)
+    education: List[Dict[str, Any]] = Field(default_factory=list)
+    projects: List[Dict[str, Any]] = Field(default_factory=list)
+    certifications: List[Dict[str, Any]] = Field(default_factory=list)
     contributions: Optional[str] = None
     communication_skills: List[CommunicationSkill] = Field(default_factory=list)
     ai_tools: List[str] = Field(default_factory=list)
+    professional_summary: Optional[str] = None
+    current_role: Optional[str] = None
+    current_company: Optional[str] = None
+    portfolio_link: Optional[str] = None
+    desired_job_title: Optional[str] = None
+    expected_salary: Optional[float] = None
+    currency: Optional[str] = None
+    linkedin_link: Optional[str] = None
+    github_link: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
     
     # Social Links
     social_links: Optional[SocialLinks] = None
@@ -191,6 +206,9 @@ class UserProfileResponse(BaseModel):
     created_at: str
     updated_at: str
     last_login: Optional[str] = None
+    
+    class Config:
+        extra = "allow"
 
 # User Update Models
 class UserProfileUpdateRequest(BaseModel):
@@ -206,10 +224,25 @@ class UserProfileUpdateRequest(BaseModel):
     highest_qualification: Optional[str] = None
     previous_organizations: Optional[List[PreviousOrganization]] = None
     skills: Optional[List[str]] = None
-    certifications: Optional[List[Certification]] = None
+    technical_skills: Optional[List[Dict[str, Any]]] = None
+    work_experience: Optional[List[Dict[str, Any]]] = None
+    education: Optional[List[Dict[str, Any]]] = None
+    projects: Optional[List[Dict[str, Any]]] = None
+    certifications: Optional[List[Dict[str, Any]]] = None
     contributions: Optional[str] = None
     communication_skills: Optional[List[CommunicationSkill]] = None
     ai_tools: Optional[List[str]] = None
+    professional_summary: Optional[str] = None
+    current_role: Optional[str] = None
+    current_company: Optional[str] = None
+    portfolio_link: Optional[str] = None
+    desired_job_title: Optional[str] = None
+    expected_salary: Optional[float] = None
+    currency: Optional[str] = None
+    linkedin_link: Optional[str] = None
+    github_link: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
     
     # Social Links
     github_link: Optional[str] = None
@@ -226,16 +259,9 @@ class UserProfileUpdateRequest(BaseModel):
     employment_type: Optional[List[Literal["full-time", "part-time", "freelancing", "contract"]]] = None
     
     # Legacy compatibility fields
-    city: Optional[str] = None
-    state: Optional[str] = None
-    current_role: Optional[str] = None
-    current_company: Optional[str] = None
     total_experience: Optional[str] = None
     industry: Optional[str] = None
     current_salary: Optional[float] = None
-    expected_salary: Optional[float] = None
-    desired_job_title: Optional[str] = None
-    professional_summary: Optional[str] = None
     area_of_expertise: Optional[List[str]] = None
     key_contributions: Optional[str] = None
     github_url: Optional[str] = None
