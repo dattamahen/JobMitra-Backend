@@ -20,6 +20,7 @@ from apply_endpoints import apply_router
 from match_analysis_endpoints import match_router
 from resume_endpoints import resume_router
 from skill_assessment_endpoints import router as skill_assessment_router
+from mock_interview_api import router as mock_interview_router
 
 
 @asynccontextmanager
@@ -84,6 +85,7 @@ def create_app() -> FastAPI:
     app.include_router(match_router, prefix="")  # Match analysis routes (includes /api/v1 prefix)
     app.include_router(resume_router, prefix="")  # Resume builder routes
     app.include_router(skill_assessment_router, prefix="")  # Skill assessment routes
+    app.include_router(mock_interview_router, prefix="")  # Mock interview routes
 
     # Health check endpoint
     @app.get("/", tags=["Health"])
