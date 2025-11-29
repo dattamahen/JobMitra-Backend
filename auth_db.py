@@ -86,7 +86,10 @@ async def create_user(user_data: Dict[str, Any]) -> Dict[str, Any]:
             # User Classification
             "user_type": user_data.get("user_type", "candidate"),
             "user_status": "active",
-            "user_plan": "free",
+            "user_plan": "F",
+            
+            # Feature Usage Tracking
+            "feature_usage_count": 5,
             
             # Preferences
             "job_preferences": user_data.get("job_preferences", []),
