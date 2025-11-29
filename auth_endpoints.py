@@ -147,6 +147,7 @@ async def login_user(request: LoginRequest):
                 user_type=user.get("user_type", "candidate"),
                 user_status=user.get("user_status", "active"),
                 user_plan=user.get("user_plan", "free"),
+                feature_usage_count=user.get("feature_usage_count", 5),
                 job_preferences=user.get("job_preferences", []),
                 employment_type=user.get("employment_type", []),
                 profile_created_on=user["profile_created_on"],
@@ -203,7 +204,9 @@ async def get_current_user_profile(current_user: dict = Depends(get_current_user
             "state": current_user.get("state"),
             "job_preferences": current_user.get("job_preferences", []),
             "employment_type": current_user.get("employment_type", []),
-            "overall_experience_years": current_user.get("overall_experience_years")
+            "overall_experience_years": current_user.get("overall_experience_years"),
+            "feature_usage_count": current_user.get("feature_usage_count", 5),
+            "user_plan": current_user.get("user_plan", "free")
         }
     except Exception as e:
         print(f"❌ Error in /auth/me: {str(e)}")
@@ -535,4 +538,59 @@ async def get_all_users(current_user: dict = Depends(get_current_user)):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to get users"
+        )
+
+@auth_router.get("/check-schema")
+async def check_user_schema():
+    """Check current user schema in database"""
+    try:
+        from db_simple import db
+        
+        # Get a sample user to see current schema
+        sample_user = await db.database["users"].find_one({})
+        if sample_user:
+            # Remove sensitive data
+            sample_user.pop("password_hash", None)
+            sample_user.pop("password", None)
+            sample_user["_id"] = str(sample_user["_id"])
+        
+        # Get distinct user_plan values
+        user_plans = await db.database["users"].distinct("user_plan")
+        
+        # Count users
+        total_users = await db.database["users"].count_documents({})
+        
+        return {
+            "total_users": total_users,
+            "user_plan_values": user_plans,
+            "sample_user": sample_user
+        }
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Schema check failed: {str(e)}"
+        )
+
+@auth_router.post("/migrate-feature-usage")
+async def migrate_feature_usage():
+    """Add feature usage count to existing users"""
+    try:
+        from db_simple import db
+        
+        # Simply add feature_usage_count to ALL users
+        result = await db.database["users"].update_many(
+            {},  # Update all users
+            {"$set": {"feature_usage_count": 5}}
+        )
+        
+        return {
+            "message": f"Added feature_usage_count to {result.modified_count} users",
+            "modified_count": result.modified_count
+        }
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Migration failed: {str(e)}"
         )

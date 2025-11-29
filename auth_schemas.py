@@ -84,7 +84,10 @@ class UserResponse(BaseModel):
     # User Classification
     user_type: Literal["candidate", "hire"] = "candidate"
     user_status: Literal["active", "inactive"] = "active"
-    user_plan: Literal["free", "subscribed", "pro"] = "free"
+    user_plan: Literal["F", "P", "S"] = "F"
+    
+    # Feature Usage Tracking
+    feature_usage_count: int = 5
     
     # Preferences
     job_preferences: List[Literal["remote", "hybrid", "on-site"]] = Field(default_factory=list)
