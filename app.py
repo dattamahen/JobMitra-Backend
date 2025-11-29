@@ -23,6 +23,7 @@ from skill_assessment_endpoints import router as skill_assessment_router
 from mock_interview_api import router as mock_interview_router
 from feature_usage_endpoints import router as feature_usage_router
 from google_auth_endpoints import router as google_auth_router
+from interview_prompts_endpoints import router as interview_prompts_router
 
 
 @asynccontextmanager
@@ -90,6 +91,7 @@ def create_app() -> FastAPI:
     app.include_router(mock_interview_router, prefix="")  # Mock interview routes
     app.include_router(feature_usage_router, prefix="")  # Feature usage tracking routes
     app.include_router(google_auth_router, prefix="/api/v1/auth")  # Google authentication routes
+    app.include_router(interview_prompts_router, prefix="/api/v1")  # Interview prompts routes
 
     # Health check endpoint
     @app.get("/", tags=["Health"])
