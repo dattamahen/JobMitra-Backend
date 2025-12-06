@@ -156,7 +156,7 @@ async def authenticate_user(email: str, password: str) -> Optional[Dict[str, Any
         print(f"🔍 Authenticating user: {email}")
         
         # Check if database is connected
-        if not db.database:
+        if db.database is None:
             print("❌ Database not connected")
             return None
             

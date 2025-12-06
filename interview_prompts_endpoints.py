@@ -52,8 +52,13 @@ async def get_interview_prompt(user_profile: UserProfileRequest):
 				# Backend always uses Gemini (working and free)
 				print(f"Backend using: gemini (ignoring UI request for {user_profile.ai_provider})")
 				
+				# Inject user skills into prompt with strict formatting
+				base_prompt = prompt_doc.get("prompt", "")
+				skills_str = ", ".join(user_profile.skills)
+				customized_prompt = f"{base_prompt}\n\nUser's Skills: {skills_str}\nUser's Role: {user_profile.role}\nUser's Experience: {user_profile.experience_years} years\n\nQUESTION REQUIREMENTS:\n- Test BOTH basic concepts AND advanced core concepts of each skill\n- Cover fundamental understanding and deep technical knowledge\n- Include practical scenario-based questions\n\nIMPORTANT OUTPUT FORMAT:\n- Generate ONLY the interview questions\n- Number each question (1., 2., 3., etc.)\n- Do NOT include greetings, introductions, or feedback\n- Do NOT include explanations or additional text\n- Each question should be on a new line"
+				
 				ai_response = await llm_service.generate(
-					prompt_doc.get("prompt", ""), 
+					customized_prompt, 
 					"gemini"
 				)
 				
@@ -68,14 +73,7 @@ async def get_interview_prompt(user_profile: UserProfileRequest):
 				}
 			except Exception as e:
 				logger.error(f"AI generation failed: {str(e)}")
-				return {
-					"session_id": str(uuid.uuid4()),
-					"questions": f"Fallback Questions for {prompt_doc['experience_level']} {prompt_doc.get('role_type', 'general')}:\n1. Tell me about yourself\n2. What are your strengths?\n3. Describe a challenging project",
-					"provider": "fallback",
-					"prompt_used": prompt_doc.get('prompt', ''),
-					"role_type": prompt_doc.get('role_type', 'N/A'),
-					"experience_level": prompt_doc['experience_level']
-				}
+				raise HTTPException(status_code=500, detail=f"Failed to generate questions: {str(e)}")
 		else:
 			return {
 				"prompt": prompt_doc.get("prompt", ""),
