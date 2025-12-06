@@ -63,9 +63,10 @@ async def generate_questions(request: InterviewGenerateRequest):
 		if not prompt_doc:
 			raise HTTPException(status_code=404, detail="No prompt found")
 		
-		# Format prompt with job profile
+		# Format prompt with job profile and strict output format
 		job_profile = f"Role: {request.role}, Experience: {request.experience_years} years, Skills: {', '.join(request.skills)}"
-		prompt = prompt_doc.get('prompt', '').format(job_profile=job_profile)
+		base_prompt = prompt_doc.get('prompt', '').format(job_profile=job_profile)
+		prompt = f"{base_prompt}\n\nQUESTION REQUIREMENTS:\n- Test BOTH basic concepts AND advanced core concepts of each skill: {', '.join(request.skills)}\n- Cover fundamental understanding and deep technical knowledge\n- Include practical scenario-based questions\n\nIMPORTANT OUTPUT FORMAT:\n- Generate ONLY the interview questions\n- Number each question (1., 2., 3., etc.)\n- Do NOT include greetings, introductions, or feedback\n- Do NOT include explanations or additional text\n- Each question should be on a new line"
 		
 		# Generate using selected provider
 		response = await llm_service.generate(prompt, request.ai_provider)
