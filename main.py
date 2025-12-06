@@ -2,6 +2,9 @@
 FastAPI main application entry point for JobMitra Backend.
 """
 
+from dotenv import load_dotenv
+load_dotenv()  # Load environment variables first
+
 import uvicorn
 
 from app import create_app
