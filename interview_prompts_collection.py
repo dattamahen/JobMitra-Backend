@@ -1,6 +1,40 @@
 from pymongo import MongoClient
 from datetime import datetime
 
+def get_mock_interview_prompt_template():
+    """
+    Updated mock interview question generation prompt template
+    """
+    return """
+Generate mock interview questions using the following inputs:
+
+Role: {{ROLE}}
+Primary Skills: {{SKILLS}}
+Total Experience: {{TOTAL_EXPERIENCE}} years
+
+Requirements:
+- Generate 15–20 questions
+- Progressive difficulty (Easy -> Medium -> Hard)
+- Difficulty distribution:
+  - Easy: 30%
+  - Medium: 40%
+  - Hard: 30%
+- Match question depth to experience level
+- Include conceptual, practical, and scenario-based questions
+- Avoid trick or puzzle questions
+
+For each question include:
+- Question number
+- Clear, real-world phrasing
+
+Output format:
+1. What is the difference between a list and a tuple in Python?
+2. How would you implement caching in a REST API?
+3. Design a scalable microservices architecture for an e-commerce platform.
+
+IMPORTANT: Generate ONLY the numbered questions. Do NOT include any introductory text, explanations, or additional commentary. Start directly with question 1.
+"""
+
 # MongoDB Collection Schema for Interview Prompts
 def create_interview_prompts_collection():
     """
@@ -12,13 +46,15 @@ def create_interview_prompts_collection():
         "role": "software_engineer",
         "experience_level": "junior",  # junior, mid, senior
         "technology": "python",
-        "prompt_template": "You are conducting a {experience_level} level {role} interview...",
-        "question_count": 5,
-        "difficulty": "medium",
+        "prompt_template": "Updated structured prompt template",
+        "question_count": 18,
+        "difficulty_distribution": {"easy": 30, "medium": 40, "hard": 30},
         "created_at": datetime,
         "updated_at": datetime
     }
     """
+    
+    base_template = get_mock_interview_prompt_template()
     
     # Sample prompts for different combinations
     sample_prompts = [
@@ -26,9 +62,9 @@ def create_interview_prompts_collection():
             "role": "software_engineer",
             "experience_level": "junior",
             "technology": "python",
-            "prompt_template": "You are conducting a junior-level Python software engineer interview. Ask 5 fundamental questions covering basic Python syntax, data structures, and simple problem-solving. Focus on: variables, loops, functions, lists/dictionaries, and basic OOP concepts.",
-            "question_count": 5,
-            "difficulty": "easy",
+            "prompt_template": base_template,
+            "question_count": 18,
+            "difficulty_distribution": {"easy": 30, "medium": 40, "hard": 30},
             "created_at": datetime.utcnow(),
             "updated_at": datetime.utcnow()
         },
@@ -36,9 +72,9 @@ def create_interview_prompts_collection():
             "role": "software_engineer", 
             "experience_level": "mid",
             "technology": "python",
-            "prompt_template": "You are conducting a mid-level Python software engineer interview. Ask 7 intermediate questions covering advanced Python concepts, design patterns, and system design basics. Focus on: decorators, generators, async/await, database integration, API design, testing, and performance optimization.",
-            "question_count": 7,
-            "difficulty": "medium",
+            "prompt_template": base_template,
+            "question_count": 18,
+            "difficulty_distribution": {"easy": 30, "medium": 40, "hard": 30},
             "created_at": datetime.utcnow(),
             "updated_at": datetime.utcnow()
         },
@@ -46,9 +82,9 @@ def create_interview_prompts_collection():
             "role": "software_engineer",
             "experience_level": "senior", 
             "technology": "python",
-            "prompt_template": "You are conducting a senior-level Python software engineer interview. Ask 10 advanced questions covering system architecture, scalability, leadership, and complex problem-solving. Focus on: microservices, distributed systems, performance tuning, code review practices, mentoring, and technical decision-making.",
-            "question_count": 10,
-            "difficulty": "hard",
+            "prompt_template": base_template,
+            "question_count": 18,
+            "difficulty_distribution": {"easy": 30, "medium": 40, "hard": 30},
             "created_at": datetime.utcnow(),
             "updated_at": datetime.utcnow()
         },
@@ -56,9 +92,9 @@ def create_interview_prompts_collection():
             "role": "data_scientist",
             "experience_level": "junior",
             "technology": "python",
-            "prompt_template": "You are conducting a junior-level Data Scientist interview. Ask 5 fundamental questions covering basic statistics, pandas, numpy, and simple ML concepts. Focus on: data cleaning, basic visualization, descriptive statistics, linear regression, and data manipulation.",
-            "question_count": 5,
-            "difficulty": "easy",
+            "prompt_template": base_template,
+            "question_count": 18,
+            "difficulty_distribution": {"easy": 30, "medium": 40, "hard": 30},
             "created_at": datetime.utcnow(),
             "updated_at": datetime.utcnow()
         },
@@ -66,9 +102,9 @@ def create_interview_prompts_collection():
             "role": "frontend_developer",
             "experience_level": "mid",
             "technology": "javascript",
-            "prompt_template": "You are conducting a mid-level Frontend Developer interview. Ask 7 questions covering React/Angular, state management, performance optimization, and modern JavaScript. Focus on: component lifecycle, hooks, state management, bundling, responsive design, accessibility, and browser APIs.",
-            "question_count": 7,
-            "difficulty": "medium",
+            "prompt_template": base_template,
+            "question_count": 18,
+            "difficulty_distribution": {"easy": 30, "medium": 40, "hard": 30},
             "created_at": datetime.utcnow(),
             "updated_at": datetime.utcnow()
         }
