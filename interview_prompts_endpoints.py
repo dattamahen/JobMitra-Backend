@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from typing import List, Optional
 from db_simple import db
-from interview_prompts_collection import get_smart_prompt
+from interview_prompts_collection import get_smart_prompt, get_mock_interview_prompt_template
 from multi_llm_service import MultiLLMService
 import logging
 import os
@@ -52,10 +52,15 @@ async def get_interview_prompt(user_profile: UserProfileRequest):
 				# Backend always uses Gemini (working and free)
 				print(f"Backend using: gemini (ignoring UI request for {user_profile.ai_provider})")
 				
-				# Inject user skills into prompt with strict formatting
-				base_prompt = prompt_doc.get("prompt", "")
+				# Use new structured prompt template
+				from interview_prompts_collection import get_mock_interview_prompt_template
+				base_template = get_mock_interview_prompt_template()
 				skills_str = ", ".join(user_profile.skills)
-				customized_prompt = f"{base_prompt}\n\nUser's Skills: {skills_str}\nUser's Role: {user_profile.role}\nUser's Experience: {user_profile.experience_years} years\n\nQUESTION REQUIREMENTS:\n- Test BOTH basic concepts AND advanced core concepts of each skill\n- Cover fundamental understanding and deep technical knowledge\n- Include practical scenario-based questions\n\nIMPORTANT OUTPUT FORMAT:\n- Generate ONLY the interview questions\n- Number each question (1., 2., 3., etc.)\n- Do NOT include greetings, introductions, or feedback\n- Do NOT include explanations or additional text\n- Each question should be on a new line"
+				
+				# Replace template variables
+				customized_prompt = base_template.replace("{{ROLE}}", user_profile.role)
+				customized_prompt = customized_prompt.replace("{{SKILLS}}", skills_str)
+				customized_prompt = customized_prompt.replace("{{TOTAL_EXPERIENCE}}", str(user_profile.experience_years))
 				
 				ai_response = await llm_service.generate(
 					customized_prompt, 
