@@ -5,7 +5,7 @@ Activity tracker module for logging user activities.
 from datetime import datetime
 from typing import Optional, Dict, Any
 
-def log_user_activity(
+async def log_user_activity(
     user_id: str,
     activity_type: str,
     details: Optional[Dict[str, Any]] = None,

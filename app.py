@@ -3,9 +3,23 @@ FastAPI application factory and configuration.
 """
 
 from datetime import datetime
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
+import logging
+import sys
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(sys.stdout)
+    ]
+)
+logger = logging.getLogger(__name__)
 
 from config import settings
 from db_simple import db
@@ -27,6 +41,7 @@ from interview_prompts_endpoints import router as interview_prompts_router
 from simple_ai_endpoints import router as simple_ai_router
 from multi_agent_endpoints import router as multi_agent_router
 from interview_evaluation_endpoint import router as interview_evaluation_router
+from resume_tailor_endpoints import router as resume_tailor_router
 
 
 @asynccontextmanager
@@ -80,6 +95,94 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
+    # Global validation error handler
+    @app.exception_handler(RequestValidationError)
+    async def validation_exception_handler(request: Request, exc: RequestValidationError):
+        """
+        Global handler for validation errors with detailed field information.
+        Provides user-friendly error messages for each validation failure.
+        """
+        errors = []
+        for error in exc.errors():
+            # Extract field path (skip 'body' prefix)
+            field_path = " -> ".join(str(loc) for loc in error["loc"][1:]) if len(error["loc"]) > 1 else str(error["loc"][0])
+            msg = error["msg"]
+            error_type = error["type"]
+            ctx = error.get("ctx", {})
+            
+            # Create user-friendly error messages based on validation type
+            if "min_length" in error_type:
+                limit = ctx.get('limit_value', 'required')
+                errors.append({
+                    "field": field_path,
+                    "message": f"Must be at least {limit} characters long",
+                    "type": "min_length",
+                    "limit": limit
+                })
+            elif "max_length" in error_type:
+                limit = ctx.get('limit_value', 'allowed')
+                errors.append({
+                    "field": field_path,
+                    "message": f"Must not exceed {limit} characters",
+                    "type": "max_length",
+                    "limit": limit
+                })
+            elif "min_items" in error_type or "too_short" in error_type:
+                limit = ctx.get('limit_value', ctx.get('min_length', 'required'))
+                errors.append({
+                    "field": field_path,
+                    "message": f"Must have at least {limit} items",
+                    "type": "min_items",
+                    "limit": limit
+                })
+            elif "max_items" in error_type or "too_long" in error_type:
+                limit = ctx.get('limit_value', ctx.get('max_length', 'allowed'))
+                errors.append({
+                    "field": field_path,
+                    "message": f"Must not exceed {limit} items",
+                    "type": "max_items",
+                    "limit": limit
+                })
+            elif "missing" in error_type:
+                errors.append({
+                    "field": field_path,
+                    "message": "This field is required",
+                    "type": "required"
+                })
+            elif "value_error" in error_type:
+                errors.append({
+                    "field": field_path,
+                    "message": msg,
+                    "type": "value_error"
+                })
+            elif "type_error" in error_type:
+                expected_type = ctx.get('expected', 'valid value')
+                errors.append({
+                    "field": field_path,
+                    "message": f"Invalid type. Expected {expected_type}",
+                    "type": "type_error"
+                })
+            else:
+                errors.append({
+                    "field": field_path,
+                    "message": msg,
+                    "type": error_type
+                })
+        
+        logger.error(f"Validation failed for {request.url.path}: {len(errors)} errors")
+        for err in errors:
+            logger.error(f"  - {err['field']}: {err['message']}")
+        
+        return JSONResponse(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            content={
+                "success": False,
+                "message": "Validation failed. Please check the errors below.",
+                "errors": errors,
+                "error_count": len(errors)
+            }
+        )
+
     # Include routers with prefixes
     app.include_router(core_router, prefix="")  # Core endpoints (ask, resume-enhance, logs)
     app.include_router(dashboard_router, prefix="/api/v1")  # Dashboard and profile endpoints
@@ -98,6 +201,7 @@ def create_app() -> FastAPI:
     app.include_router(simple_ai_router, prefix="/api/v1")  # AI Interview routes
     app.include_router(multi_agent_router, prefix="/api/v1")  # Multi-Agent Interview routes
     app.include_router(interview_evaluation_router, prefix="/api/v1/mock-interview")  # Interview evaluation routes
+    app.include_router(resume_tailor_router)  # Resume tailor routes (already has /api/v1 prefix)
 
     # Health check endpoint
     @app.get("/", tags=["Health"])
