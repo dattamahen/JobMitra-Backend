@@ -2,11 +2,16 @@
 HR Job Posting API endpoints
 """
 
-from fastapi import APIRouter, HTTPException, Depends, status
+from fastapi import APIRouter, HTTPException, Depends, status, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 from typing import List, Optional
 from datetime import datetime
 from db_simple import db
+import logging
+
+logger = logging.getLogger(__name__)
 
 from job_schemas import (
     JobPostRequest, JobPostResponse, JobListing, JobUpdateRequest, 
@@ -75,8 +80,12 @@ async def post_job(
     try:
         hr_user_id = current_user["user_id"]
         
+        logger.info(f"HR user {hr_user_id} attempting to post job: {job_data.title}")
+        
         # Create job posting
         job_id = await job_db.create_job_posting(job_data, hr_user_id)
+        
+        logger.info(f"Job posted successfully with ID: {job_id}")
         
         return JobPostResponse(
             message="Job posted successfully",
@@ -85,7 +94,14 @@ async def post_job(
             created_at=datetime.utcnow()
         )
         
+    except ValueError as e:
+        logger.error(f"Validation error while posting job: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(e)
+        )
     except Exception as e:
+        logger.error(f"Error posting job: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to post job: {str(e)}"
