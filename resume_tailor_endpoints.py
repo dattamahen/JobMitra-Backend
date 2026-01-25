@@ -116,65 +116,84 @@ async def tailor_resume(job_id: str, current_user: dict = Depends(get_current_us
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/jobs/{job_id}/apply-tailored")
-async def apply_with_tailored_resume(job_id: str, current_user: dict = Depends(get_current_user)):
-    """Apply for job with tailored resume"""
+@router.post("/jobs/{job_id}/apply")
+async def apply_for_job(job_id: str, use_tailored: bool = False, current_user: dict = Depends(get_current_user)):
+    """Apply for job with or without tailored resume"""
     try:
         from datetime import datetime
         
-        # Get the tailored resume preview data
-        preview = await get_tailor_preview(job_id, current_user)
+        print(f"\n=== Apply Request ===")
+        print(f"Job ID: {job_id}")
+        print(f"Use Tailored: {use_tailored}")
+        print(f"User ID: {current_user['user_id']}")
         
-        # Create application with tailored resume data
+        if use_tailored:
+            # Get the tailored resume preview data
+            preview = await get_tailor_preview(job_id, current_user)
+            resume_data = preview.get("tailored_resume", {})
+            match_score = preview.get("match_improvement", 88)
+            print(f"Tailored resume data: {resume_data}")
+            print(f"Match score: {match_score}")
+        else:
+            # Get user's original resume
+            user = await db.database["users"].find_one({"user_id": current_user["user_id"]})
+            resume_data = sanitize_for_json(user) if user else {}
+            match_score = None
+        
+        # Create application ID
+        application_id = f"app_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}_{current_user['user_id']}"
+        
+        # Create application document
         application = {
-            "application_id": f"app_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}_{current_user['user_id']}",
+            "application_id": application_id,
             "job_id": job_id,
             "user_id": current_user["user_id"],
-            "resume_tailored": True,
-            "tailored_resume_data": preview.get("tailored_resume", {}),
-            "match_score": preview.get("match_improvement", 88),
+            "candidate_name": f"{current_user.get('first_name', '')} {current_user.get('last_name', '')}",
+            "candidate_email": current_user.get('email', ''),
+            "resume_tailored": use_tailored,
+            "resume_data": resume_data,
+            "match_score": match_score,
             "applied_at": datetime.utcnow().isoformat(),
-            "status": "submitted"
+            "applied_date": datetime.utcnow().isoformat(),
+            "status": "applied"
         }
         
+        print(f"Application document to insert: resume_tailored={application['resume_tailored']}, match_score={application['match_score']}")
+        
+        # Insert application into applications collection
         await db.database["applications"].insert_one(application)
+        
+        # Add application reference to job's applications_received array
+        await db.database["jobs"].update_one(
+            {"job_id": job_id},
+            {
+                "$push": {
+                    "applications_received": {
+                        "application_id": application_id,
+                        "user_id": current_user["user_id"],
+                        "candidate_name": application["candidate_name"],
+                        "applied_at": application["applied_at"],
+                        "applied_date": application["applied_date"],
+                        "status": "applied",
+                        "resume_tailored": use_tailored,
+                        "match_score": match_score,
+                        "match_percentage": match_score if use_tailored else 0,
+                        "ats_score": 0
+                    }
+                }
+            }
+        )
+        
+        message = "Application submitted with tailored resume" if use_tailored else "Application submitted"
         
         return {
             "success": True,
-            "message": "Application submitted with tailored resume",
-            "match_percentage": preview.get("match_improvement", 88),
-            "application_id": application["application_id"]
+            "message": message,
+            "application_id": application_id,
+            "match_percentage": match_score
         }
     except Exception as e:
-        print(f"Error in apply-tailored: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@router.post("/jobs/{job_id}/apply-direct")
-async def apply_without_tailoring(job_id: str, current_user: dict = Depends(get_current_user)):
-    """Apply for job without tailoring"""
-    try:
-        from datetime import datetime
-        
-        # Get user's original resume
-        user = await db.database["users"].find_one({"user_id": current_user["user_id"]})
-        
-        application = {
-            "application_id": f"app_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}_{current_user['user_id']}",
-            "job_id": job_id,
-            "user_id": current_user["user_id"],
-            "resume_tailored": False,
-            "original_resume_data": sanitize_for_json(user) if user else {},
-            "applied_at": datetime.utcnow().isoformat(),
-            "status": "submitted"
-        }
-        
-        await db.database["applications"].insert_one(application)
-        
-        return {
-            "success": True,
-            "message": "Application submitted",
-            "application_id": application["application_id"]
-        }
-    except Exception as e:
-        print(f"Error in apply-direct: {e}")
+        print(f"Error in apply: {e}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
