@@ -381,25 +381,53 @@ async def get_all_applications(
         for job in jobs:
             applications_received = job.get("applications_received", [])
             for app in applications_received:
-                # Get user details
-                user = await db.database["users"].find_one({"user_id": app["user_id"]})
-                if user:
+                # Get full application details from applications collection
+                full_app = await db.database["applications"].find_one({"application_id": app["application_id"]})
+                
+                if full_app:
+                    logger.info(f"Full app data: resume_tailored={full_app.get('resume_tailored')}, has_resume_data={bool(full_app.get('resume_data'))}")
+                    
+                    # Use tailored resume data if available, otherwise get user data
+                    if full_app.get("resume_tailored") and full_app.get("resume_data"):
+                        resume_data = full_app["resume_data"]
+                        skills = resume_data.get("skills_organized", resume_data.get("skills", []))
+                        professional_summary = resume_data.get("professional_summary", "")
+                        experience_years = resume_data.get("overall_experience_years", resume_data.get("experience_years", 0))
+                        current_role = resume_data.get("current_role", "")
+                        highest_qualification = resume_data.get("highest_qualification", "")
+                        phone = resume_data.get("phone", "")
+                        logger.info(f"Using tailored data: skills={skills[:2] if skills else []}, summary_len={len(professional_summary)}")
+                    else:
+                        # Get user's original data
+                        user = await db.database["users"].find_one({"user_id": app["user_id"]})
+                        if not user:
+                            continue
+                        skills = user.get("skills", [])
+                        professional_summary = user.get("professional_summary", "")
+                        experience_years = user.get("overall_experience_years", 0)
+                        current_role = user.get("current_role", "")
+                        highest_qualification = user.get("highest_qualification", "")
+                        phone = user.get("phone", "")
+                        logger.info(f"Using original user data")
+                    
                     application_data = {
+                        "application_id": app["application_id"],
                         "job_id": job["job_id"],
                         "job_title": job["title"],
-                        "company": job["company"],
                         "user_id": app["user_id"],
-                        "full_name": f"{user.get('first_name', '')} {user.get('last_name', '')}".strip(),
-                        "email": user["email"],
-                        "phone": user.get("phone", ""),
-                        "experience_years": user.get("overall_experience_years", 0),
-                        "skills": user.get("skills", []),
-                        "highest_qualification": user.get("highest_qualification", ""),
-                        "current_role": user.get("professional_info", {}).get("current_role", ""),
-                        "applied_date": app["applied_date"],
-                        "status": app["status"],
+                        "full_name": full_app.get("candidate_name", ""),
+                        "experience_years": experience_years,
+                        "current_role": current_role,
+                        "applied_date": app.get("applied_date", app.get("applied_at", "")),
+                        "resume_tailored": full_app.get("resume_tailored", False),
+                        "match_score": full_app.get("match_score"),
                         "match_percentage": app.get("match_percentage", 0),
-                        "ats_score": app.get("ats_score", 0)
+                        "ats_score": app.get("ats_score", 0),
+                        "email": full_app.get("candidate_email", ""),
+                        "phone": phone,
+                        "skills": skills,
+                        "professional_summary": professional_summary,
+                        "highest_qualification": highest_qualification
                     }
                     all_applications.append(application_data)
         
@@ -409,6 +437,7 @@ async def get_all_applications(
         }
         
     except Exception as e:
+        logger.error(f"Error in get_all_applications: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to retrieve applications: {str(e)}"
