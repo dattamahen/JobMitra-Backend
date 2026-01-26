@@ -419,6 +419,7 @@ async def get_all_applications(
                         "experience_years": experience_years,
                         "current_role": current_role,
                         "applied_date": app.get("applied_date", app.get("applied_at", "")),
+                        "status": app.get("status", "applied"),
                         "resume_tailored": full_app.get("resume_tailored", False),
                         "match_score": full_app.get("match_score"),
                         "match_percentage": app.get("match_percentage", 0),
@@ -470,16 +471,17 @@ async def get_job_applications(
 @hr_router.put("/applications/{application_id}/status")
 async def update_application_status(
     application_id: str,
-    status: ApplicationStatus,
+    app_status: ApplicationStatus,
     notes: Optional[str] = None,
     current_user: dict = Depends(get_current_hr_user)
 ):
     """Update application status"""
     try:
-        hr_user_id = current_user["user_id"]
-        success = await job_application_db.update_application_status(
-            application_id, status, hr_user_id, notes
-        )
+        from db_simple import update_application_status as db_update_status
+        
+        # Convert enum to string value
+        status_value = app_status.value
+        success = await db_update_status(application_id, status_value)
         
         if not success:
             raise HTTPException(
