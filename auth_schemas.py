@@ -22,8 +22,8 @@ class Certification(BaseModel):
     """Certification information."""
     name: str
     issuer: str
-    issue_date: Optional[str] = None
-    expiry_date: Optional[str] = None
+    issue_date: Optional[Union[str, datetime]] = None
+    expiry_date: Optional[Union[str, datetime]] = None
     credential_id: Optional[str] = None
     link: Optional[str] = None
 
@@ -273,7 +273,7 @@ class UserProfileUpdateRequest(BaseModel):
     twitter_url: Optional[str] = None
     youtube_url: Optional[str] = None
     
-    @validator('certifications')
+    @validator('certifications', pre=True)
     @classmethod
     def validate_certifications(cls, v):
         """Handle both string and Certification object formats for certifications"""
@@ -283,22 +283,19 @@ class UserProfileUpdateRequest(BaseModel):
         processed_certs = []
         for cert in v:
             if isinstance(cert, str):
-                # Skip invalid string representations
                 if cert in ["[object Object]", ""]:
                     continue
-                # Convert valid strings to Certification objects
-                processed_certs.append(Certification(
-                    name=cert,
-                    issuer="Unknown",
-                    issue_date=None,
-                    expiry_date=None,
-                    credential_id=None
-                ))
-            elif isinstance(cert, Certification):
-                processed_certs.append(cert)
+                processed_certs.append({
+                    "name": cert,
+                    "issuer": "Unknown",
+                    "issue_date": None,
+                    "expiry_date": None,
+                    "credential_id": None
+                })
             elif isinstance(cert, dict):
-                # Handle dict format
-                processed_certs.append(Certification(**cert))
+                processed_certs.append(cert)
+            else:
+                processed_certs.append(cert)
         
         return processed_certs
 
