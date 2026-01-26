@@ -563,3 +563,36 @@ async def get_user_progress(user_id: str) -> Optional[Dict[str, Any]]:
     except Exception as e:
         print(f"Error getting user progress: {e}")
         return None
+
+
+async def update_application_status(application_id: str, status: str) -> bool:
+    """Update application status in job's applications_received array."""
+    try:
+        print(f"Updating application status: {application_id} to {status}")
+        
+        # Use 'jobs' collection directly, not from COLLECTIONS mapping
+        jobs_collection = db.database["jobs"]
+        
+        # First check if document exists
+        test_job = await jobs_collection.find_one({"applications_received.application_id": application_id})
+        print(f"Found job with application: {test_job is not None}")
+        if test_job:
+            print(f"Job ID: {test_job.get('job_id')}")
+        
+        # Update status in job's applications_received array
+        result = await jobs_collection.update_one(
+            {"applications_received.application_id": application_id},
+            {
+                "$set": {
+                    "applications_received.$.status": status,
+                    "updated_date": datetime.utcnow()
+                }
+            }
+        )
+        print(f"Update result - modified_count: {result.modified_count}")
+        return result.modified_count > 0
+    except Exception as e:
+        print(f"Error updating application status: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
