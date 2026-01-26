@@ -180,12 +180,12 @@ async def login_user(request: LoginRequest):
 async def get_current_user_profile(current_user: dict = Depends(get_current_user)):
     """Get current user profile"""
     try:
-        
         return {
             "user_id": current_user["user_id"],
             "email": current_user["email"],
             "first_name": current_user["first_name"],
             "last_name": current_user["last_name"],
+            "date_of_birth": current_user.get("date_of_birth"),
             "phone": current_user.get("phone"),
             "skills": current_user.get("skills", []),
             "technical_skills": current_user.get("technical_skills", []),
@@ -198,13 +198,16 @@ async def get_current_user_profile(current_user: dict = Depends(get_current_user
             "current_company": current_user.get("current_company"),
             "desired_job_title": current_user.get("desired_job_title"),
             "expected_salary": current_user.get("expected_salary"),
+            "currency": current_user.get("currency"),
             "linkedin_link": current_user.get("linkedin_link"),
             "github_link": current_user.get("github_link"),
+            "portfolio_link": current_user.get("portfolio_link"),
             "city": current_user.get("city"),
             "state": current_user.get("state"),
             "job_preferences": current_user.get("job_preferences", []),
             "employment_type": current_user.get("employment_type", []),
             "overall_experience_years": current_user.get("overall_experience_years"),
+            "highest_qualification": current_user.get("highest_qualification"),
             "feature_usage_count": current_user.get("feature_usage_count", 5),
             "user_plan": current_user.get("user_plan", "free")
         }
