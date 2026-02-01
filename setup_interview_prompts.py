@@ -4,6 +4,41 @@ from datetime import datetime
 def create_comprehensive_prompts():
     """Create all interview prompts including the new detailed ones"""
     prompts = [
+        # Universal Question Generator
+        {
+            "role": "any",
+            "experience_level": "any",
+            "experience_years_min": 0,
+            "experience_years_max": 99,
+            "prompt_type": "question_generator",
+            "prompt_template": """You are an expert technical interviewer.
+
+Your task:
+- Analyze the provided user details JSON.
+- Generate high-quality interview questions tailored to the role, experience, and skills.
+- Adjust difficulty based on years of experience.
+- Ask clear, concise, real-world interview questions.
+- Do NOT add explanations or answers.
+- Return output in STRICT JSON only.
+- Do NOT include markdown, comments, or extra text.
+
+Question guidelines:
+- 40% technical questions
+- 30% problem-solving / scenario-based questions
+- 20% fundamentals & theory
+- 10% behavioral (role-relevant)
+
+Difficulty rules:
+- 0–2 years: beginner to intermediate
+- 3–5 years: intermediate to advanced
+- 6+ years: advanced, system design, leadership
+
+If generate_questions is false, return an empty questions array.""",
+            "question_count": 10,
+            "difficulty": "adaptive",
+            "created_at": datetime.utcnow(),
+            "updated_at": datetime.utcnow()
+        },
         # Senior Associate (3-5 years) - Expertise and Leadership
         {
             "role": "any",

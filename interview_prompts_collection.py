@@ -117,21 +117,17 @@ def get_smart_prompt(user_profile):
     Smart prompt selection based on user profile
     """
     experience = user_profile.get('experience_years', 0)
-    skills = user_profile.get('skills', [])
-    
-    # Determine role_type based on skills
-    tech_skills = ['python', 'java', 'javascript', 'react', 'angular', 'node', 'sql', 'mongodb', 'aws', 'docker', 'kubernetes', 'typescript']
-    is_technical = any(skill.lower() in tech_skills for skill in skills)
-    role_type = 'technical' if is_technical else 'general'
     
     # Map experience to levels matching database schema
-    if experience <= 1:
-        experience_level = '0-1'
-    elif experience <= 3:
-        experience_level = '1-3'
+    if experience <= 2:
+        experience_level = 'any'
+    elif experience <= 5:
+        experience_level = 'senior_associate'
     elif experience <= 7:
-        experience_level = '3-7'
+        experience_level = 'consultant'
+    elif experience <= 10:
+        experience_level = 'senior_consultant'
     else:
-        experience_level = '7+'
+        experience_level = 'manager'
     
-    return {'experience_level': experience_level, 'role_type': role_type}
+    return {'experience_level': experience_level, 'role_type': 'any'}
