@@ -22,6 +22,14 @@ from db_simple import (
 )
 from activity_tracker import log_user_activity
 
+try:
+    from crew_agent import run_resume_enhancement_crew
+    CREW_AI_AVAILABLE = True
+except (ImportError, TypeError, Exception) as e:
+    CREW_AI_AVAILABLE = False
+    print(f"Warning: CrewAI not available - {type(e).__name__}: {str(e)}")
+    print("Resume tailoring will be disabled.")
+
 # Import schemas - commented out for now since using mock data
 # from schemas import (
 #     UserProfile, JobListing, JobApplication, MockInterviewSession,
@@ -112,10 +120,89 @@ class MockInterviewCreate(BaseModel):
 # User Profile Endpoints
 @router.post("/users", tags=["User Management"])
 async def create_user(user_data: UserProfileCreate):
-    """Create a new user profile."""
+    """Create a new user profile with all fields initialized."""
     try:
-        user_dict = user_data.dict()
-        user_id = await create_user_profile(user_dict)
+        # Initialize complete user profile with all default values
+        full_user_profile = {
+            # Core Identity
+            "user_id": user_data.user_id,
+            "email": user_data.email,
+            "password_hash": "",  # Should be set by auth system
+            
+            # Basic Personal Information
+            "first_name": user_data.full_name.split()[0] if user_data.full_name else "",
+            "last_name": " ".join(user_data.full_name.split()[1:]) if user_data.full_name and len(user_data.full_name.split()) > 1 else "",
+            "date_of_birth": None,
+            "phone": user_data.phone,
+            "location": None,
+            "city": None,
+            "state": None,
+            "avatar_url": None,
+            
+            # Professional Information
+            "overall_experience_years": None,
+            "highest_qualification": None,
+            "professional_summary": None,
+            "current_role": user_data.current_job_title,
+            "current_company": None,
+            
+            # Skills and Experience
+            "skills": user_data.skills,
+            "technical_skills": [],
+            "work_experience": [],
+            "education": [],
+            "projects": [],
+            "certifications": [],
+            
+            # Legacy fields
+            "previous_organizations": [],
+            "contributions": None,
+            "communication_skills": [],
+            "ai_tools": [],
+            
+            # Additional professional fields
+            "linkedin_link": None,
+            "github_link": None,
+            "portfolio_link": None,
+            "desired_job_title": None,
+            "expected_salary": None,
+            "currency": "USD",
+            
+            # Social Links
+            "social_links": None,
+            
+            # Job Application Tracking
+            "overall_jobs_applied": [],
+            
+            # User Classification
+            "user_type": "candidate",
+            "user_status": "active",
+            "user_plan": "free",
+            
+            # Preferences
+            "job_preferences": [],
+            "employment_type": [],
+            
+            # Timestamps
+            "profile_created_on": datetime.utcnow(),
+            "last_active": datetime.utcnow(),
+            
+            # Analytics and Metrics
+            "match_analysis_count": 0,
+            "match_tailored_count": 0,
+            "mock_interview_count": 0,
+            "profile_completion_count": 0,
+            "profile_visits": 0,
+            "recent_activity": [],
+            
+            # Legacy Settings
+            "is_active": True,
+            "is_public": True,
+            "email_notifications": True,
+            "profile_searchable": True,
+        }
+        
+        user_id = await create_user_profile(full_user_profile)
         
         if user_id:
             return {"message": "User created successfully", "user_id": user_id}
@@ -167,34 +254,34 @@ async def update_user(user_id: str, update_data: UserProfileUpdate):
         raise HTTPException(status_code=500, detail=f"Error updating user: {str(e)}")
 
 
-# Job Management Endpoints
-@router.post("/jobs/search", tags=["Job Management"])
-async def search_jobs_endpoint(search_request: JobSearchRequest):
-    """Search for jobs based on criteria."""
-    try:
-        filters = {}
-        if search_request.skills:
-            filters["skills"] = search_request.skills
-        if search_request.location_type:
-            filters["location_type"] = search_request.location_type
-        if search_request.experience_level:
-            filters["experience_level"] = search_request.experience_level
-        
-        jobs = await search_jobs(
-            query=search_request.query or "",
-            filters=filters,
-            limit=search_request.limit
-        )
-        
-        return {
-            "jobs": jobs,
-            "count": len(jobs),
-            "query": search_request.query,
-            "filters": filters
-        }
-        
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error searching jobs: {str(e)}")
+# DEPRECATED: Moved to resume_tailor_endpoints.py with already_applied flag
+# @router.post("/jobs/search", tags=["Job Management"])
+# async def search_jobs_endpoint(search_request: JobSearchRequest):
+#     """Search for jobs based on criteria."""
+#     try:
+#         filters = {}
+#         if search_request.skills:
+#             filters["skills"] = search_request.skills
+#         if search_request.location_type:
+#             filters["location_type"] = search_request.location_type
+#         if search_request.experience_level:
+#             filters["experience_level"] = search_request.experience_level
+#         
+#         jobs = await search_jobs(
+#             query=search_request.query or "",
+#             filters=filters,
+#             limit=search_request.limit
+#         )
+#         
+#         return {
+#             "jobs": jobs,
+#             "count": len(jobs),
+#             "query": search_request.query,
+#             "filters": filters
+#         }
+#         
+#     except Exception as e:
+#         raise HTTPException(status_code=500, detail=f"Error searching jobs: {str(e)}")
 
 
 @router.get("/jobs/{job_id}", tags=["Job Management"])
@@ -230,20 +317,21 @@ async def create_application(application_data: JobApplicationCreate):
         raise HTTPException(status_code=500, detail=f"Error creating application: {str(e)}")
 
 
-@router.get("/users/{user_id}/applications", tags=["Application Management"])
-async def get_user_applications_endpoint(user_id: str, limit: int = Query(20, ge=1, le=100)):
-    """Get all applications for a user."""
-    try:
-        applications = await get_user_applications(user_id, limit)
-        
-        return {
-            "applications": applications,
-            "count": len(applications),
-            "user_id": user_id
-        }
-        
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error getting applications: {str(e)}")
+# DEPRECATED: Moved to resume_tailor_endpoints.py
+# @router.get("/users/{user_id}/applications", tags=["Application Management"])
+# async def get_user_applications_endpoint(user_id: str, limit: int = Query(20, ge=1, le=100)):
+#     """Get all applications for a user."""
+#     try:
+#         applications = await get_user_applications(user_id, limit)
+#         
+#         return {
+#             "applications": applications,
+#             "count": len(applications),
+#             "user_id": user_id
+#         }
+#         
+#     except Exception as e:
+#         raise HTTPException(status_code=500, detail=f"Error getting applications: {str(e)}")
 
 
 # Mock Interview Endpoints
@@ -528,18 +616,56 @@ async def get_resume_templates():
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error getting templates: {str(e)}")
 
+
+class TailorResumeRequest(BaseModel):
+    """Request model for tailoring resume to job description."""
+    user_id: str
+    job_id: str
+    resume_content: str
+    job_description: str
+
+
+@router.post("/resumes/tailor", tags=["Resume Management"])
+async def tailor_resume(request: TailorResumeRequest):
+    """Tailor user resume to match job description using AI."""
+    try:
+        if not CREW_AI_AVAILABLE:
+            raise HTTPException(
+                status_code=503,
+                detail="Resume tailoring service is currently unavailable. Please install crewai package."
+            )
+        
+        tailored_resume = run_resume_enhancement_crew(
+            resume=request.resume_content,
+            job_description=request.job_description
+        )
+        
+        await log_user_activity(
+            request.user_id,
+            "resume_update",
+            f"Tailored resume for job {request.job_id}"
+        )
+        
+        return {
+            "tailored_resume": tailored_resume,
+            "user_id": request.user_id,
+            "job_id": request.job_id
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error tailoring resume: {str(e)}")
+
 # Analytics Endpoints
 @router.get("/analytics/summary", tags=["Analytics"])
 async def get_analytics_summary():
     """Get system-wide analytics summary."""
     try:
-        # This would require implementing analytics aggregation
-        # For now, return placeholder data
         return {
             "total_users": 0,
             "total_jobs": 0,
             "total_applications": 0,
             "total_mock_interviews": 0,
+            "crew_ai_available": CREW_AI_AVAILABLE,
             "message": "Analytics implementation needed"
         }
         
