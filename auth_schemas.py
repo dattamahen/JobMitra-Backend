@@ -2,7 +2,7 @@
 Authentication and User Management Schemas
 """
 
-from pydantic import BaseModel, EmailStr, Field, validator
+from pydantic import BaseModel, EmailStr, Field, validator, constr
 from datetime import datetime
 try:
     from typing import Literal
@@ -314,7 +314,7 @@ class ForgotPasswordRequest(BaseModel):
 
 class ResetPasswordRequest(BaseModel):
     token: str
-    new_password: str = Field(..., min_length=8)
+    new_password: constr(min_length=8, max_length=100)  # type: ignore
 
 class VerifyEmailRequest(BaseModel):
     token: str

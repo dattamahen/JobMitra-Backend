@@ -10,10 +10,11 @@ import jwt
 
 from auth_schemas import (
     LoginRequest, LoginResponse, RegisterRequest, UserResponse,
-    UserProfileUpdateRequest, PasswordChangeRequest, UserProfileResponse
+    UserProfileUpdateRequest, PasswordChangeRequest, UserProfileResponse,
+    ForgotPasswordRequest, ResetPasswordRequest
 )
 from auth_db import (
-    create_user, authenticate_user, get_user_by_id, 
+    create_user, authenticate_user, get_user_by_id, get_user_by_email,
     update_user_profile, change_user_password, seed_users_data, list_all_users
 )
 from auth_utils import create_access_token, verify_token, SECRET_KEY
@@ -597,3 +598,56 @@ async def migrate_feature_usage():
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Migration failed: {str(e)}"
         )
+
+@auth_router.post("/forgot-password")
+async def forgot_password(request: ForgotPasswordRequest):
+    """Send password reset token"""
+    from auth_utils import generate_reset_token
+    from datetime import timedelta
+    from db_simple import db
+    from email_service import email_service
+    
+    user = await get_user_by_email(request.email)
+    if not user:
+        return {"message": "If email exists, reset link will be sent"}
+    
+    token = generate_reset_token()
+    expire = datetime.utcnow() + timedelta(hours=1)
+    
+    await db.database["users"].update_one(
+        {"email": request.email},
+        {"$set": {"reset_token": token, "reset_token_expire": expire}}
+    )
+    
+    # Send email
+    user_name = f"{user.get('first_name', '')} {user.get('last_name', '')}".strip() or "User"
+    email_sent = email_service.send_password_reset_email(request.email, token, user_name)
+    
+    if not email_sent:
+        print(f"⚠️ Failed to send email, but token saved. Token: {token}")
+    
+    return {"message": "If email exists, reset link will be sent"}
+
+@auth_router.post("/reset-password")
+async def reset_password(request: ResetPasswordRequest):
+    """Reset password with token"""
+    from db_simple import db
+    
+    user = await db.database["users"].find_one({
+        "reset_token": request.token,
+        "reset_token_expire": {"$gt": datetime.utcnow()}
+    })
+    
+    if not user:
+        raise HTTPException(status_code=400, detail="Invalid or expired token")
+    
+    success = await change_user_password(user["user_id"], request.new_password)
+    if not success:
+        raise HTTPException(status_code=400, detail="Failed to reset password")
+    
+    await db.database["users"].update_one(
+        {"user_id": user["user_id"]},
+        {"$unset": {"reset_token": "", "reset_token_expire": ""}}
+    )
+    
+    return {"message": "Password reset successfully"}
