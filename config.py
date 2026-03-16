@@ -9,7 +9,7 @@ class Settings:
     DESCRIPTION = "AI-powered job search and career development platform"
     VERSION = "1.0.0"
     CORS_ORIGINS = ["http://localhost:4200", "*"]
-    HOST = "localhost"
+    HOST = "0.0.0.0"
     PORT = 8000
     RELOAD = True
     LOG_LEVEL = "info"

@@ -404,9 +404,13 @@ async def get_current_user_profile(current_user: dict = Depends(get_current_user
             "current_job_title": user_profile.get("professional_info", {}).get("current_role", ""),
             "desired_job_title": user_profile.get("professional_info", {}).get("desired_job_title", ""),
             "experience_years": user_profile.get("overall_experience_years", 0),
+            "highest_qualification": user_profile.get("highest_qualification", ""),
             "skills": user_profile.get("skills", []),
             "professional_summary": user_profile.get("professional_info", {}).get("professional_summary", ""),
-            "certifications": [cert.get("name", "") for cert in user_profile.get("certifications", [])],
+            "work_experience": user_profile.get("work_experience", []),
+            "education": user_profile.get("education", []),
+            "projects": user_profile.get("projects", []),
+            "certifications": user_profile.get("certifications", []),
             "area_of_expertise": user_profile.get("professional_info", {}).get("area_of_expertise", []),
             "key_contributions": user_profile.get("professional_info", {}).get("key_contributions", ""),
             "preferred_work_types": user_profile.get("job_preferences", []),
@@ -431,14 +435,14 @@ async def get_current_user_profile(current_user: dict = Depends(get_current_user
             },
             "profile_completion_percentage": user_profile.get("profile_completion_count", 0),
             "profile_visits": user_profile.get("profile_visits", 0),
-            "last_active": user_profile.get("last_active", datetime.now()).isoformat(),
+            "last_active": user_profile.get("last_active") if isinstance(user_profile.get("last_active"), str) else (user_profile.get("last_active").isoformat() if user_profile.get("last_active") else datetime.now().isoformat()),
             "is_active": user_profile.get("is_active", True),
             "is_public": user_profile.get("profile_settings", {}).get("is_public", True),
             "email_notifications": user_profile.get("profile_settings", {}).get("email_notifications", True),
             "profile_searchable": user_profile.get("profile_settings", {}).get("profile_searchable", True),
             "preferred_locations": user_profile.get("personal_info", {}).get("location", {}).get("city", "").split(",") if user_profile.get("personal_info", {}).get("location", {}).get("city") else [],
-            "created_at": user_profile.get("profile_created_on", datetime.now()).isoformat(),
-            "updated_at": user_profile.get("updated_at", datetime.now()).isoformat(),
+            "created_at": user_profile.get("profile_created_on") if isinstance(user_profile.get("profile_created_on"), str) else (user_profile.get("profile_created_on").isoformat() if user_profile.get("profile_created_on") else datetime.now().isoformat()),
+            "updated_at": user_profile.get("updated_at") if isinstance(user_profile.get("updated_at"), str) else (user_profile.get("updated_at").isoformat() if user_profile.get("updated_at") else datetime.now().isoformat()),
             "user_type": user_profile.get("user_type", "candidate"),
             "user_status": user_profile.get("user_status", "active"),
             "user_plan": user_profile.get("user_plan", "free")
@@ -449,6 +453,149 @@ async def get_current_user_profile(current_user: dict = Depends(get_current_user
     except Exception as e:
         print(f"❌ Error getting user profile: {e}")
         raise HTTPException(status_code=500, detail="Failed to get user profile")
+
+
+@router.get("/mock-interviews/history", tags=["Mock Interviews"])
+async def get_interview_history(current_user: dict = Depends(get_current_user)):
+	"""Get user's mock interview history."""
+	try:
+		user_id = current_user["user_id"]
+		
+		# Get mock interviews from database
+		interviews_cursor = db.database["mock_interview_sessions"].find({
+			"user_id": user_id
+		}).sort("created_at", -1).limit(10)
+		
+		interviews = []
+		async for interview in interviews_cursor:
+			interviews.append({
+				"session_id": interview.get("session_id", ""),
+				"role": interview.get("role", "Technical Interview"),
+				"score": interview.get("overall_score", 0),
+				"created_at": interview.get("created_at", datetime.now()).isoformat() if hasattr(interview.get("created_at"), 'isoformat') else str(interview.get("created_at", datetime.now())),
+				"status": "completed"
+			})
+		
+		return {
+			"success": True,
+			"interviews": interviews
+		}
+	except Exception as e:
+		print(f"❌ Error getting interview history: {e}")
+		return {
+			"success": True,
+			"interviews": []
+		}
+
+
+@router.get("/skills/technical", tags=["Skills"])
+async def get_technical_skills(current_user: dict = Depends(get_current_user)):
+	"""Get user's technical skills."""
+	try:
+		user_id = current_user["user_id"]
+		user_profile = await db.database["users"].find_one({"user_id": user_id})
+		
+		if not user_profile:
+			return []
+		
+		skills = user_profile.get("skills", [])
+		technical_skills = []
+		
+		for idx, skill in enumerate(skills):
+			skill_name = skill if isinstance(skill, str) else skill.get("name", "")
+			if skill_name:
+				technical_skills.append({
+					"skill_id": f"tech_{idx}",
+					"skill_name": skill_name,
+					"current_level": 60,
+					"level_text": "Intermediate"
+				})
+		
+		return technical_skills
+	except Exception as e:
+		print(f"❌ Error getting technical skills: {e}")
+		return []
+
+
+@router.get("/skills/soft", tags=["Skills"])
+async def get_soft_skills(current_user: dict = Depends(get_current_user)):
+	"""Get user's soft skills."""
+	try:
+		user_id = current_user["user_id"]
+		user_profile = await db.database["users"].find_one({"user_id": user_id})
+		
+		if not user_profile:
+			return []
+		
+		soft_skills_data = user_profile.get("communication_skills", [])
+		soft_skills = []
+		
+		for idx, skill in enumerate(soft_skills_data):
+			skill_name = skill if isinstance(skill, str) else skill.get("name", "")
+			if skill_name:
+				soft_skills.append({
+					"skill_id": f"soft_{idx}",
+					"skill_name": skill_name,
+					"current_level": 70,
+					"level_text": "Advanced"
+				})
+		
+		return soft_skills
+	except Exception as e:
+		print(f"❌ Error getting soft skills: {e}")
+		return []
+
+
+@router.get("/users/{user_id}/applications", tags=["Applications"])
+async def get_user_applications_endpoint(user_id: str, current_user: dict = Depends(get_current_user)):
+	"""Get all applications for a user."""
+	try:
+		# Verify user can only access their own applications
+		if current_user["user_id"] != user_id:
+			raise HTTPException(status_code=403, detail="Access denied")
+		
+		# Get applications from job_applications collection
+		applications_cursor = db.database["job_applications"].find({
+			"user_id": user_id
+		}).sort("applied_date", -1)
+		
+		applications = []
+		async for app in applications_cursor:
+			# Get job details
+			job = await db.database["jobs"].find_one({"job_id": app["job_id"]})
+			
+			if job:
+				application_data = {
+					"application_id": app["application_id"],
+					"job_title": job["title"],
+					"company": job["company"],
+					"status": app["status"],
+					"applied_date": app["applied_date"].isoformat() if hasattr(app["applied_date"], 'isoformat') else app["applied_date"],
+					"notes": app.get("notes"),
+					"tags": [],
+					"progress_percentage": None
+				}
+				
+				# Add interview stages if available
+				if app.get("interview_stages"):
+					application_data["interview_stages"] = app["interview_stages"]
+				
+				# Add offer details if available
+				if app.get("offer_details"):
+					application_data["offer_details"] = app["offer_details"]
+				
+				applications.append(application_data)
+		
+		return {
+			"applications": applications,
+			"total_count": len(applications)
+		}
+		
+	except HTTPException:
+		raise
+	except Exception as e:
+		print(f"❌ Error getting user applications: {e}")
+		raise HTTPException(status_code=500, detail="Failed to get applications")
 
 
 @router.get("/analytics/user-stats", tags=["Analytics"])

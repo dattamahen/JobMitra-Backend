@@ -112,41 +112,6 @@ async def get_interview_prompt(user_profile: UserProfileRequest):
 		traceback.print_exc()
 		raise HTTPException(status_code=500, detail=f"Failed to get interview prompt: {str(e)}")
 
-@router.post("/evaluate-interview")
-async def evaluate_interview(user_profile: UserProfileRequest):
-	"""Evaluate interview answers based on user profile"""
-	try:
-		criteria = get_smart_prompt(user_profile.dict())
-		
-		if db.database is None:
-			raise HTTPException(status_code=500, detail="Database not connected")
-		
-		prompt_doc = await db.database.interview_prompts.find_one({
-			"role_type": criteria['role_type'],
-			"experience_level": criteria['experience_level'],
-			"prompt_type": "answer_evaluator"
-		})
-		
-		if not prompt_doc:
-			prompt_doc = await db.database.interview_prompts.find_one({
-				"experience_level": criteria['experience_level'],
-				"prompt_type": "answer_evaluator"
-			})
-		
-		if not prompt_doc:
-			raise HTTPException(status_code=404, detail="No suitable evaluator prompt found")
-		
-		return {
-			"success": True,
-			"prompt": prompt_doc.get("prompt", ""),
-			"role_type": prompt_doc.get("role_type", "N/A"),
-			"experience_level": prompt_doc["experience_level"],
-			"prompt_type": "answer_evaluator"
-		}
-	except Exception as e:
-		logger.error(f"Error: {str(e)}")
-		raise HTTPException(status_code=500, detail="Failed to get evaluator prompt")
-
 @router.get("/interview-prompts")
 async def list_interview_prompts():
 	"""List all available interview prompts"""
