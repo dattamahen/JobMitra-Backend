@@ -40,6 +40,7 @@ from interview_prompts_endpoints import router as interview_prompts_router
 from multi_agent_endpoints import router as multi_agent_router
 from interview_evaluation_endpoint import router as interview_evaluation_router
 from resume_tailor_endpoints import router as resume_tailor_router
+from credits_endpoints import router as credits_router
 
 
 @asynccontextmanager
@@ -198,6 +199,7 @@ def create_app() -> FastAPI:
     app.include_router(multi_agent_router, prefix="/api/v1")  # Multi-Agent Interview routes
     app.include_router(interview_evaluation_router, prefix="/api/v1/mock-interview")  # Interview evaluation routes
     app.include_router(resume_tailor_router)  # Resume tailor routes (already has /api/v1 prefix)
+    app.include_router(credits_router)  # Credits & payments routes
 
     # Health check endpoint
     @app.get("/", tags=["Health"])
