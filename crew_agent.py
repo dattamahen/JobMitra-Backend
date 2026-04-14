@@ -6,6 +6,7 @@ Defines agents, tasks, and crew for query processing and resume enhancement.
 import os
 from crewai import Agent, Task, Crew
 from langchain_openai import ChatOpenAI
+from prompt_manager import prompt_manager
 
 
 def setup_llm():
@@ -42,13 +43,12 @@ def create_researcher_agent():
     llm = setup_llm()
     
     # Create researcher agent with specific role and capabilities
+    variant = prompt_manager.get_random("query_analysis")
+    
     researcher = Agent(
         role="Researcher",
         goal="Analyze and answer user queries with accurate, comprehensive, and helpful information",
-        backstory="""You are an expert researcher with vast knowledge across multiple domains.
-        You excel at understanding user queries, conducting thorough analysis, and providing 
-        well-structured, informative responses. You always strive to be helpful, accurate, 
-        and provide actionable insights when possible.""",
+        backstory=variant.get("system_prompt"),
         verbose=True,
         allow_delegation=False,
         llm=llm
@@ -68,13 +68,12 @@ def create_resume_matcher_agent():
     llm = setup_llm()
     
     # Create resume matcher agent
+    variant = prompt_manager.get_random("resume_validation")
+    
     resume_matcher = Agent(
         role="Resume Validator",
         goal="Compare resume with job description and return match percentage and gaps",
-        backstory="""You are an expert HR professional and ATS (Applicant Tracking System) specialist 
-        with years of experience in resume screening and job matching. You excel at analyzing resumes 
-        against job requirements, identifying skill gaps, and calculating compatibility scores. 
-        You understand what recruiters look for and how ATS systems parse and rank resumes.""",
+        backstory=variant.get("system_prompt"),
         verbose=True,
         allow_delegation=False,
         llm=llm
@@ -94,13 +93,12 @@ def create_resume_improver_agent():
     llm = setup_llm()
     
     # Create resume improver agent
+    variant = prompt_manager.get_random("resume_enhancement")
+    
     resume_improver = Agent(
         role="Enhancement Advisor",
         goal="Suggest updates to the resume based on validation analysis and best practices",
-        backstory="""You are a professional resume writer and career coach with expertise in 
-        resume optimization across various industries. You specialize in translating skill gaps 
-        into actionable improvement strategies, suggesting better keyword usage, improving content 
-        structure, and enhancing overall presentation to maximize ATS compatibility and recruiter appeal.""",
+        backstory=variant.get("system_prompt"),
         verbose=True,
         allow_delegation=False,
         llm=llm
@@ -120,14 +118,12 @@ def create_resume_finalizer_agent():
     llm = setup_llm()
     
     # Create resume finalizer agent
+    variant = prompt_manager.get_random("resume_enhancement")
+    
     resume_finalizer = Agent(
         role="Resume Generator",
         goal="Use improvement suggestions to generate the enhanced final version of the resume",
-        backstory="""You are a professional resume formatting expert and content writer who 
-        specializes in creating polished, ATS-optimized resumes. You excel at implementing 
-        improvement suggestions while maintaining professional formatting, ensuring proper 
-        keyword density, and creating compelling content that highlights candidate strengths 
-        effectively.""",
+        backstory=variant.get("system_prompt"),
         verbose=True,
         allow_delegation=False,
         llm=llm

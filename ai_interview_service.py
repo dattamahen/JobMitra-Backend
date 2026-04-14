@@ -9,6 +9,7 @@ load_dotenv()
 print(f"Loading .env file...")
 print(f"OpenAI API Key loaded: {bool(os.getenv('OPENAI_API_KEY'))}")
 from config import settings
+from prompt_manager import prompt_manager
 
 class AIInterviewService:
     def __init__(self):
@@ -38,7 +39,7 @@ class AIInterviewService:
         data = {
             "model": "gpt-3.5-turbo",
             "messages": [
-                {"role": "system", "content": "You are an expert interviewer. Generate 5-10 specific interview questions based on the given prompt. Format as numbered list."},
+                {"role": "system", "content": prompt_manager.get_random("interview_questions").get("system_prompt")},
                 {"role": "user", "content": prompt}
             ],
             "max_tokens": 1000,
