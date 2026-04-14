@@ -5,6 +5,7 @@ Resume Tailor Agent using Gemini AI for intelligent resume customization.
 import os
 import json
 import google.generativeai as genai
+from prompt_manager import prompt_manager
 
 
 def run_resume_tailor(user_profile: dict, job_description: str) -> dict:
@@ -35,8 +36,11 @@ def run_resume_tailor(user_profile: dict, job_description: str) -> dict:
             "overall_experience_years": user_profile.get('overall_experience_years', 0)
         }
         
+        tailor_variant = prompt_manager.get_random("resume_tailoring")
+        tailor_system_prompt = tailor_variant.get("system_prompt")
+        
         prompt = f"""
-You are an expert resume writer and hiring manager.
+{tailor_system_prompt}
 
 Your task:
 - Tailor a candidate's CV specifically for the provided Job Description (JD).

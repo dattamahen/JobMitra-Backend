@@ -3,6 +3,7 @@ from pydantic import BaseModel
 from typing import List, Dict, Any
 from multi_llm_service import MultiLLMService
 from db_simple import create_mock_interview, get_user_mock_interviews
+from prompt_manager import prompt_manager
 import logging
 from datetime import datetime
 
@@ -34,7 +35,13 @@ async def submit_interview_for_evaluation(submission: InterviewSubmission):
             qa_text += f"Question {i}: {qa.question}\n"
             qa_text += f"Answer {i}: {qa.answer}\n\n"
         
-        evaluation_prompt = f"""You are an expert technical interviewer. Evaluate this interview performance and provide a detailed assessment.
+        eval_variant = prompt_manager.get_random(
+            "interview_evaluation",
+            user_id=submission.user_profile.get('user_id')
+        )
+        eval_system_prompt = eval_variant.get("system_prompt")
+        
+        evaluation_prompt = f"""{eval_system_prompt}
 
 {user_info}Interview Questions and Answers:
 {qa_text}
