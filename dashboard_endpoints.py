@@ -10,7 +10,7 @@ from job_db import JobDatabase
 from auth_endpoints import get_current_user
 from db_simple import (
     db, get_user_profile, get_user_applications, get_user_mock_interviews,
-    get_user_dashboard, update_user_dashboard, get_learning_resources,
+    get_learning_resources,
     get_user_progress
 )
 from activity_tracker import log_user_activity
@@ -261,10 +261,10 @@ async def get_dashboard(current_user: dict = Depends(get_current_user)):
                 activity_item = {
                     "id": f"{activity['activity_type']}_{activity.get('timestamp', 'unknown')}",
                     "title": activity["description"],
-                    "icon": "send" if activity["activity_type"] == "job_application" else "account_circle",
+                    "icon": activity.get("icon", "info"),
                     "timestamp": activity.get("timestamp", datetime.now().isoformat()),
                     "type": activity["activity_type"],
-                    "status": "completed"
+                    "status": activity.get("status", "completed")
                 }
                 recent_activities.append(activity_item)
         
@@ -320,7 +320,7 @@ async def get_dashboard(current_user: dict = Depends(get_current_user)):
         }
         
         # Update dashboard in database
-        await update_user_dashboard(user_id, dashboard_data)
+        # REMOVED: user_dashboards collection was write-only, never read
         
         return dashboard_data
         

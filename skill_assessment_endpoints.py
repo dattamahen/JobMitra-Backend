@@ -9,6 +9,7 @@ from datetime import datetime, timedelta
 import random
 from auth_endpoints import get_current_user
 from auth_db import get_user_by_id
+from activity_tracker import log_user_activity
 
 router = APIRouter(prefix="/api/v1/skill-assessment", tags=["Skill Assessment"])
 
@@ -220,11 +221,20 @@ async def get_assessment_history(current_user: dict = Depends(get_current_user))
     return [AssessmentResult(**result) for result in MOCK_ASSESSMENT_HISTORY]
 
 @router.post("/take-test/{skill_id}")
-async def take_skill_test(skill_id: str):
+async def take_skill_test(skill_id: str, current_user: dict = Depends(get_current_user)):
     """Start a skill assessment test"""
+    test_id = f"test_{skill_id}_{random.randint(1000, 9999)}"
+
+    await log_user_activity(
+        current_user["user_id"],
+        "skill_assessment",
+        f"Started skill assessment for {skill_id}",
+        {"skill_id": skill_id, "test_id": test_id},
+    )
+
     return {
         "message": f"Assessment for {skill_id} started",
-        "test_id": f"test_{skill_id}_{random.randint(1000, 9999)}",
+        "test_id": test_id,
         "questions_count": 20,
         "duration_minutes": 30
     }

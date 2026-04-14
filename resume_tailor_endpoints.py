@@ -7,13 +7,21 @@ from pydantic import BaseModel
 from auth_endpoints import get_current_user
 from resume_tailor_agent import run_resume_tailor
 from db_simple import db
+from api_contracts import (
+    TailorPreviewResponse as TailorPreviewContract,
+    TailorResumeResponse as TailorResumeContract,
+    ApplyJobResponse as ApplyJobContract,
+    OriginalResume,
+    TailoredResume,
+    TailorChange,
+)
 import json
 from datetime import datetime
 from bson import ObjectId
 
 router = APIRouter(prefix="/api/v1", tags=["Resume Tailor"])
 
-# Request/Response Models
+# Request/Response Models (kept for backward compat, contracts are in api_contracts.py)
 class TailorPreviewResponse(BaseModel):
     original_resume: Dict[str, Any]
     tailored_resume: Dict[str, Any]
@@ -123,12 +131,14 @@ Requirements:
             {"$set": {f"tailored_resumes.{job_id}": ai_result["tailored_resume"]}}
         )
         
-        return {
-            "original_resume": original_resume,
-            "tailored_resume": ai_result.get("tailored_resume", {}),
-            "match_improvement": ai_result.get("match_improvement", 0),
-            "changes": ai_result.get("changes", [])
-        }
+        return TailorPreviewContract(
+            original_resume=OriginalResume(**original_resume),
+            tailored_resume=TailoredResume(**ai_result.get("tailored_resume", {})),
+            match_improvement=max(0, min(100, ai_result.get("match_improvement", 0))),
+            changes=[
+                TailorChange(**c) for c in ai_result.get("changes", [])
+            ],
+        ).model_dump()
         
     except HTTPException:
         raise
@@ -156,12 +166,12 @@ async def tailor_resume(job_id: str, current_user: dict = Depends(get_current_us
             {"$addToSet": {"tailored_jobs": job_id}}
         )
         
-        return {
-            "success": True,
-            "message": "Resume tailored successfully",
-            "tailor_done": True,
-            "match_percentage": preview["match_improvement"]
-        }
+        return TailorResumeContract(
+            success=True,
+            message="Resume tailored successfully",
+            tailor_done=True,
+            match_percentage=max(0, min(100, preview["match_improvement"])),
+        ).model_dump()
     except Exception as e:
         print(f"Error in tailor resume: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -255,12 +265,12 @@ async def apply_for_job(job_id: str, use_tailored: bool = False, current_user: d
         
         message = "Application submitted with tailored resume" if use_tailored else "Application submitted"
         
-        return {
-            "success": True,
-            "message": message,
-            "application_id": application_id,
-            "match_percentage": match_score
-        }
+        return ApplyJobContract(
+            success=True,
+            message=message,
+            application_id=application_id,
+            match_percentage=match_score,
+        ).model_dump()
     except Exception as e:
         print(f"Error in apply: {e}")
         import traceback
