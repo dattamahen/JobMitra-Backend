@@ -6,6 +6,7 @@ import os
 import json
 import google.generativeai as genai
 from prompt_manager import prompt_manager
+from api_contracts import parse_tailor_response
 
 
 def run_resume_tailor(user_profile: dict, job_description: str) -> dict:
@@ -111,27 +112,7 @@ Return ONLY a JSON object with this exact structure:
         response = model.generate_content(prompt)
         result_str = response.text
         
-        # Parse JSON from result
-        try:
-            # Try to find JSON in the response
-            start_idx = result_str.find('{')
-            end_idx = result_str.rfind('}') + 1
-            if start_idx != -1 and end_idx > start_idx:
-                json_str = result_str[start_idx:end_idx]
-                parsed_result = json.loads(json_str)
-                return parsed_result
-            else:
-                raise ValueError("No JSON found in response")
-        except (json.JSONDecodeError, ValueError) as e:
-            print(f"Failed to parse JSON: {e}")
-            print(f"Raw result: {result_str[:500]}")
-            # Return fallback structure
-            return {
-                "tailored_resume": {},
-                "match_improvement": 0,
-                "changes": [],
-                "error": "Failed to parse AI response"
-            }
+        return parse_tailor_response(result_str)
         
     except Exception as e:
         print(f"Error in resume tailoring: {e}")

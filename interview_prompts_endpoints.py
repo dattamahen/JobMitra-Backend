@@ -1,6 +1,6 @@
 """
 Interview Prompts Endpoints
-Uses file-based prompt_manager instead of MongoDB for prompt selection.
+Uses file-based prompt_manager with strict JSON output enforcement.
 """
 
 from fastapi import APIRouter, HTTPException
@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from typing import List, Optional
 from multi_llm_service import MultiLLMService
 from prompt_manager import prompt_manager
+from api_contracts import InterviewQuestionResponse
 import logging
 import json
 import re
@@ -27,6 +28,77 @@ class UserProfileRequest(BaseModel):
 	generate_questions: Optional[bool] = True
 
 
+def _build_question_prompt(system_prompt: str, user_details: dict) -> str:
+	"""Build a prompt that enforces strict JSON array output."""
+	experience = user_details.get("experience_years", 0)
+	if experience <= 2:
+		difficulty = "beginner to intermediate"
+		count = "8-10"
+	elif experience <= 5:
+		difficulty = "intermediate to advanced"
+		count = "8-10"
+	else:
+		difficulty = "advanced, including system design and leadership"
+		count = "7-10"
+
+	return f"""{system_prompt}
+
+Candidate Profile:
+- Role: {user_details.get("role", "Software Engineer")}
+- Experience: {experience} years
+- Skills: {", ".join(user_details.get("skills", []))}
+
+Generate {count} interview questions at {difficulty} difficulty level.
+
+STRICT OUTPUT RULES:
+- Return ONLY a valid JSON object
+- Format: {{"questions": ["question 1", "question 2", ...]}}
+- Each question must be a single, concise string (1-3 sentences max)
+- No markdown, no numbering, no explanations, no extra text
+- No sub-questions or multi-part questions — one clear question per item
+- Start your response with {{ and end with }}"""
+
+
+def _parse_questions(content: str) -> List[str]:
+	"""Parse LLM response into a clean list of question strings."""
+	content = content.strip()
+
+	# Strategy 1: Direct JSON parse
+	try:
+		content_clean = re.sub(r"^```(?:json)?\s*", "", content)
+		content_clean = re.sub(r"\s*```$", "", content_clean).strip()
+		data = json.loads(content_clean)
+		questions = data.get("questions", [])
+		if questions and isinstance(questions, list):
+			return [q.get("question", str(q)) if isinstance(q, dict) else str(q) for q in questions]
+	except (json.JSONDecodeError, AttributeError):
+		pass
+
+	# Strategy 2: Extract JSON object from mixed content
+	try:
+		match = re.search(r"\{[\s\S]*\"questions\"\s*:\s*\[[\s\S]*\][\s\S]*\}", content)
+		if match:
+			data = json.loads(match.group())
+			questions = data.get("questions", [])
+			if questions:
+				return [q.get("question", str(q)) if isinstance(q, dict) else str(q) for q in questions]
+	except (json.JSONDecodeError, AttributeError):
+		pass
+
+	# Strategy 3: Parse numbered list (1. Question\n2. Question)
+	numbered = re.findall(r"^\s*\d+[\.\)]\s*(.+)", content, re.MULTILINE)
+	if len(numbered) >= 3:
+		return [q.strip().strip('"').strip("*") for q in numbered]
+
+	# Strategy 4: Split by double newlines for paragraph-style questions
+	paragraphs = [p.strip() for p in content.split("\n\n") if p.strip() and "?" in p]
+	if len(paragraphs) >= 3:
+		return paragraphs
+
+	logger.warning("All parsing strategies failed, returning raw content")
+	return [content]
+
+
 @router.post("/get-interview-prompt")
 async def get_interview_prompt(user_profile: UserProfileRequest):
 	"""Get smart interview prompt based on user profile and generate questions"""
@@ -35,46 +107,34 @@ async def get_interview_prompt(user_profile: UserProfileRequest):
 			"interview_questions",
 			user_id=user_profile.user_id,
 		)
-		system_prompt = variant.get("system_prompt", "")
 
 		if user_profile.generate_questions:
 			user_details = {
 				"role": user_profile.role,
 				"experience_years": user_profile.experience_years,
 				"skills": user_profile.skills,
-				"generate_questions": True,
 			}
 
-			final_prompt = f"{system_prompt}\n\nUser Details: {json.dumps(user_details)}"
+			final_prompt = _build_question_prompt(
+				variant.get("system_prompt", ""),
+				user_details,
+			)
 
 			ai_response = await llm_service.generate(final_prompt, "gemini")
+			questions = _parse_questions(ai_response.get("content", ""))
 
-			try:
-				content = ai_response["content"]
-				content = re.sub(r"^```json\s*", "", content)
-				content = re.sub(r"\s*```$", "", content)
-				content = content.strip()
-
-				questions_data = json.loads(content)
-				questions_list = questions_data.get("questions", [])
-
-				if questions_list and isinstance(questions_list[0], dict):
-					questions_array = [q.get("question", str(q)) for q in questions_list]
-				else:
-					questions_array = questions_list
-			except Exception:
-				questions_array = [ai_response["content"]]
-
-			return {
-				"session_id": str(uuid.uuid4()),
-				"questions": questions_array,
-				"provider": ai_response["provider"],
-				"model": ai_response["model"],
-				"prompt_variant": variant.get("id"),
-			}
+			return InterviewQuestionResponse(
+				session_id=str(uuid.uuid4()),
+				questions=questions,
+				question_count=len(questions),
+				provider=ai_response["provider"],
+				model=ai_response["model"],
+				prompt_variant=variant.get("id", ""),
+				prompt_style=variant.get("style"),
+			).model_dump()
 		else:
 			return {
-				"prompt": system_prompt,
+				"prompt": variant.get("system_prompt", ""),
 				"prompt_variant": variant.get("id"),
 				"style": variant.get("style"),
 			}

@@ -4,6 +4,13 @@ from typing import List, Dict, Any
 from multi_llm_service import MultiLLMService
 from db_simple import create_mock_interview, get_user_mock_interviews
 from prompt_manager import prompt_manager
+from api_contracts import (
+    InterviewEvaluationResponse,
+    InterviewHistoryResponse,
+    InterviewHistoryItem,
+    parse_evaluation_response,
+)
+from activity_tracker import log_user_activity
 import logging
 from datetime import datetime
 
@@ -67,29 +74,11 @@ Provide scores from 0-100. Return ONLY the JSON object, nothing else."""
         # Get evaluation from LLM
         ai_response = await llm_service.generate(evaluation_prompt, "gemini")
         
-        # Parse the JSON response
-        import json
-        import re
-        
+        # Parse LLM response through contract parser
         content = ai_response.get("content", "")
-        # Remove markdown code blocks if present
-        content = re.sub(r'^```json\s*', '', content)
-        content = re.sub(r'\s*```$', '', content)
-        content = content.strip()
-        
-        try:
-            evaluation_data = json.loads(content)
-        except json.JSONDecodeError:
-            # Fallback if JSON parsing fails
-            logger.warning(f"Failed to parse LLM response as JSON: {content}")
-            evaluation_data = {
-                "overall_score": 75,
-                "feedback": "Interview completed successfully. Detailed evaluation is being processed.",
-                "question_scores": [
-                    {"question_id": qa.question_id, "score": 75, "feedback": "Good response"}
-                    for qa in submission.questions_and_answers
-                ]
-            }
+        question_ids = [qa.question_id for qa in submission.questions_and_answers]
+        evaluation_result = parse_evaluation_response(content, question_ids)
+        evaluation_data = evaluation_result.model_dump()
         
         # Save interview to database
         user_id = submission.user_profile.get('user_id', 'unknown')
@@ -116,12 +105,20 @@ Provide scores from 0-100. Return ONLY the JSON object, nothing else."""
         interview_id = await create_mock_interview(interview_record)
         logger.info(f"Interview saved with ID: {interview_id}")
         
-        return {
-            "success": True,
-            "session_id": submission.session_id,
-            "interview_id": interview_id,
-            "evaluation": evaluation_data
-        }
+        # Track activity
+        await log_user_activity(
+            user_id,
+            "mock_interview",
+            f"Completed mock interview — Score: {evaluation_result.overall_score}%",
+            {"session_id": submission.session_id, "score": evaluation_result.overall_score},
+        )
+        
+        return InterviewEvaluationResponse(
+            success=True,
+            session_id=submission.session_id,
+            interview_id=interview_id,
+            evaluation=evaluation_result,
+        ).model_dump()
         
     except Exception as e:
         logger.error(f"Error submitting interview for evaluation: {str(e)}")
@@ -151,13 +148,23 @@ async def get_interview_evaluation(session_id: str):
 async def get_interview_history(user_id: str, limit: int = 10):
     """Get user's interview history"""
     try:
-        interviews = await get_user_mock_interviews(user_id, limit)
-        return {
-            "success": True,
-            "user_id": user_id,
-            "interviews": interviews,
-            "total": len(interviews)
-        }
+        raw_interviews = await get_user_mock_interviews(user_id, limit)
+        interviews = [
+            InterviewHistoryItem(
+                session_id=i.get("session_id", ""),
+                interview_type=i.get("interview_type", ""),
+                overall_score=i.get("overall_score", 0),
+                completed_at=str(i.get("completed_at", "")),
+                questions_count=i.get("questions_count", 0),
+            )
+            for i in raw_interviews
+        ]
+        return InterviewHistoryResponse(
+            success=True,
+            user_id=user_id,
+            interviews=interviews,
+            total=len(interviews),
+        ).model_dump()
     except Exception as e:
         logger.error(f"Error getting interview history: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to get interview history: {str(e)}")
