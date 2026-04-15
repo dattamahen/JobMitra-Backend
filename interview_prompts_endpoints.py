@@ -26,9 +26,10 @@ class UserProfileRequest(BaseModel):
 	user_id: Optional[str] = None
 	ai_provider: Optional[str] = "gemini"
 	generate_questions: Optional[bool] = True
+	interview_type: Optional[str] = "technical"
 
 
-def _build_question_prompt(system_prompt: str, user_details: dict) -> str:
+def _build_question_prompt(system_prompt: str, user_details: dict, interview_type: str = "technical") -> str:
 	"""Build a prompt that enforces strict JSON array output."""
 	experience = user_details.get("experience_years", 0)
 	if experience <= 2:
@@ -41,14 +42,26 @@ def _build_question_prompt(system_prompt: str, user_details: dict) -> str:
 		difficulty = "advanced, including system design and leadership"
 		count = "7-10"
 
-	return f"""{system_prompt}
-
-Candidate Profile:
+	if interview_type == "behavioral":
+		context_block = f"""Candidate Profile:
 - Role: {user_details.get("role", "Software Engineer")}
 - Experience: {experience} years
 - Skills: {", ".join(user_details.get("skills", []))}
 
-Generate {count} interview questions at {difficulty} difficulty level.
+Generate {count} behavioral interview questions at {difficulty} difficulty level.
+Focus on: teamwork, conflict resolution, leadership, ownership, handling pressure, communication, and job-switch scenarios.
+Questions should be realistic and relevant to the candidate's experience level."""
+	else:
+		context_block = f"""Candidate Profile:
+- Role: {user_details.get("role", "Software Engineer")}
+- Experience: {experience} years
+- Skills: {", ".join(user_details.get("skills", []))}
+
+Generate {count} interview questions at {difficulty} difficulty level."""
+
+	return f"""{system_prompt}
+
+{context_block}
 
 STRICT OUTPUT RULES:
 - Return ONLY a valid JSON object
@@ -103,8 +116,10 @@ def _parse_questions(content: str) -> List[str]:
 async def get_interview_prompt(user_profile: UserProfileRequest):
 	"""Get smart interview prompt based on user profile and generate questions"""
 	try:
+		prompt_category = "behavioral_interview_questions" if user_profile.interview_type == "behavioral" else "interview_questions"
+
 		variant = prompt_manager.get_random(
-			"interview_questions",
+			prompt_category,
 			user_id=user_profile.user_id,
 		)
 
@@ -118,6 +133,7 @@ async def get_interview_prompt(user_profile: UserProfileRequest):
 			final_prompt = _build_question_prompt(
 				variant.get("system_prompt", ""),
 				user_details,
+				user_profile.interview_type,
 			)
 
 			ai_response = await llm_service.generate(final_prompt, "gemini")

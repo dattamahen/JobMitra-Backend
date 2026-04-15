@@ -139,9 +139,9 @@ async def get_dashboard(current_user: dict = Depends(get_current_user)):
                 },
                 {
                     "id": "interviews",
-                    "label": "Interviews Scheduled", 
+                    "label": "Mock Interview", 
                     "value": interviews_scheduled,
-                    "icon": "event",
+                    "icon": "record_voice_over",
                     "color": "accent",
                     "trend": {
                         "direction": "up" if interviews_scheduled > 0 else "neutral",
@@ -150,7 +150,7 @@ async def get_dashboard(current_user: dict = Depends(get_current_user)):
                     }
                 },
                 {
-                    "id": "total-jobs",
+                    "id": "matching-jobs",
                     "label": "Total Jobs Available",
                     "value": total_jobs,
                     "icon": "work",
@@ -340,9 +340,9 @@ async def get_dashboard(current_user: dict = Depends(get_current_user)):
                 },
                 {
                     "id": "interviews",
-                    "label": "Interviews Scheduled", 
+                    "label": "Mock Interview", 
                     "value": 0,
-                    "icon": "event",
+                    "icon": "record_voice_over",
                     "color": "accent",
                     "trend": {"direction": "neutral", "percentage": 0, "period": "this week"}
                 }

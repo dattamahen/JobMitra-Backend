@@ -7,9 +7,11 @@ from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 import logging
 import sys
+import os
 
 # Configure logging
 logging.basicConfig(
@@ -41,6 +43,7 @@ from multi_agent_endpoints import router as multi_agent_router
 from interview_evaluation_endpoint import router as interview_evaluation_router
 from resume_tailor_endpoints import router as resume_tailor_router
 from credits_endpoints import router as credits_router
+from upload_endpoints import router as upload_router
 from prompt_endpoints import router as prompt_router
 
 
@@ -201,6 +204,12 @@ def create_app() -> FastAPI:
     app.include_router(interview_evaluation_router, prefix="/api/v1/mock-interview")  # Interview evaluation routes
     app.include_router(resume_tailor_router)  # Resume tailor routes (already has /api/v1 prefix)
     app.include_router(credits_router)  # Credits & payments routes
+    app.include_router(upload_router)  # File upload routes
+
+    # Serve uploaded files
+    uploads_dir = os.path.join(os.path.dirname(__file__), "uploads")
+    os.makedirs(uploads_dir, exist_ok=True)
+    app.mount("/uploads", StaticFiles(directory=uploads_dir), name="uploads")
     app.include_router(prompt_router)  # Prompt management routes
 
     # Health check endpoint

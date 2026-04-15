@@ -27,7 +27,7 @@ ACTIVITY_CONFIG = {
     "job_application": {"icon": "send", "type": "application"},
 }
 
-MAX_RECENT_ACTIVITIES = 30
+MAX_RECENT_ACTIVITIES = 10
 
 
 async def log_user_activity(
