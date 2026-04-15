@@ -17,6 +17,7 @@ PROMPTS_DIR = Path(__file__).parent / "prompts"
 # Valid category names mapped to filenames
 CATEGORIES = {
     "interview_questions": "interview_questions.json",
+    "behavioral_interview_questions": "behavioral_interview_questions.json",
     "interview_evaluation": "interview_evaluation.json",
     "resume_tailoring": "resume_tailoring.json",
     "resume_validation": "resume_validation.json",
@@ -151,6 +152,13 @@ class PromptManager:
                 "id": "fallback",
                 "name": "Default Interviewer",
                 "system_prompt": "You are an expert interviewer. Generate specific interview questions based on the given prompt. Format as numbered list.",
+                "style": "default",
+                "temperature": 0.7,
+            },
+            "behavioral_interview_questions": {
+                "id": "fallback",
+                "name": "Default Behavioral Interviewer",
+                "system_prompt": "You are an experienced HR interviewer. Generate behavioral interview questions focusing on teamwork, leadership, conflict resolution, and communication. Use the STAR method framework.",
                 "style": "default",
                 "temperature": 0.7,
             },
