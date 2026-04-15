@@ -7,17 +7,18 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import os
 from typing import Optional
+from config import settings
 
 class EmailService:
     def __init__(self):
-        self.smtp_host = os.getenv("SMTP_HOST", "smtp.gmail.com")
-        self.smtp_port = int(os.getenv("SMTP_PORT", "587"))
-        self.smtp_user = os.getenv("SMTP_USER", "")
-        self.smtp_password = os.getenv("SMTP_PASSWORD", "")
-        self.from_email = os.getenv("FROM_EMAIL", self.smtp_user)
-        self.app_name = os.getenv("APP_NAME", "JobMitra")
-        self.frontend_url = os.getenv("FRONTEND_URL", "http://localhost:4200")
-        self.email_enabled = os.getenv("EMAIL_ENABLED", "false").lower() == "true"
+        self.smtp_host = settings.SMTP_HOST
+        self.smtp_port = settings.SMTP_PORT
+        self.smtp_user = settings.SMTP_USER
+        self.smtp_password = settings.SMTP_PASSWORD
+        self.from_email = settings.FROM_EMAIL or self.smtp_user
+        self.app_name = settings.APP_NAME_EMAIL
+        self.frontend_url = settings.FRONTEND_URL
+        self.email_enabled = settings.EMAIL_ENABLED
     
     def send_email(self, to_email: str, subject: str, html_content: str) -> bool:
         """Send email via SMTP"""
