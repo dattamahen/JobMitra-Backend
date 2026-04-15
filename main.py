@@ -2,13 +2,11 @@
 FastAPI main application entry point for JobMitra Backend.
 """
 
-from dotenv import load_dotenv
-load_dotenv()  # Load environment variables first
-
+# config.py handles environment loading based on APP_ENV
 import uvicorn
 
-from app import create_app
 from config import settings
+from app import create_app
 from db_simple import db
 
 # Create the app instance for uvicorn

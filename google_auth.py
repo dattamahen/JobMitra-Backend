@@ -3,11 +3,11 @@ from google.oauth2 import id_token
 import jwt
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
-import os
+from config import settings
 
 class GoogleAuthService:
     def __init__(self):
-        self.client_id = os.getenv('GOOGLE_CLIENT_ID', '')
+        self.client_id = settings.GOOGLE_CLIENT_ID
         
     def verify_google_token(self, credential: str) -> Optional[Dict[str, Any]]:
         """Verify Google ID token and return user info"""
@@ -48,5 +48,5 @@ class GoogleAuthService:
             'exp': datetime.utcnow() + timedelta(days=7)
         }
         
-        secret_key = os.getenv('JWT_SECRET_KEY', 'your-secret-key')
+        secret_key = settings.JWT_SECRET_KEY
         return jwt.encode(payload, secret_key, algorithm='HS256')
