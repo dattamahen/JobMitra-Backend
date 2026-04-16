@@ -3,6 +3,9 @@ MongoDB database connection and operations module.
 Handles async database operations using motor driver.
 """
 
+import logging
+logger = logging.getLogger(__name__)
+
 import os
 from datetime import datetime
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -54,30 +57,30 @@ class Database:
             
             # Test the connection
             await self.client.admin.command('ismaster')
-            print(f"Successfully connected to MongoDB: {db_name}")
+            logger.debug("Successfully connected to MongoDB: %s", db_name)
             
             # Setup indexes for performance
             await self.setup_indexes()
             
         except Exception as e:
-            print(f"Error connecting to MongoDB: {e}")
+            logger.error("connecting to MongoDB: %s", e)
             raise e
     
     async def setup_indexes(self):
         """Setup database indexes for performance optimization."""
         try:
             # Temporarily disable index setup due to schemas dependency
-            print("Skipping index setup for now - will be implemented later")
+            logger.info("Skipping index setup for now - will be implemented later")
             
         except Exception as e:
-            print(f"Error setting up indexes: {e}")
+            logger.error("setting up indexes: %s", e)
             # Don't raise error as this is not critical for basic functionality
     
     async def close_mongo_connection(self):
         """Close the MongoDB connection."""
         if self.client:
             self.client.close()
-            print("MongoDB connection closed")
+            logger.info("MongoDB connection closed")
 
 
 # Global database instance
@@ -111,11 +114,11 @@ async def log_to_db(query: str, response: str, user_id: Optional[str] = None,
         collection = db.database[COLLECTION_NAMES["query_logs"]]
         result = await collection.insert_one(log_entry.dict(by_alias=True, exclude_unset=True))
         
-        print(f"Log entry saved with ID: {result.inserted_id}")
+        logger.debug("Log entry saved with ID: %s", result.inserted_id)
         return True
         
     except Exception as e:
-        print(f"Error logging to database: {e}")
+        logger.error("logging to database: %s", e)
         return False
 
 
@@ -149,7 +152,7 @@ async def get_query_logs(limit: int = 10, user_id: Optional[str] = None):
         return logs
         
     except Exception as e:
-        print(f"Error retrieving logs: {e}")
+        logger.error("retrieving logs: %s", e)
         return []
 
 
@@ -162,7 +165,7 @@ async def create_user_profile(user_data: Dict[str, Any]) -> Optional[str]:
         result = await collection.insert_one(user_profile.dict(by_alias=True, exclude_unset=True))
         return str(result.inserted_id)
     except Exception as e:
-        print(f"Error creating user profile: {e}")
+        logger.error("creating user profile: %s", e)
         return None
 
 
@@ -175,7 +178,7 @@ async def get_user_profile(user_id: str) -> Optional[Dict[str, Any]]:
             user["_id"] = str(user["_id"])
         return user
     except Exception as e:
-        print(f"Error getting user profile: {e}")
+        logger.error("getting user profile: %s", e)
         return None
 
 
@@ -190,7 +193,7 @@ async def update_user_profile(user_id: str, update_data: Dict[str, Any]) -> bool
         )
         return result.modified_count > 0
     except Exception as e:
-        print(f"Error updating user profile: {e}")
+        logger.error("updating user profile: %s", e)
         return False
 
 
@@ -203,7 +206,7 @@ async def create_job_listing(job_data: Dict[str, Any]) -> Optional[str]:
         result = await collection.insert_one(job_listing.dict(by_alias=True, exclude_unset=True))
         return str(result.inserted_id)
     except Exception as e:
-        print(f"Error creating job listing: {e}")
+        logger.error("creating job listing: %s", e)
         return None
 
 
@@ -235,7 +238,7 @@ async def search_jobs(query: str, filters: Optional[Dict[str, Any]] = None,
             
         return jobs
     except Exception as e:
-        print(f"Error searching jobs: {e}")
+        logger.error("searching jobs: %s", e)
         return []
 
 
@@ -248,7 +251,7 @@ async def create_job_application(application_data: Dict[str, Any]) -> Optional[s
         result = await collection.insert_one(job_application.dict(by_alias=True, exclude_unset=True))
         return str(result.inserted_id)
     except Exception as e:
-        print(f"Error creating job application: {e}")
+        logger.error("creating job application: %s", e)
         return None
 
 
@@ -264,7 +267,7 @@ async def get_user_applications(user_id: str, limit: int = 20) -> List[Dict[str,
             
         return applications
     except Exception as e:
-        print(f"Error getting user applications: {e}")
+        logger.error("getting user applications: %s", e)
         return []
 
 
@@ -277,7 +280,7 @@ async def create_mock_interview(interview_data: Dict[str, Any]) -> Optional[str]
         result = await collection.insert_one(mock_interview.dict(by_alias=True, exclude_unset=True))
         return str(result.inserted_id)
     except Exception as e:
-        print(f"Error creating mock interview: {e}")
+        logger.error("creating mock interview: %s", e)
         return None
 
 
@@ -293,7 +296,7 @@ async def get_user_mock_interviews(user_id: str, limit: int = 10) -> List[Dict[s
             
         return interviews
     except Exception as e:
-        print(f"Error getting user mock interviews: {e}")
+        logger.error("getting user mock interviews: %s", e)
         return []
 
 
@@ -315,7 +318,7 @@ async def get_user_dashboard(user_id: str) -> Optional[Dict[str, Any]]:
             
         return dashboard
     except Exception as e:
-        print(f"Error getting user dashboard: {e}")
+        logger.error("getting user dashboard: %s", e)
         return None
 
 
@@ -332,7 +335,7 @@ async def update_user_dashboard(user_id: str, dashboard_data: Dict[str, Any]) ->
         )
         return result.modified_count > 0 or result.upserted_id is not None
     except Exception as e:
-        print(f"Error updating user dashboard: {e}")
+        logger.error("updating user dashboard: %s", e)
         return False
 
 
@@ -358,7 +361,7 @@ async def get_learning_resources(skill: Optional[str] = None,
             
         return resources
     except Exception as e:
-        print(f"Error getting learning resources: {e}")
+        logger.error("getting learning resources: %s", e)
         return []
 
 
@@ -379,5 +382,5 @@ async def get_user_progress(user_id: str) -> Optional[Dict[str, Any]]:
             
         return progress
     except Exception as e:
-        print(f"Error getting user progress: {e}")
+        logger.error("getting user progress: %s", e)
         return None

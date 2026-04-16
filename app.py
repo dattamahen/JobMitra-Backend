@@ -10,20 +10,44 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 import logging
+import logging.handlers
 import sys
 import os
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(sys.stdout)
-    ]
+from config import settings
+
+# ── Centralized Logging Setup ────────────────────────────────
+_LOG_FORMAT = "%(asctime)s | %(levelname)-8s | %(name)s | %(message)s"
+_LOG_LEVEL = getattr(logging, settings.LOG_LEVEL.upper(), logging.INFO)
+
+# Root logger configuration (applies to all modules)
+_root = logging.getLogger()
+_root.setLevel(_LOG_LEVEL)
+
+# Console handler
+_console = logging.StreamHandler(sys.stdout)
+_console.setFormatter(logging.Formatter(_LOG_FORMAT))
+_root.addHandler(_console)
+
+# File handler with rotation (logs/ directory)
+_log_dir = os.path.join(os.path.dirname(__file__), "logs")
+os.makedirs(_log_dir, exist_ok=True)
+_file_handler = logging.handlers.RotatingFileHandler(
+    os.path.join(_log_dir, "app.log"),
+    maxBytes=10 * 1024 * 1024,  # 10 MB
+    backupCount=5,
+    encoding="utf-8",
 )
+_file_handler.setFormatter(logging.Formatter(_LOG_FORMAT))
+_root.addHandler(_file_handler)
+
+# Suppress noisy third-party loggers in production
+if settings.APP_ENV != "local":
+    logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
+    logging.getLogger("motor").setLevel(logging.WARNING)
+
 logger = logging.getLogger(__name__)
 
-from config import settings
 from db_simple import db
 from endpoints import router as core_router
 from dashboard_endpoints import router as dashboard_router
@@ -53,23 +77,22 @@ async def lifespan(app: FastAPI):
     Application lifespan context manager.
     Handles startup and shutdown events for the FastAPI application.
     """
-    # Startup: Initialize database connection
-    print("Starting JobMitra Backend API...")
-    
+    # Startup
+    logger.info("Starting JobMitra Backend API...")
     try:
         await db.connect_to_mongo()
-        print("Database connection established successfully")
-        print(f"Database object: {db.database}")
-        print(f"Fallback mode: {db.fallback_mode}")
+        logger.info("Database connection established (fallback=%s)", db.fallback_mode)
     except Exception as e:
-        print(f"Failed to connect to database: {e}")
-        print(f"Database object after error: {db.database}")
-        # You might want to exit here in production
-        
+        logger.error("Failed to connect to database: %s", e)
+
+    # Start background job expiry scheduler
+    from job_expiry_scheduler import start_expiry_scheduler
+    start_expiry_scheduler()
+
     yield
-    
-    # Shutdown: Close database connection
-    print("Shutting down JobMitra Backend API...")
+
+    # Shutdown
+    logger.info("Shutting down JobMitra Backend API...")
     await db.close_mongo_connection()
 
 
@@ -172,9 +195,7 @@ def create_app() -> FastAPI:
                     "type": error_type
                 })
         
-        logger.error(f"Validation failed for {request.url.path}: {len(errors)} errors")
-        for err in errors:
-            logger.error(f"  - {err['field']}: {err['message']}")
+        logger.warning("Validation failed for %s: %d errors", request.url.path, len(errors))
         
         return JSONResponse(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,

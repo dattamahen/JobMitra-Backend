@@ -6,7 +6,10 @@ from datetime import datetime, timedelta
 from fastapi import APIRouter, HTTPException, Depends
 from typing import Optional, List, Dict, Any
 from pydantic import BaseModel
+import logging
 from job_db import JobDatabase
+
+logger = logging.getLogger(__name__)
 from auth_endpoints import get_current_user
 from db_simple import (
     db, get_user_profile, get_user_applications, get_user_mock_interviews,
@@ -325,7 +328,7 @@ async def get_dashboard(current_user: dict = Depends(get_current_user)):
         return dashboard_data
         
     except Exception as e:
-        print(f"❌ Error getting dashboard data: {e}")
+        logger.error("Error getting dashboard data: %s", e)
         
         # Fallback to basic data if database operations fail
         return {
@@ -451,7 +454,7 @@ async def get_current_user_profile(current_user: dict = Depends(get_current_user
         return profile_data
         
     except Exception as e:
-        print(f"❌ Error getting user profile: {e}")
+        logger.error("Error getting user profile: %s", e)
         raise HTTPException(status_code=500, detail="Failed to get user profile")
 
 
@@ -481,7 +484,7 @@ async def get_interview_history(current_user: dict = Depends(get_current_user)):
 			"interviews": interviews
 		}
 	except Exception as e:
-		print(f"❌ Error getting interview history: {e}")
+		logger.error("Error getting interview history: %s", e)
 		return {
 			"success": True,
 			"interviews": []
@@ -513,7 +516,7 @@ async def get_technical_skills(current_user: dict = Depends(get_current_user)):
 		
 		return technical_skills
 	except Exception as e:
-		print(f"❌ Error getting technical skills: {e}")
+		logger.error("Error getting technical skills: %s", e)
 		return []
 
 
@@ -542,7 +545,7 @@ async def get_soft_skills(current_user: dict = Depends(get_current_user)):
 		
 		return soft_skills
 	except Exception as e:
-		print(f"❌ Error getting soft skills: {e}")
+		logger.error("Error getting soft skills: %s", e)
 		return []
 
 
@@ -594,7 +597,7 @@ async def get_user_applications_endpoint(user_id: str, current_user: dict = Depe
 	except HTTPException:
 		raise
 	except Exception as e:
-		print(f"❌ Error getting user applications: {e}")
+		logger.error("Error getting user applications: %s", e)
 		raise HTTPException(status_code=500, detail="Failed to get applications")
 
 
@@ -683,7 +686,7 @@ async def get_user_analytics(current_user: dict = Depends(get_current_user)):
         }
         
     except Exception as e:
-        print(f"❌ Error getting user analytics: {e}")
+        logger.error("Error getting user analytics: %s", e)
         # Return basic analytics if database fails
         return {
             "applications": {
@@ -737,7 +740,7 @@ async def get_learning_resources_endpoint(
         }
         
     except Exception as e:
-        print(f"❌ Error getting learning resources: {e}")
+        logger.error("Error getting learning resources: %s", e)
         raise HTTPException(status_code=500, detail="Failed to get learning resources")
 
 
@@ -776,7 +779,7 @@ async def get_learning_progress_endpoint(current_user: dict = Depends(get_curren
         return enhanced_progress
         
     except Exception as e:
-        print(f"❌ Error getting learning progress: {e}")
+        logger.error("Error getting learning progress: %s", e)
         raise HTTPException(status_code=500, detail="Failed to get learning progress")
 
 
@@ -812,8 +815,7 @@ def calculate_job_match_score(job, user_skills, user_certifications, user_experi
     if not job_skills_lower:
         return 0.0
     
-    print(f"👤 User Skills: {user_skills_lower}")
-    print(f"🏢 Job Skills Required: {job_skills_lower}")
+    logger.debug("User skills: %s | Job skills: %s", user_skills_lower, job_skills_lower)
     
     # CORE SKILLS MATCHING: User Skills vs Job Requirements
     skills_matched = 0
@@ -838,8 +840,7 @@ def calculate_job_match_score(job, user_skills, user_certifications, user_experi
     # Calculate match percentage based on user's skills
     user_skills_match_percentage = skills_matched / len(user_skills_lower)
     
-    print(f"🎯 Skills Matched: {skills_matched}/{len(user_skills_lower)} = {user_skills_match_percentage:.2%}")
-    print(f"✅ Matched Skills: {matched_skills}")
+    logger.debug("Skills matched: %d/%d = %.2f%%", skills_matched, len(user_skills_lower), user_skills_match_percentage * 100)
     
     # BONUS SCORING
     bonus_score = 0.0
@@ -854,7 +855,6 @@ def calculate_job_match_score(job, user_skills, user_certifications, user_experi
                     break
         if cert_matches > 0:
             bonus_score += 0.1  # 10% bonus for certification matches
-            print(f"🏆 Certification bonus: +10% ({cert_matches} matches)")
     
     # Experience keywords bonus (from job description)
     if user_exp_keywords and job.get("description"):
@@ -865,7 +865,6 @@ def calculate_job_match_score(job, user_skills, user_certifications, user_experi
                 exp_matches += 1
         if exp_matches >= 3:  # Need at least 3 experience matches
             bonus_score += 0.05  # 5% bonus for experience alignment
-            print(f"� Experience bonus: +5% ({exp_matches} keyword matches)")
     
     # Calculate final score
     final_score = user_skills_match_percentage + bonus_score
@@ -873,10 +872,8 @@ def calculate_job_match_score(job, user_skills, user_certifications, user_experi
     
     # Apply minimum threshold: include if user has 20-30% skill match
     if user_skills_match_percentage >= 0.20:
-        print(f"✨ Final Score: {final_score:.2%} (QUALIFIED)")
         return final_score
     else:
-        print(f"❌ Final Score: {final_score:.2%} (BELOW THRESHOLD)")
         return 0.0
 
 
@@ -906,7 +903,7 @@ async def get_job_listings(
         user_id = current_user["user_id"]
         if not user_skills:
             user_profile = await get_user_profile(user_id)
-            print(f"🔍 User profile from get_user_profile: skills = {user_profile.get('skills', []) if user_profile else 'No profile'}")
+            logger.debug("User profile skills: %s", user_profile.get('skills', []) if user_profile else 'No profile')
             if user_profile:
                 user_skills = user_profile.get("skills", [])
                 user_certifications = [cert.get("name", "") for cert in user_profile.get("certifications", []) if isinstance(cert, dict)]
@@ -919,9 +916,8 @@ async def get_job_listings(
                 if prof_info.get("key_contributions"):
                     user_experience_keywords.extend(prof_info["key_contributions"].lower().split())
         
-        print(f"🔍 Final User Skills for job matching: {user_skills}")
-        print(f"🏆 Received User Certifications: {user_certifications}")
-        print(f"💼 Request Source: {'Request Body' if user_skills else 'User Profile'}")
+        logger.debug("Job matching - skills: %d, source: %s",
+                     len(user_skills), 'Request Body' if user_skills else 'User Profile')
         
         # Build basic MongoDB query
         query = {"is_active": True}
@@ -986,7 +982,7 @@ async def get_job_listings(
         # Sort by match score (highest first)
         all_jobs.sort(key=lambda x: x["match_score"], reverse=True)
         
-        print(f"🎯 Found {len(all_jobs)} jobs with matching criteria (OR logic)")
+        logger.info("Job search: %d jobs matched criteria", len(all_jobs))
         
         # Apply pagination to scored and filtered results
         total_count = len(all_jobs)
@@ -1027,9 +1023,7 @@ async def get_job_listings(
         }
         
     except Exception as e:
-        print(f"❌ Database error in job search: {e}")
-        import traceback
-        traceback.print_exc()
+        logger.error("Database error in job search: %s", e, exc_info=True)
         
         # Return empty results if database fails
         return {

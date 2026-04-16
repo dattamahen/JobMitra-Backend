@@ -2,6 +2,10 @@
 Resume Tailor Agent using Gemini AI for intelligent resume customization.
 """
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 import os
 import json
 import google.generativeai as genai
@@ -12,7 +16,7 @@ from api_contracts import parse_tailor_response
 def run_resume_tailor(user_profile: dict, job_description: str) -> dict:
     """Execute resume tailoring using Gemini AI."""
     try:
-        print(f"Starting resume tailoring with Gemini...")
+        logger.debug("Starting resume tailoring with Gemini...")
         
         # Configure Gemini
         gemini_api_key = os.getenv("GEMINI_API_KEY")
@@ -115,5 +119,5 @@ Return ONLY a JSON object with this exact structure:
         return parse_tailor_response(result_str)
         
     except Exception as e:
-        print(f"Error in resume tailoring: {e}")
+        logger.error("in resume tailoring: %s", e)
         raise

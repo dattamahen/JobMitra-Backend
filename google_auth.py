@@ -1,3 +1,7 @@
+import logging
+
+logger = logging.getLogger(__name__)
+
 from google.auth.transport import requests
 from google.oauth2 import id_token
 import jwt
@@ -34,10 +38,10 @@ class GoogleAuthService:
             }
             
         except ValueError as e:
-            print(f"Google token verification failed: {e}")
+            logger.debug("Google token verification failed: %s ", e)
             return None
         except Exception as e:
-            print(f"Error verifying Google token: {e}")
+            logger.error("verifying Google token: %s", e)
             return None
     
     def create_jwt_token(self, user_data: Dict[str, Any]) -> str:

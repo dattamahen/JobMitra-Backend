@@ -1,3 +1,7 @@
+import logging
+
+logger = logging.getLogger(__name__)
+
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from auth_schemas import UserResponse
@@ -91,5 +95,5 @@ async def google_signin(request: GoogleSignInRequest):
         )
         
     except Exception as e:
-        print(f"Google sign-in error: {e}")
+        logger.debug("Google sign-in error: %s ", e)
         raise HTTPException(status_code=500, detail="Google sign-in failed")
