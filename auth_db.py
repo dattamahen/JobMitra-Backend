@@ -4,9 +4,12 @@ Database operations for authentication and user management
 
 from typing import Optional, Dict, Any, List
 from datetime import datetime
+import logging
 import uuid
 from db_simple import db
 from auth_utils import hash_password, verify_password
+
+logger = logging.getLogger(__name__)
 
 # Collection names
 USERS_COLLECTION = "users"
@@ -147,41 +150,29 @@ async def create_user(user_data: Dict[str, Any]) -> Dict[str, Any]:
         return user_doc
         
     except Exception as e:
-        print(f"❌ Error creating user: {e}")
+        logger.error("Error creating user: %s", e)
         raise e
 
 async def authenticate_user(email: str, password: str) -> Optional[Dict[str, Any]]:
     """Authenticate user with email and password"""
     try:
-        print(f"🔍 Authenticating user: {email}")
-        
-        # Check if database is connected
         if db.database is None:
-            print("❌ Database not connected")
+            logger.error("Database not connected")
             return None
-            
+
         user = await db.database[USERS_COLLECTION].find_one({"email": email})
-        
+
         if not user:
-            print(f"❌ User not found: {email}")
+            logger.debug("User not found: %s", email)
             return None
-        
-        print(f"✅ User found: {user['user_id']}")
-        
-        # Check both password_hash and password fields for compatibility
+
         stored_password = user.get("password_hash") or user.get("password")
         if not stored_password:
-            print(f"❌ No password field found for user: {email}")
+            logger.warning("No password field for user: %s", email)
             return None
-        
-        print(f"🔐 Stored password hash: {stored_password[:20]}...")
-        print(f"🔑 Provided password: {password}")
-        
-        password_valid = verify_password(stored_password, password)
-        print(f"🔍 Password verification result: {password_valid}")
-        
-        if not password_valid:
-            print(f"❌ Password verification failed for user: {email}")
+
+        if not verify_password(stored_password, password):
+            logger.debug("Password verification failed for: %s", email)
             return None
             
         # Update last login with proper datetime
@@ -198,7 +189,7 @@ async def authenticate_user(email: str, password: str) -> Optional[Dict[str, Any
         return user
         
     except Exception as e:
-        print(f"❌ Error authenticating user: {e}")
+        logger.error("Error authenticating user: %s", e)
         return None
 
 async def get_user_by_id(user_id: str) -> Optional[Dict[str, Any]]:
@@ -209,7 +200,7 @@ async def get_user_by_id(user_id: str) -> Optional[Dict[str, Any]]:
             user["_id"] = str(user["_id"])
         return user
     except Exception as e:
-        print(f"❌ Error getting user by ID: {e}")
+        logger.error("Error getting user by ID: %s", e)
         return None
 
 async def get_user_by_email(email: str) -> Optional[Dict[str, Any]]:
@@ -220,7 +211,7 @@ async def get_user_by_email(email: str) -> Optional[Dict[str, Any]]:
             user["_id"] = str(user["_id"])
         return user
     except Exception as e:
-        print(f"❌ Error getting user by email: {e}")
+        logger.error("Error getting user by email: %s", e)
         return None
 
 async def update_user_profile(user_id: str, update_data: Dict[str, Any]) -> bool:
@@ -262,7 +253,7 @@ async def update_user_profile(user_id: str, update_data: Dict[str, Any]) -> bool
         return result.modified_count > 0
         
     except Exception as e:
-        print(f"❌ Error updating user profile: {e}")
+        logger.error("Error updating user profile: %s", e)
         return False
 
 async def change_user_password(user_id: str, new_password: str) -> bool:
@@ -282,7 +273,7 @@ async def change_user_password(user_id: str, new_password: str) -> bool:
         return result.modified_count > 0
         
     except Exception as e:
-        print(f"❌ Error changing password: {e}")
+        logger.error("Error changing password: %s", e)
         return False
 
 async def seed_users_data():
@@ -293,16 +284,16 @@ async def seed_users_data():
         # Check if users already exist
         existing_count = await db.database[USERS_COLLECTION].count_documents({})
         if existing_count > 0:
-            print(f"Users collection already has {existing_count} documents. Skipping seed.")
+            logger.info("Users collection already has %d documents. Skipping seed.", existing_count)
             return
         
         users = get_hashed_users()
         result = await db.database[USERS_COLLECTION].insert_many(users)
-        print(f"✅ Seeded {len(result.inserted_ids)} users successfully")
+        logger.info("Seeded %d users successfully", len(result.inserted_ids))
         return result.inserted_ids
         
     except Exception as e:
-        print(f"❌ Error seeding users: {e}")
+        logger.error("Error seeding users: %s", e)
         return None
 
 async def list_all_users() -> List[Dict[str, Any]]:
@@ -319,5 +310,5 @@ async def list_all_users() -> List[Dict[str, Any]]:
         return users
         
     except Exception as e:
-        print(f"❌ Error listing users: {e}")
+        logger.error("Error listing users: %s", e)
         return []

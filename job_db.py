@@ -2,10 +2,15 @@
 Database operations for job postings functionality
 """
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta
 from bson import ObjectId
 from motor.motor_asyncio import AsyncIOMotorDatabase
+import os
 import secrets
 import string
 
@@ -45,7 +50,7 @@ class JobDatabase:
                 "benefits": job_data.benefits or [],
                 "company_info": job_data.company_info.dict(),
                 "hr_contact": job_data.hr_contact.dict(),
-                "application_deadline": job_data.application_deadline,
+                "application_deadline": job_data.application_deadline or (datetime.utcnow() + timedelta(days=int(os.getenv("DEFAULT_JOB_EXPIRY_DAYS", "30")))).isoformat(),
                 "external_apply_url": job_data.external_apply_url,
                 "application_instructions": job_data.application_instructions,
                 "tags": job_data.tags or [],
@@ -55,6 +60,7 @@ class JobDatabase:
                 "posted_date": datetime.utcnow(),
                 "updated_date": datetime.utcnow(),
                 "is_active": True,
+                "status": "active",
                 "posted_by_hr_id": hr_user_id,
                 "views_count": 0,
                 "applications_count": [],
@@ -67,11 +73,11 @@ class JobDatabase:
             result = await db.database[self.jobs_collection].insert_one(job_doc)
             job_doc["_id"] = str(result.inserted_id)
             
-            print(f"✅ Job posting created: {job_id}")
+            logger.debug("Job posting created: %s ", job_id)
             return job_id
             
         except Exception as e:
-            print(f"❌ Error creating job posting: {e}")
+            logger.error("creating job posting: %s", e)
             raise Exception(f"Failed to create job posting: {str(e)}")
     
     async def get_job_by_id(self, job_id: str) -> Optional[Dict[str, Any]]:
@@ -82,7 +88,7 @@ class JobDatabase:
                 job["_id"] = str(job["_id"])
             return job
         except Exception as e:
-            print(f"❌ Error getting job by ID: {e}")
+            logger.error("getting job by ID: %s", e)
             return None
     
     async def get_jobs_by_hr(self, hr_user_id: str, page: int = 1, per_page: int = 10) -> Dict[str, Any]:
@@ -138,9 +144,7 @@ class JobDatabase:
             }
             
         except Exception as e:
-            print(f"❌ Error getting HR jobs: {e}")
-            import traceback
-            traceback.print_exc()
+            logger.error("getting HR jobs: %s", e)
             raise Exception(f"Database error: {str(e)}")
     
     async def search_jobs(self, filters: JobSearchFilters, page: int = 1, per_page: int = 10) -> Dict[str, Any]:
@@ -234,7 +238,7 @@ class JobDatabase:
             }
             
         except Exception as e:
-            print(f"❌ Error searching jobs: {e}")
+            logger.error("searching jobs: %s", e)
             return {"jobs": [], "total_count": 0, "page": page, "per_page": per_page}
     
     async def update_job(self, job_id: str, update_data: Dict[str, Any], hr_user_id: str) -> bool:
@@ -250,35 +254,35 @@ class JobDatabase:
             return result.modified_count > 0
             
         except Exception as e:
-            print(f"❌ Error updating job: {e}")
+            logger.error("updating job: %s", e)
             return False
     
     async def delete_job(self, job_id: str, hr_user_id: str) -> bool:
         """Delete job posting (only by the HR who posted it)"""
         try:
-            # Soft delete - mark as inactive instead of actually deleting
+            # Soft delete - mark as closed instead of actually deleting
             result = await db.database[self.jobs_collection].update_one(
                 {"job_id": job_id, "posted_by_hr_id": hr_user_id},
-                {"$set": {"is_active": False, "updated_date": datetime.utcnow()}}
+                {"$set": {"is_active": False, "status": "closed", "updated_date": datetime.utcnow()}}
             )
             
             return result.modified_count > 0
             
         except Exception as e:
-            print(f"❌ Error deleting job: {e}")
+            logger.error("deleting job: %s", e)
             return False
     
     async def get_hr_dashboard(self, hr_user_id: str) -> HRJobDashboard:
         """Get dashboard stats for HR user"""
         try:
-            print(f"🔍 Getting HR dashboard for user: {hr_user_id}")
+            logger.debug("Getting HR dashboard for user: %s ", hr_user_id)
             
             # Get all jobs by this HR
             all_jobs = await db.database[self.jobs_collection].find({
                 "posted_by_hr_id": hr_user_id
             }).to_list(None)
             
-            print(f"📊 Found {len(all_jobs)} jobs for HR user")
+            logger.debug("Found %s jobs for HR user", len(all_jobs))
             
             # Calculate stats from jobs
             total_jobs = len(all_jobs)
@@ -314,13 +318,11 @@ class JobDatabase:
                 recent_jobs=recent_jobs
             )
             
-            print(f"✅ Dashboard stats: {total_jobs} total, {active_jobs} active, {total_applications} applications")
+            logger.debug("Dashboard stats: {total_jobs} total, {active_jobs} active, %s applications", total_applications)
             return result
             
         except Exception as e:
-            print(f"❌ Error getting HR dashboard: {e}")
-            import traceback
-            traceback.print_exc()
+            logger.error("getting HR dashboard: %s", e)
             return HRJobDashboard(
                 total_jobs_posted=0,
                 active_jobs=0,
@@ -339,7 +341,7 @@ class JobDatabase:
             )
             return result.modified_count > 0
         except Exception as e:
-            print(f"❌ Error incrementing job views: {e}")
+            logger.error("incrementing job views: %s", e)
             return False
     
     async def add_job_application(self, job_id: str, user_id: str) -> bool:
@@ -358,7 +360,7 @@ class JobDatabase:
             )
             return result.modified_count > 0
         except Exception as e:
-            print(f"❌ Error adding job application: {e}")
+            logger.error("adding job application: %s", e)
             return False
     
     def _generate_job_id(self, title: str, company: str) -> str:
@@ -421,7 +423,7 @@ class JobDatabase:
             }
             
         except Exception as e:
-            print(f"❌ Error getting filter options: {e}")
+            logger.error("getting filter options: %s", e)
             return {
                 "locations": ["All Locations"],
                 "experience_levels": ["All Levels"],

@@ -2,6 +2,10 @@
 Email service for sending emails via SMTP
 """
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -23,12 +27,12 @@ class EmailService:
     def send_email(self, to_email: str, subject: str, html_content: str) -> bool:
         """Send email via SMTP"""
         if not self.email_enabled:
-            print(f"📧 Email disabled. Would send to {to_email}")
-            print(f"Subject: {subject}")
+            logger.debug("Email disabled. Would send to %s ", to_email)
+            logger.debug("Subject: %s ", subject)
             return True
         
         if not self.smtp_user or not self.smtp_password:
-            print(f"⚠️ Email credentials not configured")
+            logger.warning("Operation warning")
             return False
         
         try:
@@ -45,10 +49,10 @@ class EmailService:
                 server.login(self.smtp_user, self.smtp_password)
                 server.send_message(msg)
             
-            print(f"✅ Email sent to {to_email}")
+            logger.debug("Email sent to %s ", to_email)
             return True
         except Exception as e:
-            print(f"❌ Failed to send email: {e}")
+            logger.error("to send email: %s", e)
             return False
     
     def send_password_reset_email(self, to_email: str, reset_token: str, user_name: str) -> bool:

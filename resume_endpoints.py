@@ -2,6 +2,10 @@
 Resume API endpoints for JobMitra
 """
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 from fastapi import APIRouter, HTTPException, Depends
 from typing import Optional, Dict, Any, List
 from datetime import datetime
@@ -35,10 +39,10 @@ async def create_resume(
         
         # Always get user profile data to populate resume
         user_profile = await db.database["users"].find_one({"user_id": user_id})
-        print(f"🔍 Found user profile for {user_id}: {user_profile is not None}")
+        logger.debug("Found user profile for {user_id}: %s ", user_profile is not None)
         
         if user_profile:
-            print(f"📝 User profile data: name={user_profile.get('first_name')} {user_profile.get('last_name')}, email={user_profile.get('email')}")
+            logger.debug("User profile data: name={user_profile.get('first_name')} {user_profile.get('last_name')}, email= %s ", user_profile.get('email'))
             # Map profile data to resume sections
             sections = {
                 "personal_info": {
@@ -69,9 +73,9 @@ async def create_resume(
                     if cert and (isinstance(cert, dict) and cert.get("name") or isinstance(cert, str))
                 ]
             }
-            print(f"✅ Created sections with real data: {sections['personal_info']['full_name']}")
+            logger.debug("Created sections with real data: %s ", sections['personal_info']['full_name'])
         else:
-            print(f"❌ No user profile found, using default sections")
+            logger.debug("No user profile found, using default sections")
             sections = request.sections or get_default_sections()
         
         # Create resume document
@@ -95,14 +99,14 @@ async def create_resume(
         # Insert into database
         result = await db.database["resumes"].insert_one(resume_doc)
         
-        print(f"✅ Resume created with ID: {resume_doc['resume_id']}")
+        logger.debug("Resume created with ID: %s ", resume_doc['resume_id'])
         return {
             "resume_id": resume_doc["resume_id"],
             "message": "Resume created successfully"
         }
         
     except Exception as e:
-        print(f"Error creating resume: {e}")
+        logger.error("creating resume: %s", e)
         raise HTTPException(status_code=500, detail="Failed to create resume")
 
 @resume_router.get("/users/{user_id}/resumes")
@@ -128,7 +132,7 @@ async def get_user_resumes(
         }
         
     except Exception as e:
-        print(f"Error getting user resumes: {e}")
+        logger.error("getting user resumes: %s", e)
         raise HTTPException(status_code=500, detail="Failed to get resumes")
 
 @resume_router.get("/resumes/{resume_id}")
@@ -153,7 +157,7 @@ async def get_resume(
     except HTTPException:
         raise
     except Exception as e:
-        print(f"Error getting resume: {e}")
+        logger.error("getting resume: %s", e)
         raise HTTPException(status_code=500, detail="Failed to get resume")
 
 @resume_router.put("/resumes/{resume_id}")
@@ -192,7 +196,7 @@ async def update_resume(
     except HTTPException:
         raise
     except Exception as e:
-        print(f"Error updating resume: {e}")
+        logger.error("updating resume: %s", e)
         raise HTTPException(status_code=500, detail="Failed to update resume")
 
 @resume_router.post("/resumes/{resume_id}/optimize")
@@ -242,7 +246,7 @@ async def optimize_resume(
     except HTTPException:
         raise
     except Exception as e:
-        print(f"Error optimizing resume: {e}")
+        logger.error("optimizing resume: %s", e)
         raise HTTPException(status_code=500, detail="Failed to optimize resume")
 
 @resume_router.delete("/resumes/{resume_id}")
@@ -272,7 +276,7 @@ async def delete_resume(
     except HTTPException:
         raise
     except Exception as e:
-        print(f"Error deleting resume: {e}")
+        logger.error("deleting resume: %s", e)
         raise HTTPException(status_code=500, detail="Failed to delete resume")
 
 @resume_router.post("/resumes/create-from-profile")
@@ -294,7 +298,7 @@ async def create_resume_from_profile(
         return await create_resume(request, current_user)
         
     except Exception as e:
-        print(f"Error creating resume from profile: {e}")
+        logger.error("creating resume from profile: %s", e)
         raise HTTPException(status_code=500, detail="Failed to create resume from profile")
 
 @resume_router.put("/resumes/{resume_id}/populate-from-profile")
@@ -305,28 +309,28 @@ async def populate_resume_from_profile(
     """Replace existing resume data with current user's profile data"""
     try:
         user_id = current_user["user_id"]
-        print(f"🔍 Current user ID: {user_id}")
+        logger.debug("Current user ID: %s ", user_id)
         
         # Check if resume exists and get its owner
         existing_resume = await db.database["resumes"].find_one({"resume_id": resume_id})
         if existing_resume:
-            print(f"🔍 Resume owner: {existing_resume.get('user_id')}")
+            logger.debug("Resume owner: %s ", existing_resume.get('user_id'))
             # Update resume owner to current user if it's a dummy resume
             if existing_resume.get('user_id') != user_id:
                 await db.database["resumes"].update_one(
                     {"resume_id": resume_id},
                     {"$set": {"user_id": user_id}}
                 )
-                print(f"🔄 Updated resume owner to {user_id}")
+                logger.debug("Updated resume owner to %s ", user_id)
         
         # Get user profile data
         user_profile = await db.database["users"].find_one({"user_id": user_id})
-        print(f"🔍 Found user profile for {user_id}: {user_profile is not None}")
+        logger.debug("Found user profile for {user_id}: %s ", user_profile is not None)
         
         if not user_profile:
             raise HTTPException(status_code=404, detail="User profile not found")
         
-        print(f"📝 User profile data: name={user_profile.get('first_name')} {user_profile.get('last_name')}, email={user_profile.get('email')}")
+        logger.debug("User profile data: name={user_profile.get('first_name')} {user_profile.get('last_name')}, email= %s ", user_profile.get('email'))
         
         # Map profile data to resume sections
         sections = {
@@ -373,9 +377,9 @@ async def populate_resume_from_profile(
         if result.matched_count == 0:
             raise HTTPException(status_code=404, detail="Resume not found")
         
-        print(f"✅ Resume {resume_id} updated with real profile data for user {user_id}")
+        logger.debug("Resume {resume_id} updated with real profile data for user %s ", user_id)
         
-        print(f"✅ Resume {resume_id} updated with real profile data")
+        logger.debug("Resume %s updated with real profile data", resume_id)
         return {
             "message": "Resume populated with profile data successfully",
             "sections": sections
@@ -384,7 +388,7 @@ async def populate_resume_from_profile(
     except HTTPException:
         raise
     except Exception as e:
-        print(f"Error populating resume from profile: {e}")
+        logger.error("populating resume from profile: %s", e)
         raise HTTPException(status_code=500, detail="Failed to populate resume from profile")
 
 @resume_router.get("/resume-templates")

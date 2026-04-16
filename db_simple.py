@@ -3,16 +3,17 @@ Simplified MongoDB database functions with fallback mode.
 """
 
 import os
+import logging
 from datetime import datetime
 from typing import Optional, Dict, Any, List
 
-# Try to import MongoDB drivers, fallback to mock if not available
+logger = logging.getLogger(__name__)
+
 try:
     from motor.motor_asyncio import AsyncIOMotorClient
     MONGODB_AVAILABLE = True
-    print("MongoDB drivers available")
 except ImportError:
-    print("MongoDB drivers not available - using fallback mode")
+    logger.warning("MongoDB drivers not available — using fallback mode")
     MONGODB_AVAILABLE = False
     AsyncIOMotorClient = None
 
@@ -66,41 +67,34 @@ class Database:
     async def connect_to_mongo(self):
         """Establish connection to MongoDB or use fallback mode."""
         if not MONGODB_AVAILABLE:
-            print("Using fallback mode - data will not persist")
+            logger.warning("Using fallback mode — data will not persist")
             return
-            
+
         try:
-            # Get MongoDB URI from environment variables
             mongo_uri = os.getenv("MONGO_URI", "mongodb://localhost:27017/jobmitra")
-            
-            # Create async MongoDB client
             self.client = AsyncIOMotorClient(mongo_uri)
-            
-            # Extract database name from URI or use default
+
             if "/" in mongo_uri and mongo_uri.split("/")[-1]:
-                db_name = mongo_uri.split("/")[-1].split("?")[0]  # Remove query params
+                db_name = mongo_uri.split("/")[-1].split("?")[0]
             else:
                 db_name = "jobmitra"
-                
+
             self.database = self.client[db_name]
-            
-            # Test the connection
             await self.client.admin.command('ping')
-            print(f"Successfully connected to MongoDB: {db_name}")
+            logger.info("Connected to MongoDB: %s", db_name)
             self.fallback_mode = False
-            
+
         except Exception as e:
-            print(f"MongoDB connection failed: {e}")
-            print("Switching to fallback mode - data will not persist")
+            logger.error("MongoDB connection failed: %s", e)
             self.fallback_mode = True
     
     async def close_mongo_connection(self):
         """Close the MongoDB connection."""
         if self.client and not self.fallback_mode:
             self.client.close()
-            print("MongoDB connection closed")
+            logger.info("MongoDB connection closed")
         else:
-            print("Fallback mode - no connection to close")
+            logger.debug("Fallback mode — no connection to close")
 
 
 # Global database instance
@@ -133,22 +127,19 @@ async def log_to_db(query: str, response: str, metadata: Dict[str, Any] = None):
         }
         
         if db.fallback_mode:
-            # Use fallback storage
             db.fallback_data["query_logs"].append(log_entry)
-            # Keep only last 100 logs
             if len(db.fallback_data["query_logs"]) > 100:
                 db.fallback_data["query_logs"] = db.fallback_data["query_logs"][-100:]
-            print("Log saved to fallback storage")
+            logger.debug("Log saved to fallback storage")
         else:
-            # Use MongoDB
             collection = db.database[COLLECTIONS["query_logs"]]
             result = await collection.insert_one(log_entry)
-            print(f"Log entry saved with ID: {result.inserted_id}")
+            logger.debug("Log entry saved: %s", result.inserted_id)
         
         return True
         
     except Exception as e:
-        print(f"Error logging to database: {e}")
+        logger.error("Error logging to database: %s", e)
         return False
 
 
@@ -180,7 +171,7 @@ async def get_query_logs(limit: int = 10, user_id: Optional[str] = None):
             return logs
         
     except Exception as e:
-        print(f"Error retrieving logs: {e}")
+        logger.error("Error retrieving logs: %s", e)
         return []
 
 
@@ -195,7 +186,7 @@ async def create_user_profile(user_data: Dict[str, Any]) -> Optional[str]:
         result = await collection.insert_one(user_data)
         return str(result.inserted_id)
     except Exception as e:
-        print(f"Error creating user profile: {e}")
+        logger.error("Error creating user profile: %s", e)
         return None
 
 
@@ -208,7 +199,7 @@ async def get_user_profile(user_id: str) -> Optional[Dict[str, Any]]:
             user["_id"] = str(user["_id"])
         return user
     except Exception as e:
-        print(f"Error getting user profile: {e}")
+        logger.error("Error getting user profile: %s", e)
         return None
 
 
@@ -223,7 +214,7 @@ async def update_user_profile(user_id: str, update_data: Dict[str, Any]) -> bool
         )
         return result.modified_count > 0
     except Exception as e:
-        print(f"Error updating user profile: {e}")
+        logger.error("Error updating user profile: %s", e)
         return False
 
 
@@ -238,7 +229,7 @@ async def create_job_listing(job_data: Dict[str, Any]) -> Optional[str]:
         result = await collection.insert_one(job_data)
         return str(result.inserted_id)
     except Exception as e:
-        print(f"Error creating job listing: {e}")
+        logger.error("Error creating job listing: %s", e)
         return None
 
 
@@ -278,7 +269,7 @@ async def search_jobs(query: str = "", filters: Dict[str, Any] = None, limit: in
         return jobs
         
     except Exception as e:
-        print(f"Error searching jobs: {e}")
+        logger.error("Error searching jobs: %s", e)
         return []
 
 
@@ -293,7 +284,7 @@ async def create_job_application(app_data: Dict[str, Any]) -> Optional[str]:
         result = await collection.insert_one(app_data)
         return str(result.inserted_id)
     except Exception as e:
-        print(f"Error creating application: {e}")
+        logger.error("Error creating application: %s", e)
         return None
 
 
@@ -343,7 +334,7 @@ async def get_user_applications(user_id: str, limit: int = 20) -> List[Dict[str,
         return applications[:limit]
         
     except Exception as e:
-        print(f"Error getting user applications: {e}")
+        logger.error("Error getting user applications: %s", e)
         return []
 
 
@@ -358,7 +349,7 @@ async def create_mock_interview(interview_data: Dict[str, Any]) -> Optional[str]
         result = await collection.insert_one(interview_data)
         return str(result.inserted_id)
     except Exception as e:
-        print(f"Error creating mock interview: {e}")
+        logger.error("Error creating mock interview: %s", e)
         return None
 
 
@@ -377,7 +368,7 @@ async def get_user_mock_interviews(user_id: str, limit: int = 10) -> List[Dict[s
         return interviews
         
     except Exception as e:
-        print(f"Error getting mock interviews: {e}")
+        logger.error("Error getting mock interviews: %s", e)
         return []
 
 
@@ -461,7 +452,7 @@ async def get_user_dashboard(user_id: str) -> Optional[Dict[str, Any]]:
         return dashboard_data
         
     except Exception as e:
-        print(f"Error getting dashboard: {e}")
+        logger.error("Error getting dashboard: %s", e)
         return None
 
 
@@ -478,7 +469,7 @@ async def update_user_dashboard(user_id: str, dashboard_data: Dict[str, Any]) ->
         )
         return result.modified_count > 0 or result.upserted_id is not None
     except Exception as e:
-        print(f"Error updating dashboard: {e}")
+        logger.error("Error updating dashboard: %s", e)
         return False
 
 
@@ -530,7 +521,7 @@ async def get_learning_resources(skill: str = None, level: str = None, limit: in
         return resources
         
     except Exception as e:
-        print(f"Error getting learning resources: {e}")
+        logger.error("Error getting learning resources: %s", e)
         return []
 
 
@@ -561,25 +552,20 @@ async def get_user_progress(user_id: str) -> Optional[Dict[str, Any]]:
         return progress
         
     except Exception as e:
-        print(f"Error getting user progress: {e}")
+        logger.error("Error getting user progress: %s", e)
         return None
 
 
 async def update_application_status(application_id: str, status: str) -> bool:
     """Update application status in job's applications_received array."""
     try:
-        print(f"Updating application status: {application_id} to {status}")
-        
-        # Use 'jobs' collection directly, not from COLLECTIONS mapping
+        logger.debug("Updating application status: %s -> %s", application_id, status)
+
         jobs_collection = db.database["jobs"]
-        
-        # First check if document exists
+
         test_job = await jobs_collection.find_one({"applications_received.application_id": application_id})
-        print(f"Found job with application: {test_job is not None}")
-        if test_job:
-            print(f"Job ID: {test_job.get('job_id')}")
+        logger.debug("Found job with application: %s", test_job is not None)
         
-        # Update status in job's applications_received array
         result = await jobs_collection.update_one(
             {"applications_received.application_id": application_id},
             {
@@ -589,10 +575,8 @@ async def update_application_status(application_id: str, status: str) -> bool:
                 }
             }
         )
-        print(f"Update result - modified_count: {result.modified_count}")
+        logger.debug("Update result — modified_count: %s", result.modified_count)
         return result.modified_count > 0
     except Exception as e:
-        print(f"Error updating application status: {e}")
-        import traceback
-        traceback.print_exc()
+        logger.error("Error updating application status: %s", e, exc_info=True)
         return False

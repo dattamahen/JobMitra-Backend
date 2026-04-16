@@ -6,7 +6,10 @@ from fastapi import APIRouter, HTTPException, Depends, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from typing import Optional
 from datetime import datetime
+import logging
 import jwt
+
+logger = logging.getLogger(__name__)
 
 from auth_schemas import (
     LoginRequest, LoginResponse, RegisterRequest, UserResponse,
@@ -46,7 +49,7 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
         
         user = await get_user_by_id(user_id)
         if user is None:
-            print(f"❌ User not found for ID: {user_id}")
+            logger.warning("User not found for ID: %s", user_id)
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="User not found"
@@ -60,7 +63,7 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
             detail="Token has expired"
         )
     except Exception as e:
-        print(f"❌ Error getting user by ID: {e}")
+        logger.error("Auth error: %s", e)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Authentication failed"
@@ -213,7 +216,7 @@ async def get_current_user_profile(current_user: dict = Depends(get_current_user
             "user_plan": current_user.get("user_plan", "free")
         }
     except Exception as e:
-        print(f"❌ Error in /auth/me: {str(e)}")
+        logger.error("Error in /auth/me: %s", e)
         raise HTTPException(status_code=500, detail="Failed to get profile")
 
 @auth_router.put("/profile", response_model=UserResponse)
@@ -223,8 +226,7 @@ async def update_profile(
 ):
     """Update user profile with comprehensive fields"""
     try:
-        print(f"🔄 Profile update request received for user: {current_user.get('user_id')}")
-        print(f"📝 Request data: {request.dict()}")
+        logger.debug("Profile update request for user: %s", current_user.get('user_id'))
         
         update_data = {}
         
@@ -246,19 +248,14 @@ async def update_profile(
         if request.previous_organizations:
             update_data["previous_organizations"] = [org.dict() for org in request.previous_organizations]
         if request.skills:
-            print(f"🔧 Processing skills: {request.skills}")
             update_data["skills"] = request.skills
         if request.technical_skills:
-            print(f"🔧 Processing technical_skills: {request.technical_skills}")
             update_data["technical_skills"] = request.technical_skills
         if request.work_experience:
-            print(f"🔧 Processing work_experience: {request.work_experience}")
             update_data["work_experience"] = request.work_experience
         if request.education:
-            print(f"🔧 Processing education: {request.education}")
             update_data["education"] = request.education
         if request.projects:
-            print(f"🔧 Processing projects: {request.projects}")
             update_data["projects"] = request.projects
         if request.certifications:
             # Process certifications as objects
@@ -374,21 +371,10 @@ async def update_profile(
         # Update last_active timestamp
         update_data["last_active"] = datetime.utcnow()
         
-        print(f"📤 Final update data being sent to database: {update_data}")
-        
         success = await update_user_profile(current_user["user_id"], update_data)
         
-        print(f"🔍 Database update success: {success}")
-        
-        # Debug: Check what was actually saved
-        if success:
-            saved_user = await get_user_by_id(current_user["user_id"])
-            print(f"🔍 Data saved in DB - work_experience: {saved_user.get('work_experience', [])}")
-            print(f"🔍 Data saved in DB - education: {saved_user.get('education', [])}")
-            print(f"🔍 Data saved in DB - certifications: {saved_user.get('certifications', [])}")
-        
         if not success:
-            print(f"❌ Profile update failed for user: {current_user.get('user_id')}")
+            logger.warning("Profile update failed for user: %s", current_user.get('user_id'))
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Failed to update profile"
@@ -401,17 +387,10 @@ async def update_profile(
             "Updated profile information"
         )
         
-        print(f"✅ Profile update successful for user: {current_user.get('user_id')}")
+        logger.info("Profile updated for user: %s", current_user.get('user_id'))
         
         # Get updated user
         updated_user = await get_user_by_id(current_user["user_id"])
-        print(f"🔍 Updated user from DB:")
-        print(f"  - skills: {updated_user.get('skills', [])}")
-        print(f"  - work_experience: {updated_user.get('work_experience', [])}")
-        print(f"  - education: {updated_user.get('education', [])}")
-        print(f"  - certifications: {updated_user.get('certifications', [])}")
-        print(f"  - technical_skills: {updated_user.get('technical_skills', [])}")
-        print(f"  - projects: {updated_user.get('projects', [])}")
         
         return UserResponse(
             user_id=updated_user["user_id"],
@@ -449,13 +428,12 @@ async def update_profile(
         )
         
     except Exception as e:
-        print(f"❌ Error in profile update: {str(e)}")
-        print(f"❌ Error type: {type(e)}")
+        logger.error("Error in profile update: %s", e)
         if isinstance(e, HTTPException):
             raise e
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to update profile: {str(e)}"
+            detail="Failed to update profile"
         )
 
 @auth_router.post("/change-password")
@@ -624,7 +602,7 @@ async def forgot_password(request: ForgotPasswordRequest):
     email_sent = email_service.send_password_reset_email(request.email, token, user_name)
     
     if not email_sent:
-        print(f"⚠️ Failed to send email, but token saved. Token: {token}")
+        logger.warning("Failed to send reset email for: %s", request.email)
     
     return {"message": "If email exists, reset link will be sent"}
 

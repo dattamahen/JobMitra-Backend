@@ -8,22 +8,20 @@ Usage:
   Prod:   APP_ENV=prod python main.py
 """
 import os
+import logging
 from dotenv import load_dotenv
 
+logger = logging.getLogger(__name__)
+
 # Determine which .env file to load
-# Priority: APP_ENV env var > default "local"
 app_env = os.getenv("APP_ENV", "local")
 
-# Load the environment-specific .env file
 env_file = f".env.{app_env}"
 if os.path.exists(env_file):
     load_dotenv(env_file, override=True)
-    print(f"✅ Loaded environment: {env_file}")
 elif os.path.exists(".env"):
     load_dotenv(".env", override=True)
-    print(f"⚠️  .env.{app_env} not found, loaded fallback .env")
-else:
-    print(f"❌ No .env file found for environment: {app_env}")
+    logger.warning(".env.%s not found, loaded fallback .env", app_env)
 
 
 class Settings:

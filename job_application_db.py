@@ -2,6 +2,10 @@
 Database operations for job applications
 """
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 import uuid
@@ -76,7 +80,7 @@ class JobApplicationDatabase:
             return application_id
             
         except Exception as e:
-            print(f"Error applying for job: {e}")
+            logger.error("applying for job: %s", e)
             raise e
     
     async def get_job_applications(self, job_id: str, hr_user_id: str) -> JobApplicationsResponse:
@@ -125,7 +129,7 @@ class JobApplicationDatabase:
             )
             
         except Exception as e:
-            print(f"Error getting job applications: {e}")
+            logger.error("getting job applications: %s", e)
             raise e
     
     async def update_application_status(self, application_id: str, status: ApplicationStatus, hr_user_id: str, notes: Optional[str] = None) -> bool:
@@ -163,7 +167,7 @@ class JobApplicationDatabase:
             return result.modified_count > 0
             
         except Exception as e:
-            print(f"Error updating application status: {e}")
+            logger.error("updating application status: %s", e)
             raise e
     
     async def _calculate_profile_match(self, user: Dict[str, Any], job: Dict[str, Any]) -> Optional[ProfileMatchAnalysis]:
@@ -234,7 +238,7 @@ class JobApplicationDatabase:
             )
             
         except Exception as e:
-            print(f"Error calculating profile match: {e}")
+            logger.error("calculating profile match: %s", e)
             return None
     
     async def get_hr_jobs_with_applications(self, hr_email: str) -> List[Dict[str, Any]]:
@@ -273,7 +277,5 @@ class JobApplicationDatabase:
             return jobs_with_applications
             
         except Exception as e:
-            print(f"Error getting HR jobs with applications: {e}")
-            import traceback
-            traceback.print_exc()
+            logger.error("getting HR jobs with applications: %s", e)
             raise e

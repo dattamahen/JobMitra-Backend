@@ -1,3 +1,6 @@
+import logging
+logger = logging.getLogger(__name__)
+
 import requests
 import json
 from typing import Dict, Any, Optional
@@ -6,8 +9,8 @@ from dotenv import load_dotenv
 
 # Load environment variables
 load_dotenv()
-print(f"Loading .env file...")
-print(f"OpenAI API Key loaded: {bool(os.getenv('OPENAI_API_KEY'))}")
+logger.debug("Loading .env file...")
+logger.debug("OpenAI API Key loaded: %s", bool(os.getenv('OPENAI_API_KEY')))
 from config import settings
 from prompt_manager import prompt_manager
 
@@ -58,12 +61,12 @@ class AIInterviewService:
             )
         )
         
-        print(f"OpenAI API Response Status: {response.status_code}")
+        logger.debug("OpenAI API Response Status: %s", response.status_code)
         if response.status_code != 200:
-            print(f"OpenAI API Error Response: {response.text}")
+            logger.debug("OpenAI API Error Response: %s", response.text)
             raise Exception(f"OpenAI API error: {response.status_code} - {response.text}")
         
-        print("OpenAI API call successful!")
+        logger.info("OpenAI API call successful!")
         
         result = response.json()
         

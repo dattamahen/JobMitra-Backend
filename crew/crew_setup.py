@@ -3,6 +3,9 @@ Multi-AI Crew Orchestrator
 Coordinates ChatGPT, Gemini, and Claude agents in sequential workflow
 """
 
+import logging
+logger = logging.getLogger(__name__)
+
 from crewai import Crew
 from .agents import create_chatgpt_agent, create_gemini_agent, create_claude_agent
 from .tasks import create_chatgpt_task, create_gemini_task, create_claude_task
@@ -54,7 +57,7 @@ def run_multi_ai_query(query: str) -> dict:
 		dict: Response with result and metadata
 	"""
 	try:
-		print(f"[Multi-AI] Processing query: {query[:100]}...")
+		logger.debug("[Multi-AI] Processing query: %s...", query[:100])
 		
 		# Create and execute crew
 		crew = create_multi_ai_crew(query)
@@ -67,11 +70,11 @@ def run_multi_ai_query(query: str) -> dict:
 			"workflow": "sequential"
 		}
 		
-		print("[Multi-AI] Query processed successfully")
+		logger.info("[Multi-AI] Query processed successfully")
 		return response
 		
 	except Exception as e:
-		print(f"[Multi-AI] Error: {e}")
+		logger.debug("[Multi-AI] Error: %s", e)
 		
 		# Fallback to single provider
 		try:

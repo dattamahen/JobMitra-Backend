@@ -2,6 +2,9 @@
 Authentication utilities for JWT tokens, password hashing, etc.
 """
 
+import logging
+logger = logging.getLogger(__name__)
+
 import hashlib
 import secrets
 import jwt
@@ -31,7 +34,7 @@ def verify_password(stored_password: str, provided_password: str) -> bool:
         salt, pwd_hash = stored_password.split(':')
         return pwd_hash == hashlib.pbkdf2_hmac('sha256', provided_password.encode('utf-8'), salt.encode('utf-8'), 100000).hex()
     except Exception as e:
-        print(f"❌ Password verification error: {e}")
+        logger.debug("Password verification error: %s", e)
         return False
 
 def create_access_token(data: Dict[str, Any], expires_delta: Optional[timedelta] = None) -> str:
@@ -52,13 +55,13 @@ def verify_token(token: str) -> Optional[Dict[str, Any]]:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         return payload
     except jwt.ExpiredSignatureError:
-        print("❌ Token has expired")
+        logger.info("❌ Token has expired")
         return None
     except jwt.InvalidTokenError as e:
-        print(f"❌ JWT validation error: {e}")
+        logger.debug("JWT validation error: %s", e)
         return None
     except Exception as e:
-        print(f"❌ Token verification error: {e}")
+        logger.debug("Token verification error: %s", e)
         return None
 
 def generate_reset_token() -> str:

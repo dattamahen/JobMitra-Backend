@@ -2,6 +2,10 @@
 Skill Assessment API Endpoints - Placeholder Implementation
 """
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 from fastapi import APIRouter, HTTPException, Depends
 from typing import List, Dict, Any, Optional
 from pydantic import BaseModel
@@ -167,7 +171,7 @@ async def get_technical_skills(current_user: dict = Depends(get_current_user)) -
         
         return [SkillLevel(**skill) for skill in technical_skills]
     except Exception as e:
-        print(f"Error fetching technical skills: {e}")
+        logger.error("fetching technical skills: %s", e)
         return []
 
 @router.get("/skills/soft")
@@ -211,7 +215,7 @@ async def get_soft_skills(current_user: dict = Depends(get_current_user)) -> Lis
         
         return [SkillLevel(**skill) for skill in soft_skills]
     except Exception as e:
-        print(f"Error fetching soft skills: {e}")
+        logger.error("fetching soft skills: %s", e)
         return []
 
 @router.get("/history")
