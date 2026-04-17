@@ -84,7 +84,7 @@ class JobApplicationDatabase:
             raise e
     
     async def get_job_applications(self, job_id: str, hr_user_id: str) -> JobApplicationsResponse:
-        """Get all applications for a job (HR only)"""
+        """Get all applications for a job from jobs.applications_received + users collection"""
         try:
             # Verify job belongs to HR user
             job = await db.database[self.jobs_collection].find_one({
@@ -95,31 +95,29 @@ class JobApplicationDatabase:
             if not job:
                 raise ValueError("Job not found or access denied")
             
-            # Get all applications for this job
-            applications_cursor = db.database[self.applications_collection].find({
-                "job_id": job_id
-            }).sort("applied_date", -1)
+            applications_received = job.get("applications_received", [])
             
             applications = []
-            async for app in applications_cursor:
-                # Get user profile
-                user = await get_user_by_id(app["user_id"])
-                if user:
-                    applicant = ApplicantProfile(
-                        user_id=user["user_id"],
-                        full_name=f"{user.get('first_name', '')} {user.get('last_name', '')}".strip(),
-                        email=user["email"],
-                        phone=user.get("phone"),
-                        overall_experience_years=user.get("overall_experience_years"),
-                        current_role=user.get("professional_info", {}).get("current_role"),
-                        skills=user.get("skills", []),
-                        highest_qualification=user.get("highest_qualification"),
-                        application_id=app["application_id"],
-                        applied_date=app["applied_date"],
-                        status=ApplicationStatus(app["status"]),
-                        profile_match=ProfileMatchAnalysis(**app["profile_match"]) if app.get("profile_match") else None
-                    )
-                    applications.append(applicant)
+            for app in applications_received:
+                user = await get_user_by_id(app.get("user_id", ""))
+                if not user:
+                    continue
+                
+                applicant = ApplicantProfile(
+                    user_id=user["user_id"],
+                    full_name=app.get("user_name", f"{user.get('first_name', '')} {user.get('last_name', '')}".strip()),
+                    email=app.get("user_email", user.get("email", "")),
+                    phone=user.get("phone"),
+                    overall_experience_years=user.get("overall_experience_years"),
+                    current_role=user.get("current_role", user.get("professional_info", {}).get("current_role")),
+                    skills=user.get("skills", []),
+                    highest_qualification=user.get("highest_qualification"),
+                    application_id=app.get("application_id", f"{user['user_id']}_{job_id}"),
+                    applied_date=app.get("applied_date", app.get("applied_at", datetime.utcnow())),
+                    status=ApplicationStatus(app.get("status", "applied")),
+                    profile_match=None
+                )
+                applications.append(applicant)
             
             return JobApplicationsResponse(
                 job_id=job_id,

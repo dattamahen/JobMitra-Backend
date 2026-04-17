@@ -108,22 +108,9 @@ async def get_dashboard(current_user: dict = Depends(get_current_user)):
         # Calculate trend percentages (simplified since we're using overall_jobs_applied)
         apps_trend = min(total_applications, 5) if total_applications > 0 else 0
         
-        # Get total job count from database
-        try:
-            total_jobs = await job_db.get_total_job_count()
-            active_jobs = await job_db.get_active_job_count()
-        except Exception:
-            # Use actual database counts as fallback
-            try:
-                from motor.motor_asyncio import AsyncIOMotorClient
-                client = AsyncIOMotorClient("mongodb://localhost:27017")
-                db_fallback = client.jobmitra
-                total_jobs = await db_fallback.jobs.count_documents({})
-                active_jobs = await db_fallback.jobs.count_documents({"is_active": True})
-                client.close()
-            except Exception:
-                total_jobs = 0  # No hardcoded fallback
-                active_jobs = 0
+        # Get total job count from database (uses same query logic as job search)
+        total_jobs = await job_db.get_active_job_count()
+        active_jobs = total_jobs
         
         # Build stats based on user type
         if user_type in ["candidate", "job_seeker"]:
@@ -180,24 +167,13 @@ async def get_dashboard(current_user: dict = Depends(get_current_user)):
         else:  # HR user
             # Get HR-specific metrics from database
             try:
-                # Query actual HR jobs from database instead of posted_jobs
-                from motor.motor_asyncio import AsyncIOMotorClient
-                client = AsyncIOMotorClient("mongodb://localhost:27017")
-                db_hr = client.jobmitra
-                
-                hr_jobs_count = await db_hr.jobs.count_documents({"posted_by_hr_id": user_id})
-                hr_active_jobs = await db_hr.jobs.count_documents({"posted_by_hr_id": user_id, "is_active": True})
-                # Count applications from applications_received field in job documents
-                hr_jobs = await db_hr.jobs.find({"posted_by_hr_id": user_id}).to_list(None)
-                hr_applications_received = 0
-                for job in hr_jobs:
-                    applications_received = job.get("applications_received", [])
-                    hr_applications_received += len(applications_received)
-                
-                client.close()
-                
+                hr_jobs_count = await db.database["jobs"].count_documents({"posted_by_hr_id": user_id})
+                hr_active_jobs = await db.database["jobs"].count_documents({"posted_by_hr_id": user_id, "is_active": True})
+                hr_jobs = await db.database["jobs"].find({"posted_by_hr_id": user_id}).to_list(None)
+                hr_applications_received = sum(
+                    len(job.get("applications_received", [])) for job in hr_jobs
+                )
             except Exception:
-                # Fallback to zero if database queries fail
                 hr_jobs_count = 0
                 hr_active_jobs = 0
                 hr_applications_received = 0
@@ -551,48 +527,47 @@ async def get_soft_skills(current_user: dict = Depends(get_current_user)):
 
 @router.get("/users/{user_id}/applications", tags=["Applications"])
 async def get_user_applications_endpoint(user_id: str, current_user: dict = Depends(get_current_user)):
-	"""Get all applications for a user."""
+	"""Get all applications for a user from users.overall_jobs_applied."""
 	try:
-		# Verify user can only access their own applications
 		if current_user["user_id"] != user_id:
 			raise HTTPException(status_code=403, detail="Access denied")
 		
-		# Get applications from job_applications collection
-		applications_cursor = db.database["job_applications"].find({
-			"user_id": user_id
-		}).sort("applied_date", -1)
+		user = await db.database["users"].find_one({"user_id": user_id})
+		if not user:
+			raise HTTPException(status_code=404, detail="User not found")
+		
+		applied_records = [
+			app for app in user.get("overall_jobs_applied", [])
+			if isinstance(app, dict) and app.get("is_applied", False)
+		]
+		
+		if not applied_records:
+			return {"applications": [], "total_count": 0}
+		
+		job_ids = [app.get("job_id") for app in applied_records]
+		jobs_cursor = db.database["jobs"].find({"job_id": {"$in": job_ids}})
+		jobs_map = {}
+		async for job in jobs_cursor:
+			jobs_map[job.get("job_id")] = job
 		
 		applications = []
-		async for app in applications_cursor:
-			# Get job details
-			job = await db.database["jobs"].find_one({"job_id": app["job_id"]})
-			
+		for app_record in applied_records:
+			job = jobs_map.get(app_record.get("job_id"), {})
 			if job:
-				application_data = {
-					"application_id": app["application_id"],
-					"job_title": job["title"],
-					"company": job["company"],
-					"status": app["status"],
-					"applied_date": app["applied_date"].isoformat() if hasattr(app["applied_date"], 'isoformat') else app["applied_date"],
-					"notes": app.get("notes"),
+				applications.append({
+					"application_id": app_record.get("application_id"),
+					"job_title": job.get("title", ""),
+					"company": job.get("company", ""),
+					"status": app_record.get("status", "applied"),
+					"applied_date": app_record.get("applied_date").isoformat() if hasattr(app_record.get("applied_date"), 'isoformat') else str(app_record.get("applied_date", "")),
+					"match_percentage": app_record.get("match_percentage"),
+					"tailor_resume_done": app_record.get("tailor_resume_done", False),
+					"notes": app_record.get("notes"),
 					"tags": [],
 					"progress_percentage": None
-				}
-				
-				# Add interview stages if available
-				if app.get("interview_stages"):
-					application_data["interview_stages"] = app["interview_stages"]
-				
-				# Add offer details if available
-				if app.get("offer_details"):
-					application_data["offer_details"] = app["offer_details"]
-				
-				applications.append(application_data)
+				})
 		
-		return {
-			"applications": applications,
-			"total_count": len(applications)
-		}
+		return {"applications": applications, "total_count": len(applications)}
 		
 	except HTTPException:
 		raise
@@ -943,10 +918,15 @@ async def get_job_listings(
         if job_type and job_type not in ["all", "All Types"]:
             query["job_type"] = job_type.replace("-", "_")
         
-        # Get current user's applied jobs
+        # Get current user's applied jobs (only is_applied=True, handle legacy strings)
         user_profile = await db.database["users"].find_one({"user_id": user_id})
         applied_jobs_records = user_profile.get("overall_jobs_applied", []) if user_profile else []
-        user_applied_jobs = [app.get("job_id") if isinstance(app, dict) else app for app in applied_jobs_records]
+        user_applied_jobs = []
+        for app in applied_jobs_records:
+            if isinstance(app, dict) and app.get("is_applied", False):
+                user_applied_jobs.append(app.get("job_id"))
+            elif isinstance(app, str):
+                user_applied_jobs.append(app)
         
         # Get ALL matching jobs for intelligent scoring (we'll paginate after scoring)
         collection = db.database["jobs"]
@@ -975,9 +955,8 @@ async def get_job_listings(
                     if app_record.get("match_analysis_done") or app_record.get("tailor_resume_done"):
                         job["match_percentage"] = app_record.get("match_percentage", 0)
             
-            # Include jobs that meet ANY of the matching criteria (OR logic)
-            if match_score > 0.0:
-                all_jobs.append(job)
+            # Include ALL active jobs — unmatched ones appear at the bottom
+            all_jobs.append(job)
         
         # Sort by match score (highest first)
         all_jobs.sort(key=lambda x: x["match_score"], reverse=True)

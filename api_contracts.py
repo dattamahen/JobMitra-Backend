@@ -123,7 +123,8 @@ class TailorPreviewResponse(BaseModel):
     """Response for GET /api/v1/jobs/{job_id}/tailor-preview"""
     original_resume: OriginalResume
     tailored_resume: TailoredResume
-    match_improvement: int = Field(..., ge=0, le=100)
+    match_before: int = Field(0, ge=0, le=100)
+    match_improvement: int = Field(0, ge=0, le=100)
     changes: List[TailorChange]
 
 
@@ -278,6 +279,9 @@ def parse_tailor_response(raw_content: str) -> dict:
                 "reason": c.get("reason", ""),
             })
 
+        match_after = max(0, min(100, int(data.get("match_improvement", 0))))
+        match_before = max(0, min(100, int(data.get("match_before", max(0, match_after - 15)))))
+
         return {
             "tailored_resume": {
                 "professional_summary": tailored.get("professional_summary"),
@@ -287,7 +291,8 @@ def parse_tailor_response(raw_content: str) -> dict:
                 "projects": projects,
                 "certifications": tailored.get("certifications", []),
             },
-            "match_improvement": max(0, min(100, int(data.get("match_improvement", 0)))),
+            "match_before": match_before,
+            "match_improvement": match_after,
             "changes": changes,
         }
 
@@ -295,6 +300,7 @@ def parse_tailor_response(raw_content: str) -> dict:
         logger.warning("Tailor parse failed: %s — using fallback", e)
         return {
             "tailored_resume": {},
+            "match_before": 0,
             "match_improvement": 0,
             "changes": [],
         }

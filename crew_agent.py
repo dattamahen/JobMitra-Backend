@@ -8,27 +8,25 @@ logger = logging.getLogger(__name__)
 
 import os
 from crewai import Agent, Task, Crew
-from langchain_openai import ChatOpenAI
+from langchain_google_genai import ChatGoogleGenerativeAI
 from prompt_manager import prompt_manager
 
 
 def setup_llm():
     """
-    Setup OpenAI LLM with API key from environment variables.
+    Setup Gemini LLM. All agents route through Gemini internally.
     
     Returns:
-        ChatOpenAI: Configured OpenAI language model
+        ChatGoogleGenerativeAI: Configured Gemini language model
     """
-    # Get OpenAI API key from environment variables
-    openai_api_key = os.getenv("OPENAI_API_KEY")
+    gemini_api_key = os.getenv("GEMINI_API_KEY")
     
-    if not openai_api_key:
-        raise ValueError("OPENAI_API_KEY environment variable is required")
+    if not gemini_api_key:
+        raise ValueError("GEMINI_API_KEY environment variable is required")
     
-    # Initialize OpenAI LLM with GPT-4
-    llm = ChatOpenAI(
-        model="gpt-4",
-        api_key=openai_api_key,
+    llm = ChatGoogleGenerativeAI(
+        model="gemini-2.5-flash",
+        google_api_key=gemini_api_key,
         temperature=0.7
     )
     
