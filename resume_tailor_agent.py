@@ -99,7 +99,8 @@ Return ONLY a JSON object with this exact structure:
     ],
     "certifications": ["cert1", "cert2"]
   }},
-  "match_improvement": 85,
+  "match_before": 45,
+  "match_improvement": 78,
   "changes": [
     {{
       "section": "Professional Summary",
@@ -110,6 +111,10 @@ Return ONLY a JSON object with this exact structure:
     }}
   ]
 }}
+
+IMPORTANT for match scores:
+- "match_before": Estimate how well the ORIGINAL resume matches the JD (0-100). Be realistic — if the candidate lacks key required skills, this should be low.
+- "match_improvement": Estimate how well the TAILORED resume matches the JD (0-100). This should always be higher than match_before since you optimized phrasing, keywords, and structure. The improvement should be realistic (typically 10-30 points higher).
 """
         
         # Call Gemini

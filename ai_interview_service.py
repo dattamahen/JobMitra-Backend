@@ -1,78 +1,57 @@
 import logging
 logger = logging.getLogger(__name__)
 
-import requests
 import json
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 import os
 from dotenv import load_dotenv
+import google.generativeai as genai
 
-# Load environment variables
 load_dotenv()
-logger.debug("Loading .env file...")
-logger.debug("OpenAI API Key loaded: %s", bool(os.getenv('OPENAI_API_KEY')))
 from config import settings
 from prompt_manager import prompt_manager
 
 class AIInterviewService:
     def __init__(self):
-        self.openai_api_key = os.getenv('OPENAI_API_KEY')
+        self.gemini_api_key = os.getenv('GEMINI_API_KEY')
     
     async def generate_interview_questions(self, prompt_template: str, ai_provider: str = 'openai') -> Dict[str, Any]:
-        """Generate interview questions using AI"""
+        """Generate interview questions using Gemini (all providers route through Gemini)"""
         try:
-            if ai_provider.lower() == 'openai':
-                return await self._generate_with_openai(prompt_template)
-
-            else:
-                raise ValueError(f"Unsupported AI provider: {ai_provider}")
+            return await self._generate_with_gemini(prompt_template, ai_provider)
         except Exception as e:
             raise Exception(f"AI generation failed: {str(e)}")
     
-    async def _generate_with_openai(self, prompt: str) -> Dict[str, Any]:
-        """Generate questions using OpenAI GPT via HTTP requests"""
-        if not self.openai_api_key:
-            raise Exception("OpenAI API key not found")
+    async def _generate_with_gemini(self, prompt: str, branded_provider: str = 'openai') -> Dict[str, Any]:
+        """Generate questions using Gemini internally"""
+        if not self.gemini_api_key:
+            raise Exception("GEMINI_API_KEY not found")
         
-        headers = {
-            "Authorization": f"Bearer {self.openai_api_key}",
-            "Content-Type": "application/json"
-        }
+        genai.configure(api_key=self.gemini_api_key)
+        model = genai.GenerativeModel('gemini-2.5-flash')
         
-        data = {
-            "model": "gpt-3.5-turbo",
-            "messages": [
-                {"role": "system", "content": prompt_manager.get_random("interview_questions").get("system_prompt")},
-                {"role": "user", "content": prompt}
-            ],
-            "max_tokens": 1000,
-            "temperature": 0.7
-        }
+        system_prompt = prompt_manager.get_random("interview_questions").get("system_prompt", "")
+        full_prompt = f"{system_prompt}\n\n{prompt}" if system_prompt else prompt
         
         import asyncio
         loop = asyncio.get_event_loop()
         response = await loop.run_in_executor(
             None,
-            lambda: requests.post(
-                "https://api.openai.com/v1/chat/completions",
-                headers=headers,
-                json=data,
-                timeout=30
-            )
+            lambda: model.generate_content(full_prompt)
         )
         
-        logger.debug("OpenAI API Response Status: %s", response.status_code)
-        if response.status_code != 200:
-            logger.debug("OpenAI API Error Response: %s", response.text)
-            raise Exception(f"OpenAI API error: {response.status_code} - {response.text}")
+        logger.info("Gemini API call successful (branded as %s)", branded_provider)
         
-        logger.info("OpenAI API call successful!")
-        
-        result = response.json()
+        # Brand the response with the requested provider name
+        brand_map = {
+            "openai": "openai",
+            "gemini": "gemini",
+            "claude": "claude",
+        }
         
         return {
-            "provider": "openai",
-            "questions": result['choices'][0]['message']['content'],
-            "usage": result.get('usage', {})
+            "provider": brand_map.get(branded_provider.lower(), "gemini"),
+            "questions": response.text,
+            "usage": {}
         }
     

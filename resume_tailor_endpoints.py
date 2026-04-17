@@ -18,6 +18,7 @@ from api_contracts import (
     OriginalResume,
     TailoredResume,
     TailorChange,
+    parse_tailor_response,
 )
 import json
 from datetime import datetime, timedelta
@@ -85,27 +86,37 @@ async def get_tailor_preview(job_id: str, current_user: dict = Depends(get_curre
             raise HTTPException(status_code=404, detail="User profile not found")
         
         # Build job description from job data
-        company = job.get('company', {})
+        company = job.get('company', '')
         company_name = company.get('name', '') if isinstance(company, dict) else str(company)
         
         location = job.get('location', {})
         location_city = location.get('city', '') if isinstance(location, dict) else ''
-        location_type = location.get('type', '') if isinstance(location, dict) else ''
+        job_type = job.get('job_type', '')
+        
+        skills_required = job.get('skills_required', job.get('skills', []))
+        skills_preferred = job.get('skills_preferred', [])
         
         job_description = f"""
 Job Title: {job.get('title', '')}
 Company: {company_name}
-Location: {location_city} - {location_type}
+Location: {location_city} - {job_type}
 Experience Level: {job.get('experience_level', '')}
+Employment Type: {job.get('employment_type', '')}
 
 Description:
 {job.get('description', '')}
 
 Required Skills:
-{', '.join(job.get('skills', []))}
+{', '.join(skills_required)}
+
+Preferred Skills:
+{', '.join(skills_preferred)}
 
 Requirements:
 {chr(10).join([f"- {req.get('description', '') if isinstance(req, dict) else str(req)}" for req in job.get('requirements', [])])}
+
+Responsibilities:
+{chr(10).join([f"- {r.get('description', '') if isinstance(r, dict) else str(r)}" for r in job.get('responsibilities', [])])}
 """
         
         # Prepare original resume data
@@ -129,18 +140,22 @@ Requirements:
         if "error" in ai_result:
             raise HTTPException(status_code=500, detail=ai_result["error"])
         
+        # Parse and normalize AI output using the contract parser
+        parsed = parse_tailor_response(json.dumps(ai_result) if isinstance(ai_result, dict) else str(ai_result))
+        
         # Store tailored resume in cache for later use
         await db.database["users"].update_one(
             {"user_id": user_id},
-            {"$set": {f"tailored_resumes.{job_id}": ai_result["tailored_resume"]}}
+            {"$set": {f"tailored_resumes.{job_id}": parsed.get("tailored_resume", {})}}
         )
         
         return TailorPreviewContract(
             original_resume=OriginalResume(**original_resume),
-            tailored_resume=TailoredResume(**ai_result.get("tailored_resume", {})),
-            match_improvement=max(0, min(100, ai_result.get("match_improvement", 0))),
+            tailored_resume=TailoredResume(**parsed.get("tailored_resume", {})),
+            match_before=parsed.get("match_before", 0),
+            match_improvement=parsed.get("match_improvement", 0),
             changes=[
-                TailorChange(**c) for c in ai_result.get("changes", [])
+                TailorChange(**c) for c in parsed.get("changes", [])
             ],
         ).model_dump()
         
@@ -179,143 +194,24 @@ async def tailor_resume(job_id: str, current_user: dict = Depends(get_current_us
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/jobs/{job_id}/apply")
-async def apply_for_job(job_id: str, use_tailored: bool = False, current_user: dict = Depends(get_current_user)) -> ApplyJobResponse:
-    """Apply for job with or without tailored resume"""
-    try:
-        # Handle if current_user is a string
-        if isinstance(current_user, str):
-            user_id = current_user
-        else:
-            user_id = current_user.get('user_id') if isinstance(current_user, dict) else str(current_user)
-        
-        logger.debug("\n=== Apply Request ===")
-        logger.debug("Job ID: %s ", job_id)
-        logger.debug("Use Tailored: %s ", use_tailored)
-        logger.debug("User ID: %s ", user_id)
-        
-        # Always fetch user data
-        user = await db.database["users"].find_one({"user_id": user_id})
-        if not user:
-            raise HTTPException(status_code=404, detail="User not found")
-        
-        if use_tailored:
-            # Get cached tailored resume or generate new one
-            tailored_resumes = user.get("tailored_resumes", {})
-            
-            if job_id in tailored_resumes:
-                resume_data = tailored_resumes[job_id]
-                match_score = resume_data.get("match_improvement", 85)
-            else:
-                # Generate new tailored resume
-                preview = await get_tailor_preview(job_id, current_user)
-                resume_data = preview["tailored_resume"]
-                match_score = preview["match_improvement"]
-        else:
-            # Get user's original resume
-            resume_data = sanitize_for_json(user)
-            match_score = None
-        
-        # Create application ID
-        application_id = f"app_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}_{user_id}"
-        
-        # Create application document
-        application = {
-            "application_id": application_id,
-            "job_id": job_id,
-            "user_id": user_id,
-            "candidate_name": f"{user.get('first_name', '')} {user.get('last_name', '')}",
-            "candidate_email": user.get('email', ''),
-            "resume_tailored": use_tailored,
-            "resume_data": resume_data,
-            "match_score": match_score,
-            "applied_at": datetime.utcnow().isoformat(),
-            "applied_date": datetime.utcnow().isoformat(),
-            "status": "applied"
-        }
-        
-        # Insert application
-        await db.database["applications"].insert_one(application)
-        
-        # Update user's applied jobs list (both fields for compatibility)
-        await db.database["users"].update_one(
-            {"user_id": user_id},
-            {
-                "$addToSet": {
-                    "applied_jobs": job_id,
-                    "overall_jobs_applied": job_id
-                }
-            }
-        )
-        
-        # Update job applications
-        await db.database["jobs"].update_one(
-            {"job_id": job_id},
-            {
-                "$push": {
-                    "applications_received": {
-                        "application_id": application_id,
-                        "user_id": user_id,
-                        "candidate_name": application["candidate_name"],
-                        "applied_at": application["applied_at"],
-                        "status": "applied",
-                        "resume_tailored": use_tailored,
-                        "match_score": match_score
-                    }
-                }
-            }
-        )
-        
-        message = "Application submitted with tailored resume" if use_tailored else "Application submitted"
-        
-        return ApplyJobContract(
-            success=True,
-            message=message,
-            application_id=application_id,
-            match_percentage=match_score,
-        ).model_dump()
-    except Exception as e:
-        logger.error("in apply: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+async def apply_for_job(job_id: str, use_tailored: bool = False, current_user: dict = Depends(get_current_user)):
+    """Redirect to unified apply endpoint. Kept for backward compatibility."""
+    from apply_endpoints import apply_for_job as unified_apply, ApplyJobRequest
+    request = ApplyJobRequest(job_id=job_id, force_apply=True, use_tailored=use_tailored)
+    result = await unified_apply(request, current_user)
+    # Map to the contract response format
+    return ApplyJobContract(
+        success=result.success,
+        message=result.message,
+        application_id=result.application_id or f"{current_user.get('user_id', '')}_{job_id}",
+        match_percentage=result.match_percentage,
+    ).model_dump()
 
 @router.get("/users/{user_id}/applications")
 async def get_user_applications(user_id: str, current_user: dict = Depends(get_current_user)):
-    """Get all applications for a user - DEPRECATED: Use /jobs/search with already_applied filter in frontend"""
-    try:
-        # Verify user access
-        if isinstance(current_user, str):
-            current_user_id = current_user
-        else:
-            current_user_id = current_user.get('user_id') if isinstance(current_user, dict) else str(current_user)
-        
-        if current_user_id != user_id:
-            raise HTTPException(status_code=403, detail="Access denied")
-        
-        # Get all applications for this user
-        applications = await db.database["applications"].find({"user_id": user_id}).to_list(length=None)
-        
-        # Get job details for each application
-        result = []
-        for app in applications:
-            job = await db.database["jobs"].find_one({"job_id": app["job_id"]})
-            if job:
-                result.append({
-                    "application_id": app["application_id"],
-                    "job_id": app["job_id"],
-                    "job_title": job.get("title", ""),
-                    "company": job.get("company", ""),
-                    "location": job.get("location", {}),
-                    "status": app["status"],
-                    "applied_at": app["applied_at"],
-                    "resume_tailored": app.get("resume_tailored", False),
-                    "match_score": app.get("match_score")
-                })
-        
-        return {"applications": result, "total_count": len(result)}
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error("getting applications: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+    """Redirect to unified applications endpoint."""
+    from apply_endpoints import get_user_applied_jobs
+    return await get_user_applied_jobs(user_id, current_user)
 
 class JobSearchRequest(BaseModel):
     query: str | None = None

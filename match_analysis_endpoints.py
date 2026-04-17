@@ -56,12 +56,8 @@ async def perform_match_analysis(
                 app_index = i
                 break
         
-        # Application record must exist (user must apply first)
-        if not app_record:
-            raise HTTPException(status_code=404, detail="Please apply for the job first")
-        
-        # Check if analysis already done
-        if app_record.get("match_analysis_done", False):
+        # Check if analysis already done on existing record
+        if app_record and app_record.get("match_analysis_done", False):
             return MatchAnalysisResponse(
                 match_percentage=app_record.get("match_percentage", 0),
                 message="Match analysis already completed",
@@ -71,16 +67,32 @@ async def perform_match_analysis(
         # Generate random match percentage below 60%
         match_percentage = random.randint(20, 59)
         
-        # Update the application record
-        app_record["match_analysis_done"] = True
-        app_record["match_percentage"] = match_percentage
-        app_record["last_updated"] = datetime.utcnow()
-        
-        # Update in database
-        await db.database["users"].update_one(
-            {"user_id": user_id},
-            {"$set": {f"overall_jobs_applied.{app_index}": app_record}}
-        )
+        if app_record:
+            # Update existing application record
+            app_record["match_analysis_done"] = True
+            app_record["match_percentage"] = match_percentage
+            app_record["last_updated"] = datetime.utcnow()
+            await db.database["users"].update_one(
+                {"user_id": user_id},
+                {"$set": {f"overall_jobs_applied.{app_index}": app_record}}
+            )
+        else:
+            # Create a new application record for pre-apply analysis
+            new_record = {
+                "job_id": job_id,
+                "application_id": f"{user_id}_{job_id}",
+                "status": "analyzing",
+                "match_analysis_done": True,
+                "match_percentage": match_percentage,
+                "tailor_resume_done": False,
+                "is_applied": False,
+                "applied_date": datetime.utcnow(),
+                "last_updated": datetime.utcnow()
+            }
+            await db.database["users"].update_one(
+                {"user_id": user_id},
+                {"$push": {"overall_jobs_applied": new_record}}
+            )
         
         return MatchAnalysisResponse(
             match_percentage=match_percentage,
@@ -122,12 +134,8 @@ async def tailor_resume(
                 app_index = i
                 break
         
-        # Application record must exist (user must apply first)
-        if not app_record:
-            raise HTTPException(status_code=404, detail="Please apply for the job first")
-        
-        # Check if tailor resume already done
-        if app_record.get("tailor_resume_done", False):
+        # Check if tailor resume already done on existing record
+        if app_record and app_record.get("tailor_resume_done", False):
             return TailorResumeResponse(
                 match_percentage=app_record.get("match_percentage", 0),
                 message="Resume already tailored",
@@ -137,16 +145,32 @@ async def tailor_resume(
         # Generate random match percentage above 80%
         match_percentage = random.randint(80, 99)
         
-        # Update the application record
-        app_record["tailor_resume_done"] = True
-        app_record["match_percentage"] = match_percentage
-        app_record["last_updated"] = datetime.utcnow()
-        
-        # Update in database
-        await db.database["users"].update_one(
-            {"user_id": user_id},
-            {"$set": {f"overall_jobs_applied.{app_index}": app_record}}
-        )
+        if app_record:
+            # Update existing application record
+            app_record["tailor_resume_done"] = True
+            app_record["match_percentage"] = match_percentage
+            app_record["last_updated"] = datetime.utcnow()
+            await db.database["users"].update_one(
+                {"user_id": user_id},
+                {"$set": {f"overall_jobs_applied.{app_index}": app_record}}
+            )
+        else:
+            # Create a new application record for pre-apply tailoring
+            new_record = {
+                "job_id": job_id,
+                "application_id": f"{user_id}_{job_id}",
+                "status": "tailoring",
+                "match_analysis_done": False,
+                "match_percentage": match_percentage,
+                "tailor_resume_done": True,
+                "is_applied": False,
+                "applied_date": datetime.utcnow(),
+                "last_updated": datetime.utcnow()
+            }
+            await db.database["users"].update_one(
+                {"user_id": user_id},
+                {"$push": {"overall_jobs_applied": new_record}}
+            )
         
         
         return TailorResumeResponse(

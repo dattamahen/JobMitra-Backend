@@ -66,7 +66,7 @@ class ApplicantProfile(BaseModel):
     
     # Application specific
     application_id: str
-    applied_date: datetime
+    applied_date: Any = None
     status: ApplicationStatus
     profile_match: Optional[ProfileMatchAnalysis] = None
 

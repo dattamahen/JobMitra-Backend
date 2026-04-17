@@ -393,6 +393,22 @@ class JobDatabase:
         
         return "Not specified"
     
+    async def get_total_job_count(self) -> int:
+        """Get total count of all jobs"""
+        try:
+            return await db.database[self.jobs_collection].count_documents({})
+        except Exception as e:
+            logger.error("getting total job count: %s", e)
+            return 0
+
+    async def get_active_job_count(self) -> int:
+        """Get count of active jobs (consistent with job search query)"""
+        try:
+            return await db.database[self.jobs_collection].count_documents({"is_active": True})
+        except Exception as e:
+            logger.error("getting active job count: %s", e)
+            return 0
+
     async def _get_filter_options(self) -> Dict[str, List[str]]:
         """Get available filter options from existing jobs"""
         try:
