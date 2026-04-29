@@ -39,7 +39,12 @@ class Settings:
 
     # CORS
     _cors_raw = os.getenv("CORS_ORIGINS", "http://localhost:4200")
-    CORS_ORIGINS = [origin.strip() for origin in _cors_raw.split(",")]
+    if _cors_raw.strip() == "*":
+        CORS_ORIGINS = ["*"]
+        CORS_ALLOW_CREDENTIALS = False
+    else:
+        CORS_ORIGINS = [origin.strip() for origin in _cors_raw.split(",")]
+        CORS_ALLOW_CREDENTIALS = True
 
     # Frontend
     FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:4200")
