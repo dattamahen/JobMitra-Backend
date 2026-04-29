@@ -958,8 +958,8 @@ async def get_job_listings(
             # Include ALL active jobs — unmatched ones appear at the bottom
             all_jobs.append(job)
         
-        # Sort by match score (highest first)
-        all_jobs.sort(key=lambda x: x["match_score"], reverse=True)
+        # Sort by match score (highest first), then by posted_date (newest first) for ties
+        all_jobs.sort(key=lambda x: (x["match_score"], x.get("posted_date", "")), reverse=True)
         
         logger.info("Job search: %d jobs matched criteria", len(all_jobs))
         
