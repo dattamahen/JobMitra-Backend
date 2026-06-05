@@ -34,30 +34,31 @@ def _build_question_prompt(system_prompt: str, user_details: dict, interview_typ
 	experience = user_details.get("experience_years", 0)
 	if experience <= 2:
 		difficulty = "beginner to intermediate"
-		count = "8-10"
 	elif experience <= 5:
 		difficulty = "intermediate to advanced"
-		count = "8-10"
 	else:
 		difficulty = "advanced, including system design and leadership"
-		count = "7-10"
+
+	skills = user_details.get("skills", [])
+	skills_str = ", ".join(skills)
 
 	if interview_type == "behavioral":
 		context_block = f"""Candidate Profile:
 - Role: {user_details.get("role", "Software Engineer")}
 - Experience: {experience} years
-- Skills: {", ".join(user_details.get("skills", []))}
+- Core Skills: {skills_str}
 
-Generate {count} behavioral interview questions at {difficulty} difficulty level.
-Focus on: teamwork, conflict resolution, leadership, ownership, handling pressure, communication, and job-switch scenarios.
+Generate exactly 15-18 behavioral interview questions at {difficulty} difficulty level.
+IMPORTANT: At least 10-12 questions MUST be directly based on the candidate's core skills listed above. The remaining questions should cover teamwork, conflict resolution, leadership, ownership, handling pressure, communication, and job-switch scenarios.
 Questions should be realistic and relevant to the candidate's experience level."""
 	else:
 		context_block = f"""Candidate Profile:
 - Role: {user_details.get("role", "Software Engineer")}
 - Experience: {experience} years
-- Skills: {", ".join(user_details.get("skills", []))}
+- Core Skills: {skills_str}
 
-Generate {count} interview questions at {difficulty} difficulty level."""
+Generate exactly 15-18 interview questions at {difficulty} difficulty level.
+IMPORTANT: At least 10-12 questions MUST be directly based on the candidate's core skills listed above (e.g. if skills include Python, Django, React — ask in-depth questions on those specific technologies). The remaining 3-6 questions can cover system design, problem-solving, or general engineering practices."""
 
 	return f"""{system_prompt}
 

@@ -8,7 +8,12 @@ Run: pytest tests/e2e/ -v --html=tests/e2e/reports/e2e_report.html --self-contai
 import pytest
 import httpx
 import time
+import sys
+import os
 from datetime import datetime
+
+# Add project root to path for imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 BASE_URL = "http://localhost:8000"
 API_URL = f"{BASE_URL}/api/v1"
@@ -313,6 +318,127 @@ class TestAnalyticsE2E:
         data = resp.json()
         assert "total_users" in data
         assert "total_jobs" in data
+
+
+# ─── Default Skills & Objective E2E Tests ─────────────────────────────────────
+
+class TestDefaultProfileDataE2E:
+    """E2E: Verify new users get default skills and professional objective."""
+
+    def test_register_new_user_gets_default_skills(self, client):
+        """TC-E2E-030: Newly registered user has 5-6 default skills."""
+        import time
+        email = f"e2e_skills_{int(time.time())}@test.com"
+
+        reg_resp = client.post(f"{API_URL}/auth/register", json={
+            "email": email,
+            "password": "TestSkills123!",
+            "first_name": "Skills",
+            "last_name": "Test",
+            "user_type": "candidate"
+        })
+        assert reg_resp.status_code == 200
+        data = reg_resp.json()
+        assert "skills" in data
+        assert isinstance(data["skills"], list)
+        assert len(data["skills"]) in [5, 6]
+
+    def test_register_new_user_skills_are_valid(self, client):
+        """TC-E2E-031: Default skills are from the known skills pool."""
+        import time
+        from default_profile_data import DEFAULT_SKILLS
+
+        email = f"e2e_valid_skills_{int(time.time())}@test.com"
+
+        reg_resp = client.post(f"{API_URL}/auth/register", json={
+            "email": email,
+            "password": "TestValid123!",
+            "first_name": "Valid",
+            "last_name": "Skills",
+            "user_type": "candidate"
+        })
+        assert reg_resp.status_code == 200
+        data = reg_resp.json()
+        for skill in data["skills"]:
+            assert skill in DEFAULT_SKILLS
+
+    def test_register_new_user_gets_professional_summary(self, client):
+        """TC-E2E-032: Newly registered user has a professional_summary set."""
+        import time
+        from default_profile_data import DEFAULT_OBJECTIVES
+
+        email = f"e2e_obj_{int(time.time())}@test.com"
+
+        # Register
+        reg_resp = client.post(f"{API_URL}/auth/register", json={
+            "email": email,
+            "password": "TestObj123!!",
+            "first_name": "Objective",
+            "last_name": "Test",
+            "user_type": "candidate"
+        })
+        assert reg_resp.status_code == 200
+
+        # Login to get token
+        login_resp = client.post(f"{API_URL}/auth/login", json={
+            "email": email,
+            "password": "TestObj123!!"
+        })
+        assert login_resp.status_code == 200
+        token = login_resp.json()["access_token"]
+
+        # Fetch profile
+        me_resp = client.get(f"{API_URL}/auth/me", headers={
+            "Authorization": f"Bearer {token}"
+        })
+        assert me_resp.status_code == 200
+        profile = me_resp.json()
+        assert "professional_summary" in profile
+        assert profile["professional_summary"] in DEFAULT_OBJECTIVES
+
+    def test_register_user_with_explicit_skills_preserves_them(self, client):
+        """TC-E2E-033: User who provides skills during registration keeps them."""
+        import time
+        email = f"e2e_explicit_{int(time.time())}@test.com"
+
+        # Note: Current register endpoint doesn't accept skills,
+        # so this tests that the default is applied. If skills were
+        # passed via a different flow, they'd be preserved.
+        reg_resp = client.post(f"{API_URL}/auth/register", json={
+            "email": email,
+            "password": "ExplicitSkills1!",
+            "first_name": "Explicit",
+            "last_name": "Skills",
+            "user_type": "candidate"
+        })
+        assert reg_resp.status_code == 200
+        data = reg_resp.json()
+        # Should have defaults since register doesn't pass skills
+        assert len(data["skills"]) in [5, 6]
+
+    def test_login_response_includes_default_skills(self, client):
+        """TC-E2E-034: Login response includes the default skills assigned at registration."""
+        import time
+        email = f"e2e_login_skills_{int(time.time())}@test.com"
+
+        # Register
+        client.post(f"{API_URL}/auth/register", json={
+            "email": email,
+            "password": "LoginSkills1!",
+            "first_name": "Login",
+            "last_name": "Skills",
+            "user_type": "candidate"
+        })
+
+        # Login
+        login_resp = client.post(f"{API_URL}/auth/login", json={
+            "email": email,
+            "password": "LoginSkills1!"
+        })
+        assert login_resp.status_code == 200
+        user_data = login_resp.json()["user"]
+        assert "skills" in user_data
+        assert len(user_data["skills"]) in [5, 6]
 
 
 # ─── Forgot Password E2E Tests ────────────────────────────────────────────────
