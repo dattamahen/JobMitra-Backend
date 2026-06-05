@@ -67,6 +67,8 @@ class Database:
     async def connect_to_mongo(self):
         """Establish connection to MongoDB with connection pooling."""
         if not MONGODB_AVAILABLE:
+            if os.getenv("APP_ENV", "local") in ("prod", "production"):
+                raise RuntimeError("MongoDB drivers required in production — cannot use fallback mode")
             logger.warning("Using fallback mode — data will not persist")
             return
 

@@ -273,64 +273,69 @@ class JobDatabase:
             return False
     
     async def get_hr_dashboard(self, hr_user_id: str) -> HRJobDashboard:
-        """Get dashboard stats for HR user"""
+        """Get dashboard stats for HR user using aggregation (memory-safe)."""
         try:
-            logger.debug("Getting HR dashboard for user: %s ", hr_user_id)
-            
-            # Get all jobs by this HR
-            all_jobs = await db.database[self.jobs_collection].find({
-                "posted_by_hr_id": hr_user_id
-            }).to_list(None)
-            
-            logger.debug("Found %s jobs for HR user", len(all_jobs))
-            
-            # Calculate stats from jobs
-            total_jobs = len(all_jobs)
-            active_jobs = len([job for job in all_jobs if job.get("is_active", True)])
-            inactive_jobs = total_jobs - active_jobs
-            total_applications = sum(len(job.get("applications_count", [])) for job in all_jobs)
-            
-            # Jobs expiring soon (within 7 days)
-            cutoff_date = datetime.utcnow() + timedelta(days=7)
-            jobs_expiring_soon = 0
-            for job in all_jobs:
-                if job.get("application_deadline"):
-                    try:
-                        deadline = job["application_deadline"]
-                        if isinstance(deadline, str):
-                            deadline = datetime.fromisoformat(deadline.replace('Z', '+00:00'))
-                        if deadline <= cutoff_date:
-                            jobs_expiring_soon += 1
-                    except:
-                        continue
-            
-            # Recent jobs (last 5)
-            recent_jobs = sorted(all_jobs, key=lambda x: x.get("posted_date", datetime.min), reverse=True)[:5]
+            logger.debug("Getting HR dashboard for user: %s", hr_user_id)
+
+            # Use aggregation to compute stats without loading all docs
+            pipeline = [
+                {"$match": {"posted_by_hr_id": hr_user_id}},
+                {"$facet": {
+                    "stats": [{
+                        "$group": {
+                            "_id": None,
+                            "total_jobs": {"$sum": 1},
+                            "active_jobs": {"$sum": {"$cond": [{"$eq": ["$is_active", True]}, 1, 0]}},
+                            "total_applications": {"$sum": {"$size": {"$ifNull": ["$applications_count", []]}}}
+                        }
+                    }],
+                    "recent_jobs": [
+                        {"$sort": {"posted_date": -1}},
+                        {"$limit": 5}
+                    ]
+                }}
+            ]
+
+            agg_result = await db.database[self.jobs_collection].aggregate(pipeline).to_list(1)
+
+            if not agg_result:
+                return HRJobDashboard(total_jobs_posted=0, active_jobs=0, inactive_jobs=0,
+                                     total_applications_received=0, jobs_expiring_soon=0, recent_jobs=[])
+
+            facets = agg_result[0]
+            stats = facets["stats"][0] if facets["stats"] else {"total_jobs": 0, "active_jobs": 0, "total_applications": 0}
+            recent_jobs = facets["recent_jobs"]
+
+            total_jobs = stats["total_jobs"]
+            active_jobs = stats["active_jobs"]
+            total_applications = stats["total_applications"]
+
+            # Convert ObjectIds in recent jobs
             for job in recent_jobs:
                 job["_id"] = str(job["_id"])
-            
-            result = HRJobDashboard(
+
+            # Count jobs expiring within 7 days (separate lightweight query)
+            cutoff_date = datetime.utcnow() + timedelta(days=7)
+            jobs_expiring_soon = await db.database[self.jobs_collection].count_documents({
+                "posted_by_hr_id": hr_user_id,
+                "is_active": True,
+                "application_deadline": {"$lte": cutoff_date.isoformat()}
+            })
+
+            return HRJobDashboard(
                 total_jobs_posted=total_jobs,
                 active_jobs=active_jobs,
-                inactive_jobs=inactive_jobs,
+                inactive_jobs=total_jobs - active_jobs,
                 total_applications_received=total_applications,
                 jobs_expiring_soon=jobs_expiring_soon,
                 recent_jobs=recent_jobs
             )
-            
-            logger.debug("Dashboard stats: {total_jobs} total, {active_jobs} active, %s applications", total_applications)
-            return result
-            
+
         except Exception as e:
             logger.error("getting HR dashboard: %s", e)
             return HRJobDashboard(
-                total_jobs_posted=0,
-                active_jobs=0,
-                inactive_jobs=0,
-                total_applications_received=0,
-                jobs_expiring_soon=0,
-                recent_jobs=[]
-            )
+                total_jobs_posted=0, active_jobs=0, inactive_jobs=0,
+                total_applications_received=0, jobs_expiring_soon=0, recent_jobs=[])
     
     async def increment_job_views(self, job_id: str) -> bool:
         """Increment view count for a job"""
@@ -409,17 +414,28 @@ class JobDatabase:
             logger.error("getting active job count: %s", e)
             return 0
 
+    # Cache for filter options (refreshes every 5 minutes)
+    _filter_cache = None
+    _filter_cache_time = None
+    _FILTER_CACHE_TTL = 300  # 5 minutes
+
     async def _get_filter_options(self) -> Dict[str, List[str]]:
-        """Get available filter options from existing jobs"""
+        """Get available filter options with in-memory caching."""
+        import time
+        now = time.time()
+
+        if (self._filter_cache is not None and 
+            self._filter_cache_time is not None and 
+            now - self._filter_cache_time < self._FILTER_CACHE_TTL):
+            return self._filter_cache
+
         try:
-            # Get unique values for filters
             locations = await db.database[self.jobs_collection].distinct("location.city", {"is_active": True})
             experience_levels = await db.database[self.jobs_collection].distinct("experience_level", {"is_active": True})
             employment_types = await db.database[self.jobs_collection].distinct("employment_type", {"is_active": True})
             job_types = await db.database[self.jobs_collection].distinct("job_type", {"is_active": True})
             companies = await db.database[self.jobs_collection].distinct("company", {"is_active": True})
-            
-            # Get salary ranges (simplified)
+
             salary_ranges = [
                 {"label": "₹0-5 LPA", "min": 0, "max": 500000},
                 {"label": "₹5-10 LPA", "min": 500000, "max": 1000000},
@@ -428,8 +444,8 @@ class JobDatabase:
                 {"label": "₹20-25 LPA", "min": 2000000, "max": 2500000},
                 {"label": "₹25+ LPA", "min": 2500000, "max": 10000000}
             ]
-            
-            return {
+
+            JobDatabase._filter_cache = {
                 "locations": ["All Locations"] + [loc for loc in locations if loc],
                 "experience_levels": ["All Levels"] + experience_levels,
                 "employment_types": ["All Types"] + employment_types,
@@ -437,7 +453,9 @@ class JobDatabase:
                 "companies": ["All Companies"] + companies,
                 "salary_ranges": salary_ranges
             }
-            
+            JobDatabase._filter_cache_time = now
+            return JobDatabase._filter_cache
+
         except Exception as e:
             logger.error("getting filter options: %s", e)
             return {

@@ -129,6 +129,10 @@ def create_app() -> FastAPI:
     from rate_limiter import RateLimitMiddleware
     app.add_middleware(RateLimitMiddleware, requests_per_minute=settings.RATE_LIMIT_PER_MINUTE)
 
+    # Add request ID for tracing
+    from request_id_middleware import RequestIDMiddleware
+    app.add_middleware(RequestIDMiddleware)
+
     # Global validation error handler
     @app.exception_handler(RequestValidationError)
     async def validation_exception_handler(request: Request, exc: RequestValidationError):
