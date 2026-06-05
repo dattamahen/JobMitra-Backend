@@ -1,0 +1,27 @@
+Method,Name,Error,Occurrences,First Seen,Last Seen
+GET,/api/v1/profile/current,HTTPError('429 Client Error: Too Many Requests for url: /api/v1/profile/current'),192,2026-06-05T17:39:24Z,2026-06-05T17:41:02Z
+POST,/api/v1/profile/generate-ai-content [summary],HTTPError('404 Client Error: Not Found for url: /api/v1/profile/generate-ai-content [summary]'),1,2026-06-05T17:40:07Z,2026-06-05T17:40:07Z
+GET,/api/v1/profile/current,HTTPError('403 Client Error: Forbidden for url: /api/v1/profile/current'),3,2026-06-05T17:40:18Z,2026-06-05T17:40:20Z
+GET,/api/v1/hr/applications-received,HTTPError('429 Client Error: Too Many Requests for url: /api/v1/hr/applications-received'),16,2026-06-05T17:39:24Z,2026-06-05T17:41:01Z
+PUT,/api/v1/auth/profile [update],"ConnectionResetError(10054, 'An existing connection was forcibly closed by the remote host', None, 10054, None)",1,2026-06-05T17:40:31Z,2026-06-05T17:40:31Z
+POST,/api/v1/get-interview-prompt,HTTPError('429 Client Error: Too Many Requests for url: /api/v1/get-interview-prompt'),104,2026-06-05T17:39:24Z,2026-06-05T17:41:02Z
+POST,/api/v1/jobs [search],HTTPError('403 Client Error: Forbidden for url: /api/v1/jobs [search]'),16,2026-06-05T17:40:06Z,2026-06-05T17:40:20Z
+GET,/api/v1/skills/technical,HTTPError('429 Client Error: Too Many Requests for url: /api/v1/skills/technical'),58,2026-06-05T17:39:42Z,2026-06-05T17:41:01Z
+POST,/api/v1/get-interview-prompt,HTTPError('500 Server Error: Internal Server Error for url: /api/v1/get-interview-prompt'),4,2026-06-05T17:40:23Z,2026-06-05T17:40:26Z
+GET,/api/v1/dashboard,HTTPError('403 Client Error: Forbidden for url: /api/v1/dashboard'),9,2026-06-05T17:40:06Z,2026-06-05T17:40:20Z
+GET,/api/v1/hr/jobs,HTTPError('429 Client Error: Too Many Requests for url: /api/v1/hr/jobs'),66,2026-06-05T17:39:24Z,2026-06-05T17:40:57Z
+GET,/api/v1/profile/current,"ConnectionResetError(10054, 'An existing connection was forcibly closed by the remote host', None, 10054, None)",1,2026-06-05T17:41:01Z,2026-06-05T17:41:01Z
+PUT,/api/v1/auth/profile [update],HTTPError('429 Client Error: Too Many Requests for url: /api/v1/auth/profile [update]'),118,2026-06-05T17:39:24Z,2026-06-05T17:41:02Z
+GET,/api/v1/dashboard,HTTPError('429 Client Error: Too Many Requests for url: /api/v1/dashboard'),853,2026-06-05T17:39:24Z,2026-06-05T17:41:02Z
+POST,/api/v1/profile/generate-ai-content [job_desc],HTTPError('429 Client Error: Too Many Requests for url: /api/v1/profile/generate-ai-content [job_desc]'),37,2026-06-05T17:39:42Z,2026-06-05T17:41:02Z
+GET,/api/v1/auth/me,HTTPError('429 Client Error: Too Many Requests for url: /api/v1/auth/me'),555,2026-06-05T17:39:24Z,2026-06-05T17:41:02Z
+POST,/api/v1/profile/generate-ai-content [summary],HTTPError('429 Client Error: Too Many Requests for url: /api/v1/profile/generate-ai-content [summary]'),72,2026-06-05T17:39:42Z,2026-06-05T17:41:02Z
+POST,/api/v1/jobs [search],"ConnectionResetError(10054, 'An existing connection was forcibly closed by the remote host', None, 10054, None)",1,2026-06-05T17:39:47Z,2026-06-05T17:39:47Z
+GET,/api/v1/auth/me,HTTPError('403 Client Error: Forbidden for url: /api/v1/auth/me'),4,2026-06-05T17:40:06Z,2026-06-05T17:40:19Z
+PUT,/api/v1/auth/profile [update],HTTPError('403 Client Error: Forbidden for url: /api/v1/auth/profile [update]'),3,2026-06-05T17:40:19Z,2026-06-05T17:40:20Z
+GET,/api/v1/mock-interviews/history,HTTPError('403 Client Error: Forbidden for url: /api/v1/mock-interviews/history'),2,2026-06-05T17:40:06Z,2026-06-05T17:40:07Z
+POST,/api/v1/auth/login,HTTPError('429 Client Error: Too Many Requests for url: /api/v1/auth/login'),100,2026-06-05T17:39:19Z,2026-06-05T17:39:20Z
+POST,/api/v1/jobs [search],HTTPError('429 Client Error: Too Many Requests for url: /api/v1/jobs [search]'),937,2026-06-05T17:39:24Z,2026-06-05T17:41:02Z
+GET,/api/v1/mock-interviews/history,HTTPError('429 Client Error: Too Many Requests for url: /api/v1/mock-interviews/history'),54,2026-06-05T17:39:42Z,2026-06-05T17:41:01Z
+GET,/api/v1/hr/jobs,HTTPError('403 Client Error: Forbidden for url: /api/v1/hr/jobs'),3,2026-06-05T17:40:18Z,2026-06-05T17:40:20Z
+POST,/api/v1/profile/generate-ai-content [job_desc],HTTPError('404 Client Error: Not Found for url: /api/v1/profile/generate-ai-content [job_desc]'),2,2026-06-05T17:40:07Z,2026-06-05T17:40:19Z
