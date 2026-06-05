@@ -82,6 +82,10 @@ async def lifespan(app: FastAPI):
     try:
         await db.connect_to_mongo()
         logger.info("Database connection established (fallback=%s)", db.fallback_mode)
+        # Ensure indexes exist for optimal query performance
+        if not db.fallback_mode:
+            from db_indexes import ensure_indexes
+            await ensure_indexes(db.database)
     except Exception as e:
         logger.error("Failed to connect to database: %s", e)
 
@@ -120,6 +124,10 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    # Add rate limiting middleware
+    from rate_limiter import RateLimitMiddleware
+    app.add_middleware(RateLimitMiddleware, requests_per_minute=settings.RATE_LIMIT_PER_MINUTE)
 
     # Global validation error handler
     @app.exception_handler(RequestValidationError)

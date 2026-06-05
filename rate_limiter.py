@@ -1,87 +1,88 @@
 """
-Rate limiting middleware for API protection
+Rate Limiting Middleware
+Simple sliding-window rate limiter using in-memory storage.
+For production with multiple instances, replace with Redis-backed limiter.
 """
+
 import time
-from fastapi import Request, HTTPException, status
-from fastapi.responses import JSONResponse
-from starlette.middleware.base import BaseHTTPMiddleware
-from cache import cache
-from config import settings
 import logging
+from collections import defaultdict
+from fastapi import Request, HTTPException, status
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import JSONResponse
+from config import settings
 
 logger = logging.getLogger(__name__)
 
+# Sliding window storage: {key: [(timestamp, count)]}
+_request_log: dict = defaultdict(list)
+
+# Cleanup threshold — purge old entries every N requests
+_CLEANUP_INTERVAL = 1000
+_request_counter = 0
+
+
+def _get_client_key(request: Request) -> str:
+    """Extract client identifier from request."""
+    # Try to get user_id from auth header (for per-user limiting)
+    # Fallback to IP address
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
+def _cleanup_old_entries(window_seconds: int = 60):
+    """Remove expired entries to prevent memory leak."""
+    cutoff = time.time() - window_seconds
+    keys_to_delete = []
+    for key, timestamps in _request_log.items():
+        _request_log[key] = [t for t in timestamps if t > cutoff]
+        if not _request_log[key]:
+            keys_to_delete.append(key)
+    for key in keys_to_delete:
+        del _request_log[key]
+
+
 class RateLimitMiddleware(BaseHTTPMiddleware):
+    """Rate limiting middleware with configurable limits per minute."""
+
+    def __init__(self, app, requests_per_minute: int = None):
+        super().__init__(app)
+        self.limit = requests_per_minute or settings.RATE_LIMIT_PER_MINUTE
+        self.window = 60  # 1 minute window
+
     async def dispatch(self, request: Request, call_next):
+        global _request_counter
+
         # Skip rate limiting for health checks
-        if request.url.path in ["/health", "/", "/docs", "/redoc"]:
+        if request.url.path in ("/", "/cors-test", "/docs", "/redoc", "/openapi.json"):
             return await call_next(request)
-        
-        # Get user identifier (IP or user_id from token)
-        client_id = self.get_client_id(request)
-        
-        # Check rate limit
-        if not await self.is_allowed(client_id):
+
+        client_key = _get_client_key(request)
+        now = time.time()
+
+        # Periodic cleanup
+        _request_counter += 1
+        if _request_counter % _CLEANUP_INTERVAL == 0:
+            _cleanup_old_entries(self.window)
+
+        # Count requests in current window
+        cutoff = now - self.window
+        _request_log[client_key] = [t for t in _request_log[client_key] if t > cutoff]
+        request_count = len(_request_log[client_key])
+
+        if request_count >= self.limit:
+            logger.warning("Rate limit exceeded for %s: %d/%d", client_key, request_count, self.limit)
             return JSONResponse(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                 content={
-                    "error": "Rate limit exceeded",
-                    "message": f"Maximum {settings.RATE_LIMIT_PER_MINUTE} requests per minute allowed"
+                    "detail": "Too many requests. Please slow down.",
+                    "retry_after_seconds": int(self.window - (now - _request_log[client_key][0]))
                 }
             )
-        
+
+        # Record this request
+        _request_log[client_key].append(now)
+
         return await call_next(request)
-    
-    def get_client_id(self, request: Request) -> str:
-        """Get client identifier for rate limiting"""
-        # Try to get user_id from Authorization header
-        auth_header = request.headers.get("authorization")
-        if auth_header:
-            try:
-                from auth_utils import verify_token
-                token = auth_header.replace("Bearer ", "")
-                payload = verify_token(token)
-                if payload and payload.get("user_id"):
-                    return f"user:{payload['user_id']}"
-            except:
-                pass
-        
-        # Fallback to IP address
-        client_ip = request.client.host
-        forwarded_for = request.headers.get("x-forwarded-for")
-        if forwarded_for:
-            client_ip = forwarded_for.split(",")[0].strip()
-        
-        return f"ip:{client_ip}"
-    
-    async def is_allowed(self, client_id: str) -> bool:
-        """Check if client is within rate limit"""
-        current_time = int(time.time())
-        window_start = current_time - 60  # 1-minute window
-        
-        key = f"rate_limit:{client_id}"
-        
-        try:
-            # Get current request count
-            requests = await cache.get(key) or []
-            
-            # Filter requests within current window
-            recent_requests = [req_time for req_time in requests if req_time > window_start]
-            
-            # Check if limit exceeded
-            if len(recent_requests) >= settings.RATE_LIMIT_PER_MINUTE:
-                logger.warning(f"Rate limit exceeded for {client_id}")
-                return False
-            
-            # Add current request
-            recent_requests.append(current_time)
-            
-            # Update cache
-            await cache.set(key, recent_requests, 60)
-            
-            return True
-            
-        except Exception as e:
-            logger.error(f"Rate limit check error: {e}")
-            # Allow request if rate limiting fails
-            return True

@@ -492,6 +492,8 @@ async def logout_user(current_user: dict = Depends(get_current_user)):
 @auth_router.post("/seed-users")
 async def seed_users():
     """Seed database with test users (development only)"""
+    if settings.APP_ENV not in ("local", "dev"):
+        raise HTTPException(status_code=403, detail="Not available in production")
     try:
         result = await seed_users_data()
         
@@ -525,6 +527,8 @@ async def get_all_users(current_user: dict = Depends(get_current_user)):
 @auth_router.get("/check-schema")
 async def check_user_schema():
     """Check current user schema in database"""
+    if settings.APP_ENV not in ("local", "dev"):
+        raise HTTPException(status_code=403, detail="Not available in production")
     try:
         from db_simple import db
         
@@ -557,6 +561,8 @@ async def check_user_schema():
 @auth_router.post("/migrate-feature-usage")
 async def migrate_feature_usage():
     """Add feature usage count to existing users"""
+    if settings.APP_ENV not in ("local", "dev"):
+        raise HTTPException(status_code=403, detail="Not available in production")
     try:
         from db_simple import db
         

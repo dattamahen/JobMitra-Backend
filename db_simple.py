@@ -65,14 +65,22 @@ class Database:
         ]
         
     async def connect_to_mongo(self):
-        """Establish connection to MongoDB or use fallback mode."""
+        """Establish connection to MongoDB with connection pooling."""
         if not MONGODB_AVAILABLE:
             logger.warning("Using fallback mode — data will not persist")
             return
 
         try:
-            mongo_uri = os.getenv("MONGO_URI", "mongodb://localhost:27017/jobmitra")
-            self.client = AsyncIOMotorClient(mongo_uri)
+            from config import settings
+            mongo_uri = settings.MONGO_URI
+            self.client = AsyncIOMotorClient(
+                mongo_uri,
+                maxPoolSize=settings.MONGO_MAX_POOL_SIZE,
+                minPoolSize=settings.MONGO_MIN_POOL_SIZE,
+                serverSelectionTimeoutMS=5000,
+                connectTimeoutMS=5000,
+                retryWrites=True
+            )
 
             if "/" in mongo_uri and mongo_uri.split("/")[-1]:
                 db_name = mongo_uri.split("/")[-1].split("?")[0]
@@ -81,7 +89,7 @@ class Database:
 
             self.database = self.client[db_name]
             await self.client.admin.command('ping')
-            logger.info("Connected to MongoDB: %s", db_name)
+            logger.info("Connected to MongoDB: %s (pool: %d-%d)", db_name, settings.MONGO_MIN_POOL_SIZE, settings.MONGO_MAX_POOL_SIZE)
             self.fallback_mode = False
 
         except Exception as e:
@@ -234,42 +242,81 @@ async def create_job_listing(job_data: Dict[str, Any]) -> Optional[str]:
 
 
 async def search_jobs(query: str = "", filters: Dict[str, Any] = None, limit: int = 20) -> List[Dict[str, Any]]:
-    """Search for jobs based on criteria."""
+    """Search for jobs using text index and filters."""
     try:
         collection = db.database[COLLECTIONS["jobs"]]
-        
-        # Build search query
-        search_query = {}
-        
-        # Text search
+
+        search_query: Dict[str, Any] = {"is_active": True}
+
+        # Use text index for keyword search (much faster than $regex)
+        if query:
+            search_query["$text"] = {"$search": query}
+
+        # Apply filters
+        if filters:
+            if "skills" in filters and filters["skills"]:
+                search_query["skills_required"] = {"$in": filters["skills"]}
+            if "location_type" in filters and filters["location_type"]:
+                search_query["location.type"] = filters["location_type"]
+            if "experience_level" in filters and filters["experience_level"]:
+                search_query["experience_level"] = filters["experience_level"]
+
+        # Sort by text relevance if searching, otherwise by date
+        if query:
+            cursor = collection.find(
+                search_query, {"score": {"$meta": "textScore"}}
+            ).sort([("score", {"$meta": "textScore"})]).limit(limit)
+        else:
+            cursor = collection.find(search_query).sort("posted_date", -1).limit(limit)
+
+        jobs = await cursor.to_list(length=limit)
+
+        for job in jobs:
+            if "_id" in job:
+                job["_id"] = str(job["_id"])
+            job.pop("score", None)
+
+        return jobs
+
+    except Exception as e:
+        # Fallback to regex if text index not available
+        if "text index" in str(e).lower() or "$text" in str(e):
+            return await _search_jobs_regex_fallback(query, filters, limit)
+        logger.error("Error searching jobs: %s", e)
+        return []
+
+
+async def _search_jobs_regex_fallback(query: str, filters: Dict[str, Any], limit: int) -> List[Dict[str, Any]]:
+    """Fallback search using regex when text index is unavailable."""
+    try:
+        collection = db.database[COLLECTIONS["jobs"]]
+        search_query: Dict[str, Any] = {"is_active": True}
+
         if query:
             search_query["$or"] = [
                 {"title": {"$regex": query, "$options": "i"}},
                 {"description": {"$regex": query, "$options": "i"}},
                 {"company": {"$regex": query, "$options": "i"}}
             ]
-        
-        # Apply filters
+
         if filters:
-            if "skills" in filters:
-                search_query["required_skills"] = {"$in": filters["skills"]}
-            if "location_type" in filters:
-                search_query["location_type"] = filters["location_type"]
-            if "experience_level" in filters:
+            if "skills" in filters and filters["skills"]:
+                search_query["skills_required"] = {"$in": filters["skills"]}
+            if "location_type" in filters and filters["location_type"]:
+                search_query["location.type"] = filters["location_type"]
+            if "experience_level" in filters and filters["experience_level"]:
                 search_query["experience_level"] = filters["experience_level"]
-        
-        cursor = collection.find(search_query).sort("created_at", -1).limit(limit)
+
+        cursor = collection.find(search_query).sort("posted_date", -1).limit(limit)
         jobs = await cursor.to_list(length=limit)
-        
-        # Convert ObjectId to string
+
         for job in jobs:
             if "_id" in job:
                 job["_id"] = str(job["_id"])
-        
+
         return jobs
-        
     except Exception as e:
-        logger.error("Error searching jobs: %s", e)
+        logger.error("Regex search fallback failed: %s", e)
         return []
 
 
@@ -291,48 +338,58 @@ async def create_job_application(app_data: Dict[str, Any]) -> Optional[str]:
 async def get_user_applications(user_id: str, limit: int = 20) -> List[Dict[str, Any]]:
     """Get applications for a user from user profile's overall_jobs_applied array."""
     try:
-        # Get user profile to access overall_jobs_applied array (same as dashboard)
         user_profile = await get_user_profile(user_id)
         if not user_profile:
             return []
-        
-        # Get applications from overall_jobs_applied array
+
         overall_jobs_applied = user_profile.get("overall_jobs_applied", [])
-        
-        # Filter only applied jobs (is_applied=True) and get job details
-        applications = []
-        jobs_collection = db.database["jobs"]
-        
+
+        # Filter applied jobs and collect job_ids
+        applied_records = []
+        job_ids = []
         for app_record in overall_jobs_applied:
             if isinstance(app_record, dict) and app_record.get("is_applied", False):
                 job_id = app_record.get("job_id")
                 if job_id:
-                    # Get job details
-                    job = await jobs_collection.find_one({"job_id": job_id})
-                    if job:
-                        # Convert to application format
-                        application = {
-                            "_id": str(job.get("_id", "")),
-                            "application_id": f"app_{job_id}_{user_id}",
-                            "job_id": job_id,
-                            "user_id": user_id,
-                            "job_title": job.get("title", ""),
-                            "company": job.get("company", ""),
-                            "status": app_record.get("status", "applied"),
-                            "applied_date": app_record.get("applied_date", app_record.get("timestamp", "")),
-                            "match_percentage": app_record.get("match_percentage", 0),
-                            "match_analysis_done": app_record.get("match_analysis_done", False),
-                            "tailor_resume_done": app_record.get("tailor_resume_done", False),
-                            "created_at": app_record.get("timestamp", ""),
-                            "updated_at": app_record.get("timestamp", "")
-                        }
-                        applications.append(application)
-        
+                    applied_records.append(app_record)
+                    job_ids.append(job_id)
+
+        if not job_ids:
+            return []
+
+        # Batch fetch all jobs in ONE query instead of N queries
+        jobs_collection = db.database["jobs"]
+        jobs_cursor = jobs_collection.find({"job_id": {"$in": job_ids}})
+        jobs_map = {}
+        async for job in jobs_cursor:
+            jobs_map[job["job_id"]] = job
+
+        # Build application list
+        applications = []
+        for app_record in applied_records:
+            job_id = app_record.get("job_id")
+            job = jobs_map.get(job_id)
+            if job:
+                applications.append({
+                    "_id": str(job.get("_id", "")),
+                    "application_id": f"app_{job_id}_{user_id}",
+                    "job_id": job_id,
+                    "user_id": user_id,
+                    "job_title": job.get("title", ""),
+                    "company": job.get("company", ""),
+                    "status": app_record.get("status", "applied"),
+                    "applied_date": app_record.get("applied_date", app_record.get("timestamp", "")),
+                    "match_percentage": app_record.get("match_percentage", 0),
+                    "match_analysis_done": app_record.get("match_analysis_done", False),
+                    "tailor_resume_done": app_record.get("tailor_resume_done", False),
+                    "created_at": app_record.get("timestamp", ""),
+                    "updated_at": app_record.get("timestamp", "")
+                })
+
         # Sort by applied date (most recent first)
         applications.sort(key=lambda x: x.get("applied_date", ""), reverse=True)
-        
         return applications[:limit]
-        
+
     except Exception as e:
         logger.error("Error getting user applications: %s", e)
         return []
