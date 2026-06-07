@@ -165,14 +165,18 @@ async def get_dashboard(current_user: dict = Depends(get_current_user)):
                 }
             ]
         else:  # HR user
-            # Get HR-specific metrics from database
+            # Get HR-specific metrics from database using aggregation (not loading all docs)
             try:
                 hr_jobs_count = await db.database["jobs"].count_documents({"posted_by_hr_id": user_id})
                 hr_active_jobs = await db.database["jobs"].count_documents({"posted_by_hr_id": user_id, "is_active": True})
-                hr_jobs = await db.database["jobs"].find({"posted_by_hr_id": user_id}).to_list(None)
-                hr_applications_received = sum(
-                    len(job.get("applications_received", [])) for job in hr_jobs
-                )
+                # Use aggregation to count applications without loading all jobs into memory
+                pipeline = [
+                    {"$match": {"posted_by_hr_id": user_id}},
+                    {"$project": {"app_count": {"$size": {"$ifNull": ["$applications_received", []]}}}},
+                    {"$group": {"_id": None, "total": {"$sum": "$app_count"}}}
+                ]
+                agg_result = await db.database["jobs"].aggregate(pipeline).to_list(1)
+                hr_applications_received = agg_result[0]["total"] if agg_result else 0
             except Exception:
                 hr_jobs_count = 0
                 hr_active_jobs = 0
@@ -922,15 +926,19 @@ async def get_job_listings(
         user_profile = await db.database["users"].find_one({"user_id": user_id})
         applied_jobs_records = user_profile.get("overall_jobs_applied", []) if user_profile else []
         user_applied_jobs = []
+        applied_jobs_map = {}
         for app in applied_jobs_records:
             if isinstance(app, dict) and app.get("is_applied", False):
                 user_applied_jobs.append(app.get("job_id"))
+                applied_jobs_map[app.get("job_id")] = app
             elif isinstance(app, str):
                 user_applied_jobs.append(app)
         
-        # Get ALL matching jobs for intelligent scoring (we'll paginate after scoring)
+        # Get jobs with a reasonable limit to prevent memory issues
+        # Score in batches — fetch max 200 jobs for scoring (covers most use cases)
+        MAX_JOBS_FOR_SCORING = 200
         collection = db.database["jobs"]
-        cursor = collection.find(query).sort("posted_date", -1)
+        cursor = collection.find(query).sort("posted_date", -1).limit(MAX_JOBS_FOR_SCORING)
         
         all_jobs = []
         async for job in cursor:
@@ -939,7 +947,6 @@ async def get_job_listings(
             # Calculate intelligent matching score
             match_score = calculate_job_match_score(job, user_skills, user_certifications, user_experience_keywords)
             job["match_score"] = match_score
-            # Don't show match_percentage by default - only after analysis
             
             # Check if user already applied and add application state
             job_id = job.get("job_id")
@@ -947,15 +954,13 @@ async def get_job_listings(
             
             # Add application state if user has applied
             if job_id in user_applied_jobs:
-                app_record = next((app for app in applied_jobs_records if isinstance(app, dict) and app.get("job_id") == job_id), None)
+                app_record = applied_jobs_map.get(job_id)
                 if app_record:
                     job["match_analysis_done"] = app_record.get("match_analysis_done", False)
                     job["tailor_resume_done"] = app_record.get("tailor_resume_done", False)
-                    # Only show match percentage if analysis or tailor resume was done
                     if app_record.get("match_analysis_done") or app_record.get("tailor_resume_done"):
                         job["match_percentage"] = app_record.get("match_percentage", 0)
             
-            # Include ALL active jobs — unmatched ones appear at the bottom
             all_jobs.append(job)
         
         # Sort by match score (highest first), then by posted_date (newest first) for ties

@@ -302,19 +302,21 @@ async def seed_users_data():
         logger.error("Error seeding users: %s", e)
         return None
 
-async def list_all_users() -> List[Dict[str, Any]]:
-    """List all users (for admin purposes)"""
+async def list_all_users(page: int = 1, per_page: int = 50) -> List[Dict[str, Any]]:
+    """List all users with pagination (for admin purposes)"""
     try:
-        cursor = db.database[USERS_COLLECTION].find({}, {
-            "password_hash": 0  # Exclude password hash
-        })
-        users = await cursor.to_list(length=None)
-        
+        skip = (page - 1) * per_page
+        cursor = db.database[USERS_COLLECTION].find(
+            {},
+            {"password_hash": 0}
+        ).sort("last_active", -1).skip(skip).limit(per_page)
+        users = await cursor.to_list(length=per_page)
+
         for user in users:
             user["_id"] = str(user["_id"])
-            
+
         return users
-        
+
     except Exception as e:
         logger.error("Error listing users: %s", e)
         return []

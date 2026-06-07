@@ -69,6 +69,7 @@ from resume_tailor_endpoints import router as resume_tailor_router
 from credits_endpoints import router as credits_router
 from upload_endpoints import router as upload_router
 from prompt_endpoints import router as prompt_router
+from cv_bootstrap_endpoints import router as cv_bootstrap_router
 from professional_summary_endpoints import router as professional_summary_router
 
 
@@ -83,6 +84,10 @@ async def lifespan(app: FastAPI):
     try:
         await db.connect_to_mongo()
         logger.info("Database connection established (fallback=%s)", db.fallback_mode)
+        # Ensure indexes exist for optimal query performance
+        if not db.fallback_mode:
+            from db_indexes import ensure_indexes
+            await ensure_indexes(db.database)
     except Exception as e:
         logger.error("Failed to connect to database: %s", e)
 
@@ -121,6 +126,14 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    # Add rate limiting middleware
+    from rate_limiter import RateLimitMiddleware
+    app.add_middleware(RateLimitMiddleware, requests_per_minute=settings.RATE_LIMIT_PER_MINUTE)
+
+    # Add request ID for tracing
+    from request_id_middleware import RequestIDMiddleware
+    app.add_middleware(RequestIDMiddleware)
 
     # Global validation error handler
     @app.exception_handler(RequestValidationError)
@@ -233,6 +246,7 @@ def create_app() -> FastAPI:
     os.makedirs(uploads_dir, exist_ok=True)
     app.mount("/uploads", StaticFiles(directory=uploads_dir), name="uploads")
     app.include_router(prompt_router)  # Prompt management routes
+    app.include_router(cv_bootstrap_router)  # CV bootstrap for new users
     app.include_router(professional_summary_router, prefix="/api/v1")  # Professional summary generation
 
     # Health check endpoint

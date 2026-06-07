@@ -32,6 +32,15 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
     """Get current authenticated user"""
     try:
         token = credentials.credentials
+
+        # Check if token has been blacklisted (logged out)
+        from token_blacklist import is_token_blacklisted
+        if is_token_blacklisted(token):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Token has been revoked"
+            )
+
         payload = verify_token(token)
         
         if payload is None:
@@ -472,18 +481,22 @@ async def change_password(
         )
 
 @auth_router.post("/logout")
-async def logout_user(current_user: dict = Depends(get_current_user)):
-    """Logout user - invalidates the current session"""
+async def logout_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    """Logout user - blacklists the current token"""
     try:
-        # In a JWT-based system, logout is mainly handled on the frontend
-        # by removing the token. Here we can log the logout event or 
-        # implement token blacklisting if needed in the future.
-        
+        from token_blacklist import blacklist_token
+        token = credentials.credentials
+        blacklist_token(token)
+
+        # Decode to get user_id for logging
+        payload = verify_token(token)
+        user_id = payload.get("user_id", "unknown") if payload else "unknown"
+
         return {
             "message": "Logged out successfully",
-            "user_id": current_user["user_id"]
+            "user_id": user_id
         }
-        
+
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -493,6 +506,8 @@ async def logout_user(current_user: dict = Depends(get_current_user)):
 @auth_router.post("/seed-users")
 async def seed_users():
     """Seed database with test users (development only)"""
+    if settings.APP_ENV not in ("local", "dev"):
+        raise HTTPException(status_code=403, detail="Not available in production")
     try:
         result = await seed_users_data()
         
@@ -526,6 +541,8 @@ async def get_all_users(current_user: dict = Depends(get_current_user)):
 @auth_router.get("/check-schema")
 async def check_user_schema():
     """Check current user schema in database"""
+    if settings.APP_ENV not in ("local", "dev"):
+        raise HTTPException(status_code=403, detail="Not available in production")
     try:
         from db_simple import db
         
@@ -558,6 +575,8 @@ async def check_user_schema():
 @auth_router.post("/migrate-feature-usage")
 async def migrate_feature_usage():
     """Add feature usage count to existing users"""
+    if settings.APP_ENV not in ("local", "dev"):
+        raise HTTPException(status_code=403, detail="Not available in production")
     try:
         from db_simple import db
         
