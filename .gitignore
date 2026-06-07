@@ -150,3 +150,6 @@ migrate_*.py
 # Allow test files in tests/ directory
 !tests/
 !tests/**
+
+# Log files
+logs/

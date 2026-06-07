@@ -98,6 +98,7 @@ async def register_user(request: RegisterRequest):
             email=user["email"],
             first_name=user["first_name"],
             last_name=user["last_name"],
+            skills=user.get("skills", []),
             user_type=user.get("user_type", "candidate"),
             user_status=user.get("user_status", "active"),
             user_plan=user.get("user_plan", "free"),

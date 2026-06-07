@@ -8,6 +8,7 @@ import logging
 import uuid
 from db_simple import db
 from auth_utils import hash_password, verify_password
+from default_profile_data import get_random_default_skills, get_random_objective
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +39,10 @@ async def create_user(user_data: Dict[str, Any]) -> Dict[str, Any]:
         # Create timestamp
         now = datetime.utcnow()
         
+        # Determine default skills and objective
+        default_skills = user_data.get("skills") or get_random_default_skills()
+        default_summary = user_data.get("professional_summary") or get_random_objective()
+        
         # Create comprehensive user document with new schema
         user_doc = {
             "user_id": str(uuid.uuid4()),
@@ -54,7 +59,7 @@ async def create_user(user_data: Dict[str, Any]) -> Dict[str, Any]:
             "overall_experience_years": user_data.get("overall_experience_years"),
             "highest_qualification": user_data.get("highest_qualification"),
             "previous_organizations": [],
-            "skills": user_data.get("skills", []),
+            "skills": default_skills,
             "technical_skills": [],
             "work_experience": [],
             "education": [],
@@ -63,7 +68,7 @@ async def create_user(user_data: Dict[str, Any]) -> Dict[str, Any]:
             "contributions": None,
             "communication_skills": [],
             "ai_tools": [],
-            "professional_summary": None,
+            "professional_summary": default_summary,
             "current_role": None,
             "current_company": None,
             "portfolio_link": None,
@@ -134,9 +139,10 @@ async def create_user(user_data: Dict[str, Any]) -> Dict[str, Any]:
                 "current_company": "",
                 "total_experience": "",
                 "industry": "",
-                "skills": user_data.get("skills", []),
+                "skills": default_skills,
                 "current_salary": 0,
-                "expected_salary": 0
+                "expected_salary": 0,
+                "professional_summary": default_summary
             },
             "preferences": {
                 "job_locations": [],
