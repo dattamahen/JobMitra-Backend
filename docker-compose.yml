@@ -14,7 +14,7 @@ services:
       - REDIS_URL=redis://redis:6379
       - JWT_SECRET_KEY=${JWT_SECRET_KEY:-change-this-in-production-use-64-char-random-string}
       - GEMINI_API_KEY=${GEMINI_API_KEY}
-      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_ID=1090356197579-abdlof3j1luttp85oikdpet3e9k4p4gk.apps.googleusercontent.com
       - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:4200,https://www.jobmouka.com}
       - LOG_LEVEL=info
       - RATE_LIMIT_PER_MINUTE=100
