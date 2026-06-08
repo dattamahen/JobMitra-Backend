@@ -91,8 +91,14 @@ async def register_user(request: RegisterRequest):
             "user_type": request.user_type
         }
         
-        # HR accounts require email verification
+        # HR accounts require company email + email verification
         if request.user_type in ("hire", "hr"):
+            from email_domain_validator import is_company_email
+            if not is_company_email(request.email):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="HR registration requires a company email address. Public email providers (Gmail, Yahoo, Outlook, etc.) are not allowed."
+                )
             user_data["user_status"] = "pending_verification"
         
         user = await create_user(user_data)
