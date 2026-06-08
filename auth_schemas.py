@@ -83,7 +83,7 @@ class UserResponse(BaseModel):
     
     # User Classification
     user_type: Literal["candidate", "hire"] = "candidate"
-    user_status: Literal["active", "inactive"] = "active"
+    user_status: Literal["active", "inactive", "pending_verification"] = "active"
     user_plan: Literal["F", "P", "S"] = "F"
     
     # Feature Usage Tracking
@@ -177,7 +177,7 @@ class UserProfileResponse(BaseModel):
     
     # User Classification
     user_type: Literal["candidate", "hire"] = "candidate"
-    user_status: Literal["active", "inactive"] = "active"
+    user_status: Literal["active", "inactive", "pending_verification"] = "active"
     user_plan: Literal["free", "subscribed", "pro"] = "free"
     
     # Preferences
@@ -254,7 +254,7 @@ class UserProfileUpdateRequest(BaseModel):
     playstore_link: Optional[str] = None
     
     # User Classification
-    user_status: Optional[Literal["active", "inactive"]] = None
+    user_status: Optional[Literal["active", "inactive", "pending_verification"]] = None
     user_plan: Optional[Literal["free", "subscribed", "pro"]] = None
     
     # Preferences
