@@ -1,4 +1,4 @@
-"""
+﻿"""
 Tests for Core endpoints: health check, AI query, resume enhancement, logs.
 """
 import pytest
@@ -8,7 +8,7 @@ from httpx import AsyncClient, ASGITransport
 
 @pytest.fixture
 def app():
-    with patch("db_simple.db") as mock_db:
+    with patch("db.db") as mock_db:
         mock_db.fallback_mode = False
         mock_db.database = MagicMock()
         mock_db.connect_to_mongo = AsyncMock()
@@ -59,8 +59,8 @@ class TestAIQuery:
     """Test /ask endpoint."""
 
     @pytest.mark.asyncio
-    @patch("crew_agent_simple.run_crew_ai")
-    @patch("db_simple.log_to_db")
+    @patch("crew_agent.run_crew_ai")
+    @patch("db.log_to_db")
     async def test_ask_success(self, mock_log, mock_ai, client):
         mock_ai.return_value = {"answer": "FastAPI is a modern Python web framework."}
         mock_log.return_value = True
@@ -86,7 +86,7 @@ class TestAIQuery:
         assert response.status_code == 422
 
     @pytest.mark.asyncio
-    @patch("crew_agent_simple.run_crew_ai")
+    @patch("crew_agent.run_crew_ai")
     async def test_ask_ai_failure(self, mock_ai, client):
         mock_ai.return_value = None
         
@@ -102,8 +102,8 @@ class TestResumeEnhancement:
     """Test /resume-enhance endpoint."""
 
     @pytest.mark.asyncio
-    @patch("crew_agent_simple.run_resume_enhancement_crew")
-    @patch("db_simple.log_to_db")
+    @patch("crew_agent.run_resume_enhancement_crew")
+    @patch("db.log_to_db")
     async def test_enhance_resume_success(self, mock_log, mock_enhance, client):
         mock_enhance.return_value = {"enhanced_resume": "Enhanced version of the resume..."}
         mock_log.return_value = True
@@ -134,7 +134,7 @@ class TestResumeEnhancement:
         assert response.status_code == 400
 
     @pytest.mark.asyncio
-    @patch("crew_agent_simple.run_resume_enhancement_crew")
+    @patch("crew_agent.run_resume_enhancement_crew")
     async def test_enhance_resume_ai_failure(self, mock_enhance, client):
         mock_enhance.return_value = None
         
@@ -151,7 +151,7 @@ class TestLogs:
     """Test logs endpoints."""
 
     @pytest.mark.asyncio
-    @patch("db_simple.get_query_logs")
+    @patch("db.get_query_logs")
     async def test_get_logs_success(self, mock_logs, client):
         mock_logs.return_value = [
             {"query": "test query", "response": "test response", "timestamp": "2024-01-01"}
@@ -164,7 +164,7 @@ class TestLogs:
         assert data["count"] == 1
 
     @pytest.mark.asyncio
-    @patch("db_simple.get_query_logs")
+    @patch("db.get_query_logs")
     async def test_get_logs_with_limit(self, mock_logs, client):
         mock_logs.return_value = []
         
@@ -172,7 +172,7 @@ class TestLogs:
         assert response.status_code == 200
 
     @pytest.mark.asyncio
-    @patch("db_simple.get_query_logs")
+    @patch("db.get_query_logs")
     async def test_get_resume_logs(self, mock_logs, client):
         mock_logs.return_value = [
             {"query": "Resume Enhancement", "response": "enhanced", "metadata": {"process_type": "resume_enhancement"}}

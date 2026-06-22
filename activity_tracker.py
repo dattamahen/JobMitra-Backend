@@ -1,4 +1,4 @@
-"""
+﻿"""
 Activity Tracker — Persists user activities to MongoDB.
 Activities are stored in the user's `recent_activity` array
 and displayed on the dashboard.
@@ -47,7 +47,7 @@ async def log_user_activity(
         metadata: Optional extra data (job_id, score, etc.)
     """
     try:
-        from db_simple import db
+        from db import db
 
         if db.database is None:
             logger.warning("DB not connected — activity not persisted for %s", user_id)

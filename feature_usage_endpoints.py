@@ -1,4 +1,4 @@
-"""
+﻿"""
 Feature Usage Tracking Endpoints
 """
 
@@ -9,7 +9,7 @@ try:
 except ImportError:
     from typing_extensions import Literal
 from typing import Optional
-from db_simple import db
+from db import db
 from datetime import datetime
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from auth_utils import verify_token

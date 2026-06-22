@@ -22,13 +22,22 @@ def main():
         logger.warning("Missing environment variables: %s", settings.missing_env_vars)
 
     logger.info("Starting %s server on %s:%s", settings.APP_NAME, settings.HOST, settings.PORT)
-    uvicorn.run(
-        "main:app",
-        host=settings.HOST,
-        port=settings.PORT,
-        reload=settings.RELOAD,
-        log_level=settings.LOG_LEVEL
-    )
+
+    run_kwargs = {
+        "app": "main:app",
+        "host": settings.HOST,
+        "port": settings.PORT,
+        "log_level": settings.LOG_LEVEL,
+    }
+
+    if settings.APP_ENV == "local":
+        run_kwargs["reload"] = True
+    else:
+        run_kwargs["workers"] = settings.MAX_WORKERS
+        run_kwargs["access_log"] = False
+        run_kwargs["keep_alive_timeout"] = settings.KEEP_ALIVE_TIMEOUT
+
+    uvicorn.run(**run_kwargs)
 
 
 # Run the application

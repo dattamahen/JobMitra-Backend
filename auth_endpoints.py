@@ -1,4 +1,4 @@
-"""
+﻿"""
 Authentication API endpoints for JobMitra
 """
 
@@ -20,6 +20,7 @@ from auth_db import (
     create_user, authenticate_user, get_user_by_id, get_user_by_email,
     update_user_profile, change_user_password, seed_users_data, list_all_users
 )
+from db import db
 from auth_utils import create_access_token, verify_token, SECRET_KEY
 from activity_tracker import log_user_activity
 
@@ -90,7 +91,30 @@ async def register_user(request: RegisterRequest):
             "user_type": request.user_type
         }
         
+        # HR accounts require company email + email verification
+        if request.user_type in ("hire", "hr"):
+            from email_domain_validator import is_company_email
+            if not is_company_email(request.email):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="HR registration requires a company email address. Public email providers (Gmail, Yahoo, Outlook, etc.) are not allowed."
+                )
+            user_data["user_status"] = "pending_verification"
+        
         user = await create_user(user_data)
+        
+        # Send verification email for HR users
+        if request.user_type in ("hire", "hr"):
+            from email_service import email_service
+            from auth_utils import generate_verification_token
+            token = generate_verification_token()
+            # Store token in DB
+            await db.database["users"].update_one(
+                {"user_id": user["user_id"]},
+                {"$set": {"verification_token": token, "user_status": "pending_verification"}}
+            )
+            user_name = f"{request.first_name} {request.last_name}"
+            email_service.send_verification_email(request.email, token, user_name)
         
         # Create response
         return UserResponse(
@@ -544,7 +568,7 @@ async def check_user_schema():
     if settings.APP_ENV not in ("local", "dev"):
         raise HTTPException(status_code=403, detail="Not available in production")
     try:
-        from db_simple import db
+        from db import db
         
         # Get a sample user to see current schema
         sample_user = await db.database["users"].find_one({})
@@ -578,7 +602,7 @@ async def migrate_feature_usage():
     if settings.APP_ENV not in ("local", "dev"):
         raise HTTPException(status_code=403, detail="Not available in production")
     try:
-        from db_simple import db
+        from db import db
         
         # Simply add feature_usage_count to ALL users
         result = await db.database["users"].update_many(
@@ -597,12 +621,50 @@ async def migrate_feature_usage():
             detail=f"Migration failed: {str(e)}"
         )
 
+@auth_router.post("/verify-email")
+async def verify_email_endpoint(token: str = None, code: str = None):
+    """Verify HR email with token (from link) or code (6-char uppercase)"""
+    from db import db
+    from datetime import datetime, timedelta
+
+    lookup_value = token or code
+    if not lookup_value:
+        raise HTTPException(status_code=400, detail="Token or code is required")
+
+    # Find user by token (full token match or first 6 chars uppercase match)
+    user = await db.database["users"].find_one({"verification_token": {"$exists": True}})
+    
+    # Try full token match
+    user = await db.database["users"].find_one({"verification_token": lookup_value})
+    
+    # Try 6-char code match
+    if not user and len(lookup_value) == 6:
+        all_pending = db.database["users"].find({"user_status": "pending_verification", "verification_token": {"$exists": True}})
+        async for pending_user in all_pending:
+            stored_token = pending_user.get("verification_token", "")
+            if stored_token[:6].upper() == lookup_value.upper():
+                user = pending_user
+                break
+
+    if not user:
+        raise HTTPException(status_code=400, detail="Invalid or expired verification token")
+
+    # Activate the account
+    await db.database["users"].update_one(
+        {"user_id": user["user_id"]},
+        {"$set": {"user_status": "active", "is_verified": True},
+         "$unset": {"verification_token": ""}}
+    )
+
+    return {"message": "Email verified successfully. Your HR account is now active.", "user_id": user["user_id"]}
+
+
 @auth_router.post("/forgot-password")
 async def forgot_password(request: ForgotPasswordRequest):
     """Send password reset token"""
     from auth_utils import generate_reset_token
     from datetime import timedelta
-    from db_simple import db
+    from db import db
     from email_service import email_service
     
     user = await get_user_by_email(request.email)
@@ -629,7 +691,7 @@ async def forgot_password(request: ForgotPasswordRequest):
 @auth_router.post("/reset-password")
 async def reset_password(request: ResetPasswordRequest):
     """Reset password with token"""
-    from db_simple import db
+    from db import db
     
     user = await db.database["users"].find_one({
         "reset_token": request.token,

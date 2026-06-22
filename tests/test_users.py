@@ -1,4 +1,4 @@
-"""
+﻿"""
 Tests for User Management endpoints.
 Covers: create user, get user, update user profile.
 """
@@ -9,7 +9,7 @@ from httpx import AsyncClient, ASGITransport
 
 @pytest.fixture
 def app():
-    with patch("db_simple.db") as mock_db:
+    with patch("db.db") as mock_db:
         mock_db.fallback_mode = False
         mock_db.database = MagicMock()
         mock_db.connect_to_mongo = AsyncMock()
@@ -29,7 +29,7 @@ class TestCreateUser:
     """Test user creation via /api/v1/users."""
 
     @pytest.mark.asyncio
-    @patch("db_simple.create_user_profile")
+    @patch("db.create_user_profile")
     async def test_create_user_success(self, mock_create, client):
         mock_create.return_value = "inserted_id_123"
         
@@ -46,7 +46,7 @@ class TestCreateUser:
         assert data["user_id"] == "inserted_id_123"
 
     @pytest.mark.asyncio
-    @patch("db_simple.create_user_profile")
+    @patch("db.create_user_profile")
     async def test_create_user_failure(self, mock_create, client):
         mock_create.return_value = None
         
@@ -69,7 +69,7 @@ class TestGetUser:
     """Test get user profile via /api/v1/users/{user_id}."""
 
     @pytest.mark.asyncio
-    @patch("db_simple.get_user_profile")
+    @patch("db.get_user_profile")
     async def test_get_user_success(self, mock_get, client, sample_user):
         mock_get.return_value = sample_user
         
@@ -80,7 +80,7 @@ class TestGetUser:
         assert data["email"] == "test@example.com"
 
     @pytest.mark.asyncio
-    @patch("db_simple.get_user_profile")
+    @patch("db.get_user_profile")
     async def test_get_user_not_found(self, mock_get, client):
         mock_get.return_value = None
         
@@ -92,7 +92,7 @@ class TestUpdateUser:
     """Test update user profile via /api/v1/users/{user_id}."""
 
     @pytest.mark.asyncio
-    @patch("db_simple.update_user_profile")
+    @patch("db.update_user_profile")
     @patch("activity_tracker.log_user_activity")
     async def test_update_user_success(self, mock_log, mock_update, client):
         mock_update.return_value = True
@@ -106,7 +106,7 @@ class TestUpdateUser:
         assert response.json()["message"] == "User updated successfully"
 
     @pytest.mark.asyncio
-    @patch("db_simple.update_user_profile")
+    @patch("db.update_user_profile")
     async def test_update_user_not_found(self, mock_update, client):
         mock_update.return_value = False
         

@@ -1,10 +1,11 @@
-"""
+﻿"""
 FastAPI application factory and configuration.
 """
 
 from datetime import datetime
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -48,13 +49,12 @@ if settings.APP_ENV != "local":
 
 logger = logging.getLogger(__name__)
 
-from db_simple import db
+from db import db
 from endpoints import router as core_router
 from dashboard_endpoints import router as dashboard_router
 from api_routes import router as api_router
 from auth_endpoints import auth_router
 from hr_endpoints import hr_router
-from hr_test_endpoints import test_hr_router
 from job_application_endpoints import application_router
 from apply_endpoints import apply_router
 from match_analysis_endpoints import match_router
@@ -91,6 +91,13 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error("Failed to connect to database: %s", e)
 
+    # Initialize Redis cache
+    try:
+        from cache import cache
+        await cache.connect()
+    except Exception as e:
+        logger.warning("Redis cache unavailable: %s", e)
+
     # Start background job expiry scheduler
     from job_expiry_scheduler import start_expiry_scheduler
     start_expiry_scheduler()
@@ -117,6 +124,9 @@ def create_app() -> FastAPI:
         version=settings.VERSION,
         lifespan=lifespan
     )
+
+    # Add GZip compression for responses > 1KB
+    app.add_middleware(GZipMiddleware, minimum_size=1000)
 
     # Add CORS middleware
     app.add_middleware(

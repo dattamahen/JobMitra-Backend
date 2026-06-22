@@ -1,4 +1,4 @@
-"""
+﻿"""
 File upload endpoints for JobMitra Backend.
 Handles avatar/DP upload, retrieval, and deletion.
 """
@@ -10,7 +10,7 @@ from datetime import datetime
 from fastapi import APIRouter, HTTPException, UploadFile, File, Depends
 from fastapi.responses import JSONResponse
 from auth_endpoints import get_current_user
-from db_simple import db
+from db import db
 
 router = APIRouter(tags=["File Upload"])
 

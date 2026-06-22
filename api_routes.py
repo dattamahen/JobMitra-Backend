@@ -1,4 +1,4 @@
-"""
+﻿"""
 Additional API endpoints for JobMitra Backend.
 Provides comprehensive REST API for all features.
 """
@@ -12,7 +12,7 @@ from pydantic import BaseModel
 from auth_endpoints import auth_router
 
 # Import database functions
-from db_simple import (
+from db import (
     create_user_profile, get_user_profile, update_user_profile,
     search_jobs, create_job_listing,
     create_job_application, get_user_applications,

@@ -1,4 +1,4 @@
-"""
+﻿"""
 Credits and Payment endpoints for JobMitra Backend.
 Credits are stored as a subdocument inside the users collection.
 Payment audit log is kept in a separate payments collection.
@@ -7,7 +7,7 @@ Payment audit log is kept in a separate payments collection.
 from datetime import datetime
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from db_simple import db
+from db import db
 from activity_tracker import log_user_activity
 
 router = APIRouter(tags=["Credits & Payments"])

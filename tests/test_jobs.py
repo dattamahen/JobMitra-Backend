@@ -1,4 +1,4 @@
-"""
+﻿"""
 Tests for Job Management endpoints.
 Covers: job search, job details, applications, resume tailor, apply.
 """
@@ -10,7 +10,7 @@ from datetime import datetime
 
 @pytest.fixture
 def app():
-    with patch("db_simple.db") as mock_db:
+    with patch("db.db") as mock_db:
         mock_db.fallback_mode = False
         mock_db.database = MagicMock()
         mock_db.connect_to_mongo = AsyncMock()
@@ -31,7 +31,7 @@ class TestJobSearch:
 
     @pytest.mark.asyncio
     @patch("auth_db.get_user_by_id")
-    @patch("db_simple.db")
+    @patch("db.db")
     async def test_search_jobs_success(self, mock_db, mock_get_user, client, sample_user, sample_job, auth_headers):
         mock_get_user.return_value = sample_user
         
@@ -74,7 +74,7 @@ class TestJobApplications:
     """Test job application endpoints."""
 
     @pytest.mark.asyncio
-    @patch("db_simple.create_job_application")
+    @patch("db.create_job_application")
     async def test_create_application_success(self, mock_create, client):
         mock_create.return_value = "app_id_123"
         
@@ -88,7 +88,7 @@ class TestJobApplications:
         assert data["message"] == "Application created successfully"
 
     @pytest.mark.asyncio
-    @patch("db_simple.create_job_application")
+    @patch("db.create_job_application")
     async def test_create_application_failure(self, mock_create, client):
         mock_create.return_value = None
         
@@ -111,7 +111,7 @@ class TestResumeTailor:
 
     @pytest.mark.asyncio
     @patch("auth_db.get_user_by_id")
-    @patch("db_simple.db")
+    @patch("db.db")
     @patch("resume_tailor_agent.run_resume_tailor")
     async def test_tailor_preview_success(self, mock_tailor, mock_db, mock_get_user, client, sample_user, sample_job, auth_headers):
         mock_get_user.return_value = sample_user
@@ -150,7 +150,7 @@ class TestCloseJob:
 
     @pytest.mark.asyncio
     @patch("auth_db.get_user_by_id")
-    @patch("db_simple.db")
+    @patch("db.db")
     async def test_close_job_success(self, mock_db, mock_get_user, client, sample_user, sample_job, auth_headers):
         mock_get_user.return_value = sample_user
         
@@ -165,7 +165,7 @@ class TestCloseJob:
 
     @pytest.mark.asyncio
     @patch("auth_db.get_user_by_id")
-    @patch("db_simple.db")
+    @patch("db.db")
     async def test_close_job_not_found(self, mock_db, mock_get_user, client, sample_user, auth_headers):
         mock_get_user.return_value = sample_user
         

@@ -1,4 +1,4 @@
-"""
+﻿"""
 Shared test fixtures and configuration for JobMitra Backend tests.
 """
 import os
@@ -29,7 +29,7 @@ def event_loop():
 @pytest.fixture
 def mock_db():
     """Mock database instance."""
-    with patch("db_simple.db") as mock:
+    with patch("db.db") as mock:
         mock.fallback_mode = False
         mock.database = MagicMock()
         yield mock

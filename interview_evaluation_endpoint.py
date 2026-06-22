@@ -1,8 +1,8 @@
-from fastapi import APIRouter, HTTPException
+﻿from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import List, Dict, Any
 from multi_llm_service import MultiLLMService
-from db_simple import create_mock_interview, get_user_mock_interviews
+from db import create_mock_interview, get_user_mock_interviews
 from prompt_manager import prompt_manager
 from api_contracts import (
     InterviewEvaluationResponse,

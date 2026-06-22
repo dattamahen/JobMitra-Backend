@@ -1,4 +1,4 @@
-"""
+﻿"""
 Background scheduler to auto-expire stale job listings.
 Runs periodically to mark jobs as expired/inactive based on:
 1. Past application_deadline
@@ -10,7 +10,7 @@ import asyncio
 import logging
 import os
 from datetime import datetime, timedelta
-from db_simple import db
+from db import db
 
 logger = logging.getLogger(__name__)
 

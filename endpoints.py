@@ -1,4 +1,4 @@
-"""
+﻿"""
 Core API endpoints for JobMitra Backend.
 """
 
@@ -7,8 +7,14 @@ from fastapi import APIRouter, HTTPException
 import logging
 
 from models import QueryRequest, QueryResponse, ResumeEnhanceRequest, ResumeEnhanceResponse
-from crew_agent_simple import run_crew_ai, run_resume_enhancement_crew
-from db_simple import log_to_db
+from db import log_to_db
+
+try:
+    from crew_agent import run_crew_ai, run_resume_enhancement_crew
+except (ImportError, TypeError) as e:
+    logging.getLogger(__name__).warning("CrewAI unavailable (%s), using multi_llm_service fallback", e)
+    run_crew_ai = None
+    run_resume_enhancement_crew = None
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +53,9 @@ async def ask_question(request: QueryRequest):
         
         user_query = request.query.strip()
         logger.info("Received query: %s", user_query[:100])
+        
+        if run_crew_ai is None:
+            raise HTTPException(status_code=503, detail="AI service temporarily unavailable")
         
         ai_response = run_crew_ai(user_query)
         
@@ -128,6 +137,9 @@ async def enhance_resume(request: ResumeEnhanceRequest):
         logger.info("Resume enhancement request (resume=%d chars, JD=%d chars)",
                      len(resume_content), len(job_desc_content))
         
+        if run_resume_enhancement_crew is None:
+            raise HTTPException(status_code=503, detail="AI service temporarily unavailable")
+        
         enhancement_result = run_resume_enhancement_crew(resume_content, job_desc_content)
         
         if not enhancement_result or not enhancement_result.get("enhanced_resume"):
@@ -191,8 +203,8 @@ async def get_recent_logs(limit: int = 10):
         elif limit < 1:
             limit = 10
             
-        # Import the function from db_simple
-        from db_simple import get_query_logs
+        # Import the function from db
+        from db import get_query_logs
         logs = await get_query_logs(limit)
         
         return {
@@ -228,7 +240,7 @@ async def get_recent_resume_logs(limit: int = 10):
             limit = 10
         
         # Get all logs and filter for resume enhancement
-        from db_simple import get_query_logs
+        from db import get_query_logs
         all_logs = await get_query_logs(100)  # Get more logs to filter
         
         resume_logs = [log for log in all_logs if 

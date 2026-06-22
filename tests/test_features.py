@@ -1,4 +1,4 @@
-"""
+﻿"""
 Tests for Mock Interviews, Dashboard, and Learning Resources endpoints.
 """
 import pytest
@@ -9,7 +9,7 @@ from datetime import datetime
 
 @pytest.fixture
 def app():
-    with patch("db_simple.db") as mock_db:
+    with patch("db.db") as mock_db:
         mock_db.fallback_mode = False
         mock_db.database = MagicMock()
         mock_db.connect_to_mongo = AsyncMock()
@@ -31,7 +31,7 @@ class TestMockInterviews:
     """Test mock interview endpoints."""
 
     @pytest.mark.asyncio
-    @patch("db_simple.create_mock_interview")
+    @patch("db.create_mock_interview")
     async def test_create_mock_interview_success(self, mock_create, client):
         mock_create.return_value = "session_id_123"
         
@@ -46,7 +46,7 @@ class TestMockInterviews:
         assert "session_id" in data
 
     @pytest.mark.asyncio
-    @patch("db_simple.create_mock_interview")
+    @patch("db.create_mock_interview")
     async def test_create_mock_interview_failure(self, mock_create, client):
         mock_create.return_value = None
         
@@ -65,7 +65,7 @@ class TestMockInterviews:
         assert response.status_code == 422
 
     @pytest.mark.asyncio
-    @patch("db_simple.get_user_mock_interviews")
+    @patch("db.get_user_mock_interviews")
     async def test_get_user_mock_interviews(self, mock_get, client):
         mock_get.return_value = [
             {
@@ -85,7 +85,7 @@ class TestMockInterviews:
         assert data["interviews"][0]["skill"] == "Python"
 
     @pytest.mark.asyncio
-    @patch("db_simple.get_user_mock_interviews")
+    @patch("db.get_user_mock_interviews")
     async def test_get_mock_interviews_empty(self, mock_get, client):
         mock_get.return_value = []
         
@@ -100,7 +100,7 @@ class TestDashboard:
     """Test dashboard endpoints."""
 
     @pytest.mark.asyncio
-    @patch("db_simple.get_user_dashboard")
+    @patch("db.get_user_dashboard")
     async def test_get_dashboard_success(self, mock_get, client, sample_user):
         mock_get.return_value = {
             "user_id": "test_user_001",
@@ -118,7 +118,7 @@ class TestDashboard:
         assert data["applications_count"] == 5
 
     @pytest.mark.asyncio
-    @patch("db_simple.get_user_dashboard")
+    @patch("db.get_user_dashboard")
     async def test_get_dashboard_not_found(self, mock_get, client):
         mock_get.return_value = None
         
@@ -132,7 +132,7 @@ class TestLearningResources:
     """Test learning resources endpoints."""
 
     @pytest.mark.asyncio
-    @patch("db_simple.get_learning_resources")
+    @patch("db.get_learning_resources")
     async def test_get_resources_no_filter(self, mock_get, client):
         mock_get.return_value = [
             {"title": "Python Basics", "skill": "Python", "level": "beginner"},
@@ -145,7 +145,7 @@ class TestLearningResources:
         assert data["count"] == 2
 
     @pytest.mark.asyncio
-    @patch("db_simple.get_learning_resources")
+    @patch("db.get_learning_resources")
     async def test_get_resources_with_skill_filter(self, mock_get, client):
         mock_get.return_value = [
             {"title": "Python Basics", "skill": "Python", "level": "beginner"}
@@ -157,7 +157,7 @@ class TestLearningResources:
         assert data["filters"]["skill"] == "Python"
 
     @pytest.mark.asyncio
-    @patch("db_simple.get_learning_resources")
+    @patch("db.get_learning_resources")
     async def test_get_resources_with_level_filter(self, mock_get, client):
         mock_get.return_value = []
         
@@ -172,7 +172,7 @@ class TestUserProgress:
     """Test user progress endpoints."""
 
     @pytest.mark.asyncio
-    @patch("db_simple.get_user_progress")
+    @patch("db.get_user_progress")
     async def test_get_progress_success(self, mock_get, client):
         mock_get.return_value = {
             "user_id": "test_user_001",
@@ -187,7 +187,7 @@ class TestUserProgress:
         assert data["total_learning_hours"] == 25
 
     @pytest.mark.asyncio
-    @patch("db_simple.get_user_progress")
+    @patch("db.get_user_progress")
     async def test_get_progress_not_found(self, mock_get, client):
         mock_get.return_value = None
         
