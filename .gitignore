@@ -153,3 +153,13 @@ migrate_*.py
 
 # Log files
 logs/
+
+# Generated reports
+reports/
+
+# User uploads
+uploads/
+
+# Test reports
+tests/reports/
+tests/e2e/reports/

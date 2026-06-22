@@ -1,4 +1,4 @@
-"""
+﻿"""
 Resume API endpoints for JobMitra
 """
 
@@ -13,7 +13,7 @@ from pydantic import BaseModel
 import uuid
 
 from auth_endpoints import get_current_user
-from db_simple import db
+from db import db
 
 # Create router
 resume_router = APIRouter(prefix="/api/v1", tags=["Resume"])

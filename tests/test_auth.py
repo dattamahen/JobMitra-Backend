@@ -1,4 +1,4 @@
-"""
+﻿"""
 Tests for Authentication endpoints.
 Covers: register, login, logout, profile, change-password, forgot/reset password.
 """
@@ -11,7 +11,7 @@ from datetime import datetime
 @pytest.fixture
 def app():
     """Create test app instance."""
-    with patch("db_simple.db") as mock_db:
+    with patch("db.db") as mock_db:
         mock_db.fallback_mode = False
         mock_db.database = MagicMock()
         mock_db.connect_to_mongo = AsyncMock()
@@ -241,7 +241,7 @@ class TestForgotResetPassword:
 
     @pytest.mark.asyncio
     @patch("auth_db.get_user_by_email")
-    @patch("db_simple.db")
+    @patch("db.db")
     @patch("email_service.email_service")
     async def test_forgot_password_existing_email(self, mock_email, mock_db, mock_get_user, client, sample_user):
         mock_get_user.return_value = sample_user

@@ -1,4 +1,4 @@
-"""
+﻿"""
 Resume Tailor API endpoints using CrewAI and OpenAI
 """
 import logging
@@ -10,7 +10,7 @@ from typing import Dict, Any, List
 from pydantic import BaseModel
 from auth_endpoints import get_current_user
 from resume_tailor_agent import run_resume_tailor
-from db_simple import db
+from db import db
 from api_contracts import (
     TailorPreviewResponse as TailorPreviewContract,
     TailorResumeResponse as TailorResumeContract,

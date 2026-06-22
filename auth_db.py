@@ -1,4 +1,4 @@
-"""
+﻿"""
 Database operations for authentication and user management
 """
 
@@ -6,7 +6,7 @@ from typing import Optional, Dict, Any, List
 from datetime import datetime
 import logging
 import uuid
-from db_simple import db
+from db import db
 from auth_utils import hash_password, verify_password
 from default_profile_data import get_random_default_skills, get_random_objective
 

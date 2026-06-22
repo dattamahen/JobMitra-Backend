@@ -1,158 +1,187 @@
 """
-MongoDB database connection and operations module.
-Handles async database operations using motor driver.
+Simplified MongoDB database functions with fallback mode.
 """
 
+import os
 import logging
+from datetime import datetime
+from typing import Optional, Dict, Any, List
+
 logger = logging.getLogger(__name__)
 
-import os
-from datetime import datetime
-from motor.motor_asyncio import AsyncIOMotorClient
-from typing import Optional, Dict, Any, List
-from pymongo import IndexModel
-
-# Temporarily comment out schemas import to avoid dependency issues
-# from schemas import (
-#     COLLECTION_NAMES, 
-#     get_indexes,
-#     UserProfile,
-#     JobListing,
-#     JobApplication,
-#     Resume,
-#     MockInterviewSession,
-#     LearningResource,
-#     SkillAssessment,
-#     UserProgress,
-#     UserSubscription,
-#     UserDashboard,
-#     QueryLog,
-#     SystemConfig
-# )
+try:
+    from motor.motor_asyncio import AsyncIOMotorClient
+    MONGODB_AVAILABLE = True
+except ImportError:
+    logger.warning("MongoDB drivers not available — using fallback mode")
+    MONGODB_AVAILABLE = False
+    AsyncIOMotorClient = None
 
 
 class Database:
-    """MongoDB database handler class."""
+    """Database handler class with fallback mode."""
     
     def __init__(self):
         self.client: Optional[AsyncIOMotorClient] = None
         self.database = None
+        self.fallback_mode = not MONGODB_AVAILABLE
+        
+        # Fallback in-memory storage
+        self.fallback_data = {
+            "users": {},
+            "jobs": {},
+            "applications": {},
+            "mock_interviews": {},
+            "learning_resources": [],
+            "user_progress": {},
+            "dashboards": {},
+            "query_logs": []
+        }
+        
+        if self.fallback_mode:
+            self._seed_fallback_data()
+        
+    def _seed_fallback_data(self):
+        """Add sample data for fallback mode."""
+        self.fallback_data["learning_resources"] = [
+            {
+                "title": "Python Programming Fundamentals",
+                "description": "Learn Python basics for web development",
+                "skill": "Python",
+                "level": "beginner",
+                "type": "course",
+                "url": "https://example.com/python-course",
+                "duration_minutes": 480
+            },
+            {
+                "title": "React.js Complete Guide",
+                "description": "Master React.js for frontend development",
+                "skill": "React",
+                "level": "intermediate",
+                "type": "course",
+                "url": "https://example.com/react-course",
+                "duration_minutes": 720
+            }
+        ]
         
     async def connect_to_mongo(self):
-        """Establish connection to MongoDB using URI from environment variables."""
+        """Establish connection to MongoDB with connection pooling."""
+        if not MONGODB_AVAILABLE:
+            if os.getenv("APP_ENV", "local") in ("prod", "production"):
+                raise RuntimeError("MongoDB drivers required in production — cannot use fallback mode")
+            logger.warning("Using fallback mode — data will not persist")
+            return
+
         try:
-            # Get MongoDB URI from environment variables
-            mongo_uri = os.getenv("MONGO_URI", "mongodb://localhost:27017/jobmitra")
-            
-            # Create async MongoDB client
-            self.client = AsyncIOMotorClient(mongo_uri)
-            
-            # Extract database name from URI or use default
+            from config import settings
+            mongo_uri = settings.MONGO_URI
+            self.client = AsyncIOMotorClient(
+                mongo_uri,
+                maxPoolSize=settings.MONGO_MAX_POOL_SIZE,
+                minPoolSize=settings.MONGO_MIN_POOL_SIZE,
+                serverSelectionTimeoutMS=5000,
+                connectTimeoutMS=5000,
+                retryWrites=True
+            )
+
             if "/" in mongo_uri and mongo_uri.split("/")[-1]:
-                db_name = mongo_uri.split("/")[-1]
+                db_name = mongo_uri.split("/")[-1].split("?")[0]
             else:
                 db_name = "jobmitra"
-                
+
             self.database = self.client[db_name]
-            
-            # Test the connection
-            await self.client.admin.command('ismaster')
-            logger.debug("Successfully connected to MongoDB: %s", db_name)
-            
-            # Setup indexes for performance
-            await self.setup_indexes()
-            
+            await self.client.admin.command('ping')
+            logger.info("Connected to MongoDB: %s (pool: %d-%d)", db_name, settings.MONGO_MIN_POOL_SIZE, settings.MONGO_MAX_POOL_SIZE)
+            self.fallback_mode = False
+
         except Exception as e:
-            logger.error("connecting to MongoDB: %s", e)
-            raise e
-    
-    async def setup_indexes(self):
-        """Setup database indexes for performance optimization."""
-        try:
-            # Temporarily disable index setup due to schemas dependency
-            logger.info("Skipping index setup for now - will be implemented later")
-            
-        except Exception as e:
-            logger.error("setting up indexes: %s", e)
-            # Don't raise error as this is not critical for basic functionality
+            logger.error("MongoDB connection failed: %s", e)
+            self.fallback_mode = True
     
     async def close_mongo_connection(self):
         """Close the MongoDB connection."""
-        if self.client:
+        if self.client and not self.fallback_mode:
             self.client.close()
             logger.info("MongoDB connection closed")
+        else:
+            logger.debug("Fallback mode — no connection to close")
 
 
 # Global database instance
 db = Database()
 
 
-async def log_to_db(query: str, response: str, user_id: Optional[str] = None, 
-                   processing_time_ms: Optional[int] = None) -> bool:
-    """
-    Log query and response to MongoDB collection.
-    
-    Args:
-        query (str): User's input query
-        response (str): AI-generated response
-        user_id (str, optional): User ID if authenticated
-        processing_time_ms (int, optional): Processing time in milliseconds
-        
-    Returns:
-        bool: True if logged successfully, False otherwise
-    """
+# Collection names
+COLLECTIONS = {
+    "users": "users",
+    "jobs": "job_listings", 
+    "applications": "job_applications",
+    "mock_interviews": "mock_interview_sessions",
+    "learning_resources": "learning_resources",
+    "user_progress": "user_progress",
+    "dashboards": "user_dashboards",
+    "query_logs": "query_logs"
+}
+
+
+# Database Functions
+async def log_to_db(query: str, response: str, metadata: Dict[str, Any] = None):
+    """Log query and response to database."""
     try:
-        # Create log entry with timestamp
-        log_entry = QueryLog(
-            user_id=user_id,
-            query=query,
-            response=response,
-            processing_time_ms=processing_time_ms
-        )
+        log_entry = {
+            "query": query,
+            "response": response,
+            "metadata": metadata or {},
+            "timestamp": datetime.utcnow(),
+            "created_at": datetime.utcnow()
+        }
         
-        # Insert into query_logs collection
-        collection = db.database[COLLECTION_NAMES["query_logs"]]
-        result = await collection.insert_one(log_entry.dict(by_alias=True, exclude_unset=True))
+        if db.fallback_mode:
+            db.fallback_data["query_logs"].append(log_entry)
+            if len(db.fallback_data["query_logs"]) > 100:
+                db.fallback_data["query_logs"] = db.fallback_data["query_logs"][-100:]
+            logger.debug("Log saved to fallback storage")
+        else:
+            collection = db.database[COLLECTIONS["query_logs"]]
+            result = await collection.insert_one(log_entry)
+            logger.debug("Log entry saved: %s", result.inserted_id)
         
-        logger.debug("Log entry saved with ID: %s", result.inserted_id)
         return True
         
     except Exception as e:
-        logger.error("logging to database: %s", e)
+        logger.error("Error logging to database: %s", e)
         return False
 
 
 async def get_query_logs(limit: int = 10, user_id: Optional[str] = None):
-    """
-    Retrieve recent query logs from database.
-    
-    Args:
-        limit (int): Number of logs to retrieve
-        user_id (str, optional): Filter by user ID
-        
-    Returns:
-        list: List of query log documents
-    """
+    """Retrieve recent query logs from database."""
     try:
-        collection = db.database[COLLECTION_NAMES["query_logs"]]
-        
-        # Build query filter
-        query_filter = {}
-        if user_id:
-            query_filter["user_id"] = user_id
+        if db.fallback_mode:
+            # Use fallback storage
+            logs = db.fallback_data["query_logs"]
+            if user_id:
+                logs = [log for log in logs if log.get("user_id") == user_id]
+            return logs[-limit:] if logs else []
+        else:
+            # Use MongoDB
+            collection = db.database[COLLECTIONS["query_logs"]]
             
-        cursor = collection.find(query_filter).sort("created_at", -1).limit(limit)
-        logs = await cursor.to_list(length=limit)
-        
-        # Convert ObjectId to string for JSON serialization
-        for log in logs:
-            if "_id" in log:
-                log["_id"] = str(log["_id"])
+            query_filter = {}
+            if user_id:
+                query_filter["user_id"] = user_id
                 
-        return logs
+            cursor = collection.find(query_filter).sort("created_at", -1).limit(limit)
+            logs = await cursor.to_list(length=limit)
+            
+            # Convert ObjectId to string for JSON serialization
+            for log in logs:
+                if "_id" in log:
+                    log["_id"] = str(log["_id"])
+                    
+            return logs
         
     except Exception as e:
-        logger.error("retrieving logs: %s", e)
+        logger.error("Error retrieving logs: %s", e)
         return []
 
 
@@ -160,32 +189,34 @@ async def get_query_logs(limit: int = 10, user_id: Optional[str] = None):
 async def create_user_profile(user_data: Dict[str, Any]) -> Optional[str]:
     """Create a new user profile."""
     try:
-        user_profile = UserProfile(**user_data)
-        collection = db.database[COLLECTION_NAMES["users"]]
-        result = await collection.insert_one(user_profile.dict(by_alias=True, exclude_unset=True))
+        user_data["created_at"] = datetime.utcnow()
+        user_data["updated_at"] = datetime.utcnow()
+        
+        collection = db.database[COLLECTIONS["users"]]
+        result = await collection.insert_one(user_data)
         return str(result.inserted_id)
     except Exception as e:
-        logger.error("creating user profile: %s", e)
+        logger.error("Error creating user profile: %s", e)
         return None
 
 
 async def get_user_profile(user_id: str) -> Optional[Dict[str, Any]]:
     """Get user profile by user_id."""
     try:
-        collection = db.database[COLLECTION_NAMES["users"]]
+        collection = db.database[COLLECTIONS["users"]]
         user = await collection.find_one({"user_id": user_id})
         if user:
             user["_id"] = str(user["_id"])
         return user
     except Exception as e:
-        logger.error("getting user profile: %s", e)
+        logger.error("Error getting user profile: %s", e)
         return None
 
 
 async def update_user_profile(user_id: str, update_data: Dict[str, Any]) -> bool:
     """Update user profile."""
     try:
-        collection = db.database[COLLECTION_NAMES["users"]]
+        collection = db.database[COLLECTIONS["users"]]
         update_data["updated_at"] = datetime.utcnow()
         result = await collection.update_one(
             {"user_id": user_id},
@@ -193,7 +224,7 @@ async def update_user_profile(user_id: str, update_data: Dict[str, Any]) -> bool
         )
         return result.modified_count > 0
     except Exception as e:
-        logger.error("updating user profile: %s", e)
+        logger.error("Error updating user profile: %s", e)
         return False
 
 
@@ -201,73 +232,168 @@ async def update_user_profile(user_id: str, update_data: Dict[str, Any]) -> bool
 async def create_job_listing(job_data: Dict[str, Any]) -> Optional[str]:
     """Create a new job listing."""
     try:
-        job_listing = JobListing(**job_data)
-        collection = db.database[COLLECTION_NAMES["jobs"]]
-        result = await collection.insert_one(job_listing.dict(by_alias=True, exclude_unset=True))
+        job_data["created_at"] = datetime.utcnow()
+        job_data["updated_at"] = datetime.utcnow()
+        
+        collection = db.database[COLLECTIONS["jobs"]]
+        result = await collection.insert_one(job_data)
         return str(result.inserted_id)
     except Exception as e:
-        logger.error("creating job listing: %s", e)
+        logger.error("Error creating job listing: %s", e)
         return None
 
 
-async def search_jobs(query: str, filters: Optional[Dict[str, Any]] = None, 
-                     limit: int = 20) -> List[Dict[str, Any]]:
-    """Search for jobs based on query and filters."""
+async def search_jobs(query: str = "", filters: Dict[str, Any] = None, limit: int = 20) -> List[Dict[str, Any]]:
+    """Search for jobs using text index and filters."""
     try:
-        collection = db.database[COLLECTION_NAMES["jobs"]]
-        
-        # Build search pipeline
-        search_query = {"is_active": True}
-        
+        collection = db.database[COLLECTIONS["jobs"]]
+
+        search_query: Dict[str, Any] = {"is_active": True}
+
+        # Use text index for keyword search (much faster than $regex)
         if query:
             search_query["$text"] = {"$search": query}
-            
+
+        # Apply filters
         if filters:
-            if "skills" in filters:
-                search_query["skills"] = {"$in": filters["skills"]}
-            if "location_type" in filters:
+            if "skills" in filters and filters["skills"]:
+                search_query["skills_required"] = {"$in": filters["skills"]}
+            if "location_type" in filters and filters["location_type"]:
                 search_query["location.type"] = filters["location_type"]
-            if "experience_level" in filters:
+            if "experience_level" in filters and filters["experience_level"]:
                 search_query["experience_level"] = filters["experience_level"]
-                
-        cursor = collection.find(search_query).limit(limit)
+
+        # Sort by text relevance if searching, otherwise by date
+        if query:
+            cursor = collection.find(
+                search_query, {"score": {"$meta": "textScore"}}
+            ).sort([("score", {"$meta": "textScore"})]).limit(limit)
+        else:
+            cursor = collection.find(search_query).sort("posted_date", -1).limit(limit)
+
         jobs = await cursor.to_list(length=limit)
-        
+
         for job in jobs:
-            job["_id"] = str(job["_id"])
-            
+            if "_id" in job:
+                job["_id"] = str(job["_id"])
+            job.pop("score", None)
+
+        return jobs
+
+    except Exception as e:
+        # Fallback to regex if text index not available
+        if "text index" in str(e).lower() or "$text" in str(e):
+            return await _search_jobs_regex_fallback(query, filters, limit)
+        logger.error("Error searching jobs: %s", e)
+        return []
+
+
+async def _search_jobs_regex_fallback(query: str, filters: Dict[str, Any], limit: int) -> List[Dict[str, Any]]:
+    """Fallback search using regex when text index is unavailable."""
+    try:
+        collection = db.database[COLLECTIONS["jobs"]]
+        search_query: Dict[str, Any] = {"is_active": True}
+
+        if query:
+            search_query["$or"] = [
+                {"title": {"$regex": query, "$options": "i"}},
+                {"description": {"$regex": query, "$options": "i"}},
+                {"company": {"$regex": query, "$options": "i"}}
+            ]
+
+        if filters:
+            if "skills" in filters and filters["skills"]:
+                search_query["skills_required"] = {"$in": filters["skills"]}
+            if "location_type" in filters and filters["location_type"]:
+                search_query["location.type"] = filters["location_type"]
+            if "experience_level" in filters and filters["experience_level"]:
+                search_query["experience_level"] = filters["experience_level"]
+
+        cursor = collection.find(search_query).sort("posted_date", -1).limit(limit)
+        jobs = await cursor.to_list(length=limit)
+
+        for job in jobs:
+            if "_id" in job:
+                job["_id"] = str(job["_id"])
+
         return jobs
     except Exception as e:
-        logger.error("searching jobs: %s", e)
+        logger.error("Regex search fallback failed: %s", e)
         return []
 
 
 # Application Management Functions
-async def create_job_application(application_data: Dict[str, Any]) -> Optional[str]:
+async def create_job_application(app_data: Dict[str, Any]) -> Optional[str]:
     """Create a new job application."""
     try:
-        job_application = JobApplication(**application_data)
-        collection = db.database[COLLECTION_NAMES["applications"]]
-        result = await collection.insert_one(job_application.dict(by_alias=True, exclude_unset=True))
+        app_data["created_at"] = datetime.utcnow()
+        app_data["updated_at"] = datetime.utcnow()
+        
+        collection = db.database[COLLECTIONS["applications"]]
+        result = await collection.insert_one(app_data)
         return str(result.inserted_id)
     except Exception as e:
-        logger.error("creating job application: %s", e)
+        logger.error("Error creating application: %s", e)
         return None
 
 
 async def get_user_applications(user_id: str, limit: int = 20) -> List[Dict[str, Any]]:
-    """Get all applications for a user."""
+    """Get applications for a user from user profile's overall_jobs_applied array."""
     try:
-        collection = db.database[COLLECTION_NAMES["applications"]]
-        cursor = collection.find({"user_id": user_id}).sort("created_at", -1).limit(limit)
-        applications = await cursor.to_list(length=limit)
-        
-        for app in applications:
-            app["_id"] = str(app["_id"])
-            
-        return applications
+        user_profile = await get_user_profile(user_id)
+        if not user_profile:
+            return []
+
+        overall_jobs_applied = user_profile.get("overall_jobs_applied", [])
+
+        # Filter applied jobs and collect job_ids
+        applied_records = []
+        job_ids = []
+        for app_record in overall_jobs_applied:
+            if isinstance(app_record, dict) and app_record.get("is_applied", False):
+                job_id = app_record.get("job_id")
+                if job_id:
+                    applied_records.append(app_record)
+                    job_ids.append(job_id)
+
+        if not job_ids:
+            return []
+
+        # Batch fetch all jobs in ONE query instead of N queries
+        jobs_collection = db.database["jobs"]
+        jobs_cursor = jobs_collection.find({"job_id": {"$in": job_ids}})
+        jobs_map = {}
+        async for job in jobs_cursor:
+            jobs_map[job["job_id"]] = job
+
+        # Build application list
+        applications = []
+        for app_record in applied_records:
+            job_id = app_record.get("job_id")
+            job = jobs_map.get(job_id)
+            if job:
+                applications.append({
+                    "_id": str(job.get("_id", "")),
+                    "application_id": f"app_{job_id}_{user_id}",
+                    "job_id": job_id,
+                    "user_id": user_id,
+                    "job_title": job.get("title", ""),
+                    "company": job.get("company", ""),
+                    "status": app_record.get("status", "applied"),
+                    "applied_date": app_record.get("applied_date", app_record.get("timestamp", "")),
+                    "match_percentage": app_record.get("match_percentage", 0),
+                    "match_analysis_done": app_record.get("match_analysis_done", False),
+                    "tailor_resume_done": app_record.get("tailor_resume_done", False),
+                    "created_at": app_record.get("timestamp", ""),
+                    "updated_at": app_record.get("timestamp", "")
+                })
+
+        # Sort by applied date (most recent first)
+        applications.sort(key=lambda x: x.get("applied_date", ""), reverse=True)
+        return applications[:limit]
+
     except Exception as e:
-        logger.error("getting user applications: %s", e)
+        logger.error("Error getting user applications: %s", e)
         return []
 
 
@@ -275,57 +401,124 @@ async def get_user_applications(user_id: str, limit: int = 20) -> List[Dict[str,
 async def create_mock_interview(interview_data: Dict[str, Any]) -> Optional[str]:
     """Create a new mock interview session."""
     try:
-        mock_interview = MockInterviewSession(**interview_data)
-        collection = db.database[COLLECTION_NAMES["mock_interviews"]]
-        result = await collection.insert_one(mock_interview.dict(by_alias=True, exclude_unset=True))
+        interview_data["created_at"] = datetime.utcnow()
+        interview_data["updated_at"] = datetime.utcnow()
+        
+        collection = db.database[COLLECTIONS["mock_interviews"]]
+        result = await collection.insert_one(interview_data)
         return str(result.inserted_id)
     except Exception as e:
-        logger.error("creating mock interview: %s", e)
+        logger.error("Error creating mock interview: %s", e)
         return None
 
 
 async def get_user_mock_interviews(user_id: str, limit: int = 10) -> List[Dict[str, Any]]:
-    """Get mock interview history for a user."""
+    """Get mock interviews for a user."""
     try:
-        collection = db.database[COLLECTION_NAMES["mock_interviews"]]
+        collection = db.database[COLLECTIONS["mock_interviews"]]
         cursor = collection.find({"user_id": user_id}).sort("created_at", -1).limit(limit)
         interviews = await cursor.to_list(length=limit)
         
+        # Convert ObjectId to string
         for interview in interviews:
-            interview["_id"] = str(interview["_id"])
-            
+            if "_id" in interview:
+                interview["_id"] = str(interview["_id"])
+        
         return interviews
+        
     except Exception as e:
-        logger.error("getting user mock interviews: %s", e)
+        logger.error("Error getting mock interviews: %s", e)
         return []
 
 
-# Dashboard and Analytics Functions
+# Dashboard Functions
 async def get_user_dashboard(user_id: str) -> Optional[Dict[str, Any]]:
-    """Get user dashboard data."""
+    """Get user dashboard data without creating persistent dashboard entries."""
     try:
-        collection = db.database[COLLECTION_NAMES["dashboards"]]
-        dashboard = await collection.find_one({"user_id": user_id})
-        
-        if not dashboard:
-            # Create default dashboard if doesn't exist
-            default_dashboard = UserDashboard(user_id=user_id)
-            await collection.insert_one(default_dashboard.dict(by_alias=True, exclude_unset=True))
-            dashboard = default_dashboard.dict(by_alias=True, exclude_unset=True)
-        
-        if dashboard and "_id" in dashboard:
-            dashboard["_id"] = str(dashboard["_id"])
+        # Get user profile to check user type
+        user_profile = await get_user_profile(user_id)
+        if not user_profile:
+            return None
             
-        return dashboard
+        user_type = user_profile.get("user_type", "candidate")
+        
+        # Generate dashboard data dynamically without storing in database
+        if user_type == "hire":
+            # For HR users, count applications received for their job postings
+            jobs_collection = db.database[COLLECTIONS["jobs"]]
+            applications_collection = db.database[COLLECTIONS["applications"]]
+            
+            hr_jobs = await jobs_collection.find({"posted_by_hr_id": user_id}).to_list(None)
+            hr_job_ids = [job.get('job_id') for job in hr_jobs if job.get('job_id')]
+            
+            if hr_job_ids:
+                applications_received = await applications_collection.count_documents({"job_id": {"$in": hr_job_ids}})
+            else:
+                applications_received = 0
+            
+            dashboard_data = {
+                "user_id": user_id,
+                "applications_count": applications_received,
+                "total_job_postings": len(hr_jobs),
+                "total_interviews": 0,
+                "profile_completion": 75,
+                "recent_activity": [],
+                "stats": [
+                    {
+                        "id": "applications-received",
+                        "label": "Applications Received",
+                        "value": applications_received,
+                        "icon": "inbox",
+                        "color": "accent",
+                        "trend": {
+                            "direction": "neutral",
+                            "percentage": 15,
+                            "period": "this week"
+                        }
+                    }
+                ],
+                "created_at": datetime.utcnow(),
+                "updated_at": datetime.utcnow()
+            }
+        else:
+            # For candidates, count applications from overall_jobs_applied array
+            applications_sent = len(user_profile.get("overall_jobs_applied", []))
+            
+            dashboard_data = {
+                "user_id": user_id,
+                "applications_count": applications_sent,
+                "total_interviews": 0,
+                "profile_completion": 75,
+                "recent_activity": [],
+                "stats": [
+                    {
+                        "id": "applications-sent",
+                        "label": "Applications Sent",
+                        "value": applications_sent,
+                        "icon": "send",
+                        "color": "primary",
+                        "trend": {
+                            "direction": "neutral",
+                            "percentage": 0,
+                            "period": "this week"
+                        }
+                    }
+                ],
+                "created_at": datetime.utcnow(),
+                "updated_at": datetime.utcnow()
+            }
+        
+        return dashboard_data
+        
     except Exception as e:
-        logger.error("getting user dashboard: %s", e)
+        logger.error("Error getting dashboard: %s", e)
         return None
 
 
 async def update_user_dashboard(user_id: str, dashboard_data: Dict[str, Any]) -> bool:
-    """Update user dashboard data."""
+    """Update user dashboard."""
     try:
-        collection = db.database[COLLECTION_NAMES["dashboards"]]
+        collection = db.database[COLLECTIONS["dashboards"]]
         dashboard_data["updated_at"] = datetime.utcnow()
         
         result = await collection.update_one(
@@ -335,52 +528,114 @@ async def update_user_dashboard(user_id: str, dashboard_data: Dict[str, Any]) ->
         )
         return result.modified_count > 0 or result.upserted_id is not None
     except Exception as e:
-        logger.error("updating user dashboard: %s", e)
+        logger.error("Error updating dashboard: %s", e)
         return False
 
 
-# Learning and Progress Functions
-async def get_learning_resources(skill: Optional[str] = None, 
-                               level: Optional[str] = None,
-                               limit: int = 20) -> List[Dict[str, Any]]:
+# Learning Resources Functions
+async def get_learning_resources(skill: str = None, level: str = None, limit: int = 20) -> List[Dict[str, Any]]:
     """Get learning resources with optional filters."""
     try:
-        collection = db.database[COLLECTION_NAMES["learning_resources"]]
+        collection = db.database[COLLECTIONS["learning_resources"]]
         
-        query_filter = {}
+        # Build query
+        query = {}
         if skill:
-            query_filter["skill"] = {"$regex": skill, "$options": "i"}
+            query["skill"] = {"$regex": skill, "$options": "i"}
         if level:
-            query_filter["level"] = level
-            
-        cursor = collection.find(query_filter).limit(limit)
+            query["level"] = level.lower()
+        
+        cursor = collection.find(query).limit(limit)
         resources = await cursor.to_list(length=limit)
         
+        # Convert ObjectId to string
         for resource in resources:
-            resource["_id"] = str(resource["_id"])
-            
+            if "_id" in resource:
+                resource["_id"] = str(resource["_id"])
+        
+        # If no resources found, return sample data
+        if not resources:
+            sample_resources = [
+                {
+                    "title": "Python Programming Fundamentals",
+                    "description": "Learn Python basics for web development",
+                    "skill": skill or "Python",
+                    "level": level or "beginner",
+                    "type": "course",
+                    "url": "https://example.com/python-course",
+                    "duration_minutes": 480
+                },
+                {
+                    "title": "React.js Complete Guide", 
+                    "description": "Master React.js for frontend development",
+                    "skill": skill or "React",
+                    "level": level or "intermediate",
+                    "type": "course",
+                    "url": "https://example.com/react-course",
+                    "duration_minutes": 720
+                }
+            ]
+            return sample_resources[:limit]
+        
         return resources
+        
     except Exception as e:
-        logger.error("getting learning resources: %s", e)
+        logger.error("Error getting learning resources: %s", e)
         return []
 
 
 async def get_user_progress(user_id: str) -> Optional[Dict[str, Any]]:
     """Get user learning progress."""
     try:
-        collection = db.database[COLLECTION_NAMES["user_progress"]]
+        collection = db.database[COLLECTIONS["user_progress"]]
         progress = await collection.find_one({"user_id": user_id})
         
         if not progress:
-            # Create default progress if doesn't exist
-            default_progress = UserProgress(user_id=user_id)
-            await collection.insert_one(default_progress.dict(by_alias=True, exclude_unset=True))
-            progress = default_progress.dict(by_alias=True, exclude_unset=True)
+            # Create default progress
+            progress_data = {
+                "user_id": user_id,
+                "completed_resources": [],
+                "current_skills": ["Python", "JavaScript"],
+                "skill_levels": {"Python": "intermediate", "JavaScript": "beginner"},
+                "total_learning_hours": 25,
+                "certificates_earned": 2,
+                "created_at": datetime.utcnow(),
+                "updated_at": datetime.utcnow()
+            }
+            result = await collection.insert_one(progress_data)
+            progress = await collection.find_one({"_id": result.inserted_id})
         
         if progress and "_id" in progress:
             progress["_id"] = str(progress["_id"])
-            
+        
         return progress
+        
     except Exception as e:
-        logger.error("getting user progress: %s", e)
+        logger.error("Error getting user progress: %s", e)
         return None
+
+
+async def update_application_status(application_id: str, status: str) -> bool:
+    """Update application status in job's applications_received array."""
+    try:
+        logger.debug("Updating application status: %s -> %s", application_id, status)
+
+        jobs_collection = db.database["jobs"]
+
+        test_job = await jobs_collection.find_one({"applications_received.application_id": application_id})
+        logger.debug("Found job with application: %s", test_job is not None)
+        
+        result = await jobs_collection.update_one(
+            {"applications_received.application_id": application_id},
+            {
+                "$set": {
+                    "applications_received.$.status": status,
+                    "updated_date": datetime.utcnow()
+                }
+            }
+        )
+        logger.debug("Update result — modified_count: %s", result.modified_count)
+        return result.modified_count > 0
+    except Exception as e:
+        logger.error("Error updating application status: %s", e, exc_info=True)
+        return False

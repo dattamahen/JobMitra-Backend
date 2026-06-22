@@ -1,11 +1,11 @@
-"""
-Tests for database operations (db_simple.py).
+﻿"""
+Tests for database operations (db.py).
 Covers: CRUD operations, query logging, fallback mode.
 """
 import pytest
 from unittest.mock import AsyncMock, patch, MagicMock
 from datetime import datetime
-from db_simple import (
+from db import (
     Database, log_to_db, get_query_logs,
     create_user_profile, get_user_profile, update_user_profile,
     search_jobs, create_job_application, get_user_applications,
@@ -18,18 +18,18 @@ class TestDatabaseConnection:
     """Test database connection and fallback mode."""
 
     def test_database_init_fallback_mode(self):
-        with patch("db_simple.MONGODB_AVAILABLE", False):
+        with patch("db.MONGODB_AVAILABLE", False):
             db = Database()
             assert db.fallback_mode is True
 
     @pytest.mark.asyncio
     async def test_connect_to_mongo_success(self):
         db = Database()
-        with patch("db_simple.MONGODB_AVAILABLE", True):
+        with patch("db.MONGODB_AVAILABLE", True):
             db.fallback_mode = False
             mock_client = MagicMock()
             mock_client.admin.command = AsyncMock(return_value=True)
-            with patch("db_simple.AsyncIOMotorClient", return_value=mock_client):
+            with patch("db.AsyncIOMotorClient", return_value=mock_client):
                 await db.connect_to_mongo()
 
     @pytest.mark.asyncio
@@ -45,7 +45,7 @@ class TestQueryLogging:
     """Test query logging operations."""
 
     @pytest.mark.asyncio
-    @patch("db_simple.db")
+    @patch("db.db")
     async def test_log_to_db_success(self, mock_db):
         mock_collection = MagicMock()
         mock_collection.insert_one = AsyncMock(return_value=MagicMock(inserted_id="log_id"))
@@ -56,7 +56,7 @@ class TestQueryLogging:
         assert result is True
 
     @pytest.mark.asyncio
-    @patch("db_simple.db")
+    @patch("db.db")
     async def test_log_to_db_fallback(self, mock_db):
         mock_db.fallback_mode = True
         mock_db.fallback_data = {"query_logs": []}
@@ -66,7 +66,7 @@ class TestQueryLogging:
         assert len(mock_db.fallback_data["query_logs"]) == 1
 
     @pytest.mark.asyncio
-    @patch("db_simple.db")
+    @patch("db.db")
     async def test_get_query_logs_success(self, mock_db):
         mock_cursor = MagicMock()
         mock_cursor.sort.return_value = mock_cursor
@@ -89,7 +89,7 @@ class TestUserOperations:
     """Test user CRUD operations."""
 
     @pytest.mark.asyncio
-    @patch("db_simple.db")
+    @patch("db.db")
     async def test_create_user_profile(self, mock_db):
         mock_collection = MagicMock()
         mock_collection.insert_one = AsyncMock(return_value=MagicMock(inserted_id="user_id_123"))
@@ -100,7 +100,7 @@ class TestUserOperations:
         assert result == "user_id_123"
 
     @pytest.mark.asyncio
-    @patch("db_simple.db")
+    @patch("db.db")
     async def test_get_user_profile_found(self, mock_db):
         mock_collection = MagicMock()
         mock_collection.find_one = AsyncMock(return_value={
@@ -114,7 +114,7 @@ class TestUserOperations:
         assert user["user_id"] == "test_001"
 
     @pytest.mark.asyncio
-    @patch("db_simple.db")
+    @patch("db.db")
     async def test_get_user_profile_not_found(self, mock_db):
         mock_collection = MagicMock()
         mock_collection.find_one = AsyncMock(return_value=None)
@@ -125,7 +125,7 @@ class TestUserOperations:
         assert user is None
 
     @pytest.mark.asyncio
-    @patch("db_simple.db")
+    @patch("db.db")
     async def test_update_user_profile_success(self, mock_db):
         mock_collection = MagicMock()
         mock_collection.update_one = AsyncMock(return_value=MagicMock(modified_count=1))
@@ -136,7 +136,7 @@ class TestUserOperations:
         assert result is True
 
     @pytest.mark.asyncio
-    @patch("db_simple.db")
+    @patch("db.db")
     async def test_update_user_profile_not_found(self, mock_db):
         mock_collection = MagicMock()
         mock_collection.update_one = AsyncMock(return_value=MagicMock(modified_count=0))
@@ -151,7 +151,7 @@ class TestJobOperations:
     """Test job search and application operations."""
 
     @pytest.mark.asyncio
-    @patch("db_simple.db")
+    @patch("db.db")
     async def test_search_jobs_with_query(self, mock_db):
         mock_cursor = MagicMock()
         mock_cursor.sort.return_value = mock_cursor
@@ -169,7 +169,7 @@ class TestJobOperations:
         assert len(jobs) == 1
 
     @pytest.mark.asyncio
-    @patch("db_simple.db")
+    @patch("db.db")
     async def test_create_job_application(self, mock_db):
         mock_collection = MagicMock()
         mock_collection.insert_one = AsyncMock(return_value=MagicMock(inserted_id="app_id"))
@@ -184,7 +184,7 @@ class TestMockInterviewOperations:
     """Test mock interview database operations."""
 
     @pytest.mark.asyncio
-    @patch("db_simple.db")
+    @patch("db.db")
     async def test_create_mock_interview(self, mock_db):
         mock_collection = MagicMock()
         mock_collection.insert_one = AsyncMock(return_value=MagicMock(inserted_id="mi_id"))
@@ -195,7 +195,7 @@ class TestMockInterviewOperations:
         assert result == "mi_id"
 
     @pytest.mark.asyncio
-    @patch("db_simple.db")
+    @patch("db.db")
     async def test_get_user_mock_interviews(self, mock_db):
         mock_cursor = MagicMock()
         mock_cursor.sort.return_value = mock_cursor
@@ -217,7 +217,7 @@ class TestLearningResources:
     """Test learning resources operations."""
 
     @pytest.mark.asyncio
-    @patch("db_simple.db")
+    @patch("db.db")
     async def test_get_resources_from_db(self, mock_db):
         mock_cursor = MagicMock()
         mock_cursor.limit.return_value = mock_cursor
@@ -234,7 +234,7 @@ class TestLearningResources:
         assert len(resources) == 1
 
     @pytest.mark.asyncio
-    @patch("db_simple.db")
+    @patch("db.db")
     async def test_get_resources_fallback_sample(self, mock_db):
         mock_cursor = MagicMock()
         mock_cursor.limit.return_value = mock_cursor

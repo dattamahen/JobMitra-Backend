@@ -580,6 +580,24 @@ class SystemConfig(BaseDocument):
     environment: Literal["development", "staging", "production"] = "development"
 
 
+# API Request Models
+class JobSearchRequest(BaseModel):
+    """Request model for job search."""
+    query: Optional[str] = None
+    skills: Optional[List[str]] = None
+    location_type: Optional[str] = None
+    experience_level: Optional[str] = None
+    limit: int = 20
+
+
+class JobApplicationCreate(BaseModel):
+    """Request model for creating job application."""
+    user_id: str
+    job_id: str
+    cover_letter: Optional[str] = None
+    custom_answers: Dict[str, str] = Field(default_factory=dict)
+
+
 # Collection Names Constants
 COLLECTION_NAMES = {
     "users": "user_profiles",

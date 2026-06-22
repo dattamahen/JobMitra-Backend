@@ -1,4 +1,4 @@
-"""
+﻿"""
 Match Analysis and Tailor Resume endpoints
 """
 
@@ -8,7 +8,7 @@ from typing import Optional
 import random
 from datetime import datetime
 
-from db_simple import db
+from db import db
 from auth_endpoints import get_current_user
 
 # Create router

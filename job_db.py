@@ -1,4 +1,4 @@
-"""
+﻿"""
 Database operations for job postings functionality
 """
 
@@ -14,7 +14,7 @@ import os
 import secrets
 import string
 
-from db_simple import db
+from db import db
 from job_schemas import JobListing, JobPostRequest, JobSearchFilters, HRJobDashboard
 from auth_db import get_user_by_id
 

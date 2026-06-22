@@ -1,4 +1,4 @@
-"""
+﻿"""
 Authentication API endpoints for JobMitra
 """
 
@@ -20,7 +20,7 @@ from auth_db import (
     create_user, authenticate_user, get_user_by_id, get_user_by_email,
     update_user_profile, change_user_password, seed_users_data, list_all_users
 )
-from db_simple import db
+from db import db
 from auth_utils import create_access_token, verify_token, SECRET_KEY
 from activity_tracker import log_user_activity
 
@@ -568,7 +568,7 @@ async def check_user_schema():
     if settings.APP_ENV not in ("local", "dev"):
         raise HTTPException(status_code=403, detail="Not available in production")
     try:
-        from db_simple import db
+        from db import db
         
         # Get a sample user to see current schema
         sample_user = await db.database["users"].find_one({})
@@ -602,7 +602,7 @@ async def migrate_feature_usage():
     if settings.APP_ENV not in ("local", "dev"):
         raise HTTPException(status_code=403, detail="Not available in production")
     try:
-        from db_simple import db
+        from db import db
         
         # Simply add feature_usage_count to ALL users
         result = await db.database["users"].update_many(
@@ -624,7 +624,7 @@ async def migrate_feature_usage():
 @auth_router.post("/verify-email")
 async def verify_email_endpoint(token: str = None, code: str = None):
     """Verify HR email with token (from link) or code (6-char uppercase)"""
-    from db_simple import db
+    from db import db
     from datetime import datetime, timedelta
 
     lookup_value = token or code
@@ -664,7 +664,7 @@ async def forgot_password(request: ForgotPasswordRequest):
     """Send password reset token"""
     from auth_utils import generate_reset_token
     from datetime import timedelta
-    from db_simple import db
+    from db import db
     from email_service import email_service
     
     user = await get_user_by_email(request.email)
@@ -691,7 +691,7 @@ async def forgot_password(request: ForgotPasswordRequest):
 @auth_router.post("/reset-password")
 async def reset_password(request: ResetPasswordRequest):
     """Reset password with token"""
-    from db_simple import db
+    from db import db
     
     user = await db.database["users"].find_one({
         "reset_token": request.token,

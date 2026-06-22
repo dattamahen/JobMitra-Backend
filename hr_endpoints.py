@@ -1,4 +1,4 @@
-"""
+﻿"""
 HR Job Posting API endpoints
 """
 
@@ -8,7 +8,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from typing import List, Optional
 from datetime import datetime
-from db_simple import db
+from db import db
 import logging
 
 logger = logging.getLogger(__name__)
@@ -465,7 +465,7 @@ async def update_application_status(
 ):
     """Update application status"""
     try:
-        from db_simple import update_application_status as db_update_status
+        from db import update_application_status as db_update_status
         
         # Convert enum to string value
         status_value = app_status.value

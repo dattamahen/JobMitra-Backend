@@ -1,4 +1,4 @@
-"""
+﻿"""
 Database operations for job applications
 """
 
@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 import uuid
-from db_simple import db
+from db import db
 from job_application_schemas import JobApplication, ApplicantProfile, ProfileMatchAnalysis, ApplicationStatus, JobApplicationsResponse
 from auth_db import get_user_by_id
 

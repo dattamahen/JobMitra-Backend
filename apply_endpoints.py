@@ -1,4 +1,4 @@
-"""
+﻿"""
 Unified Apply for Job endpoint.
 Single entry point for all apply flows (direct + tailored).
 Stores in: users.overall_jobs_applied[] + jobs.applications_received[]
@@ -14,7 +14,7 @@ from typing import Optional, List
 from datetime import datetime
 import random
 
-from db_simple import db
+from db import db
 from auth_endpoints import get_current_user
 from job_db import job_db
 from activity_tracker import log_user_activity

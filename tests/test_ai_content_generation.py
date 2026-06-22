@@ -1,4 +1,4 @@
-"""
+﻿"""
 Tests for AI Content Generation endpoints: professional summary and job description.
 """
 import pytest
@@ -8,7 +8,7 @@ from httpx import AsyncClient, ASGITransport
 
 @pytest.fixture
 def app():
-    with patch("db_simple.db") as mock_db:
+    with patch("db.db") as mock_db:
         mock_db.fallback_mode = False
         mock_db.database = MagicMock()
         mock_db.connect_to_mongo = AsyncMock()

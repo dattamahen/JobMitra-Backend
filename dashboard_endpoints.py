@@ -1,4 +1,4 @@
-"""
+﻿"""
 Dashboard and Profile API endpoints.
 """
 
@@ -11,7 +11,7 @@ from job_db import JobDatabase
 
 logger = logging.getLogger(__name__)
 from auth_endpoints import get_current_user
-from db_simple import (
+from db import (
     db, get_user_profile, get_user_applications, get_user_mock_interviews,
     get_learning_resources,
     get_user_progress
