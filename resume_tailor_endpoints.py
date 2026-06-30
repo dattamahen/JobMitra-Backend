@@ -269,9 +269,39 @@ async def _backfill_legacy_job_status():
     _backfill_done = True
 
 
+def calculate_skill_match_score(user_skills: List[str], job_skills: List[str]) -> int:
+    """Calculate skill match percentage between user and job skills."""
+    if not user_skills or not job_skills:
+        return 0
+    
+    # Normalize skills to lowercase for comparison
+    normalized_user_skills = [skill.lower().strip() for skill in user_skills]
+    normalized_job_skills = [skill.lower().strip() for skill in job_skills]
+    
+    # Count exact matches
+    exact_matches = len(set(normalized_user_skills) & set(normalized_job_skills))
+    
+    # Count partial matches (substring matching)
+    partial_matches = 0
+    for user_skill in normalized_user_skills:
+        for job_skill in normalized_job_skills:
+            if user_skill not in normalized_job_skills:  # Don't double count exact matches
+                if user_skill in job_skill or job_skill in user_skill:
+                    partial_matches += 1
+                    break
+    
+    total_matches = exact_matches + (partial_matches * 0.5)  # Partial matches count as half
+    total_job_skills = len(normalized_job_skills)
+    
+    if total_job_skills == 0:
+        return 0
+    
+    match_percentage = min(100, int((total_matches / total_job_skills) * 100))
+    return match_percentage
+
 @router.post("/jobs/search")
 async def search_jobs_unified(search_request: JobSearchRequest, current_user: dict = Depends(get_current_user)):
-    """Unified job search - returns only active jobs with already_applied flag"""
+    """Unified job search with skill-based filtering - at least 2 skills must match"""
     try:
         # Get user_id
         if isinstance(current_user, str):
@@ -279,32 +309,121 @@ async def search_jobs_unified(search_request: JobSearchRequest, current_user: di
         else:
             user_id = current_user.get('user_id') if isinstance(current_user, dict) else str(current_user)
         
-        # Get user's applied jobs
+        # Get user profile and applied jobs
         user = await db.database["users"].find_one({"user_id": user_id})
-        applied_jobs = set(user.get("applied_jobs", [])) if user else set()
+        if not user:
+            raise HTTPException(status_code=404, detail="User profile not found")
         
-        # Backfill legacy jobs missing status field, then query only active
+        user_skills = user.get("skills", [])
+        applied_jobs = set(user.get("applied_jobs", []))
+        
+        # If user has no skills, return empty result with message
+        if not user_skills or len(user_skills) < 2:
+            logger.warning(f"User {user_id} has insufficient skills ({len(user_skills)}) for skill-based matching")
+            return {
+                "jobs": [],
+                "total": 0,
+                "message": "Please add at least 2 skills to your profile to see relevant job recommendations.",
+                "filters_applied": {
+                    "min_skills_required": 2,
+                    "user_skills_count": len(user_skills),
+                    "skill_matching_enabled": True
+                }
+            }
+        
+        # Backfill legacy jobs missing status field
         await _backfill_legacy_job_status()
 
+        # Base query - only active jobs
         query = {"status": "active"}
-        if search_request.skills:
-            query["skills"] = {"$in": search_request.skills}
+        
+        # Apply additional filters (location, experience level)
         if search_request.location_type:
             query["location.type"] = search_request.location_type
         if search_request.experience_level:
             query["experience_level"] = search_request.experience_level
         
-        # Search jobs
-        jobs = await db.database["jobs"].find(query).limit(search_request.limit).to_list(length=None)
+        # Get all active jobs first
+        all_jobs = await db.database["jobs"].find(query).to_list(length=None)
+        logger.info(f"Found {len(all_jobs)} active jobs before skill filtering")
         
-        # Add already_applied flag and remaining days to each job
+        # Apply skill-based filtering: at least 2 skills must match
+        filtered_jobs = []
         now = datetime.utcnow()
-        result = []
-        for job in jobs:
+        
+        for job in all_jobs:
+            # Get all job skills (required + preferred)
+            job_skills_required = job.get('skills_required', job.get('skills', []))
+            job_skills_preferred = job.get('skills_preferred', [])
+            all_job_skills = job_skills_required + job_skills_preferred
+            
+            if not all_job_skills:
+                continue  # Skip jobs with no skills listed
+            
+            # Count skill matches
+            normalized_user_skills = [skill.lower().strip() for skill in user_skills]
+            normalized_job_skills = [skill.lower().strip() for skill in all_job_skills]
+            
+            # Count exact and partial matches
+            exact_matches = 0
+            partial_matches = 0
+            matched_skills = []
+            
+            for user_skill in normalized_user_skills:
+                # Check for exact matches first
+                if user_skill in normalized_job_skills:
+                    exact_matches += 1
+                    matched_skills.append(user_skill)
+                else:
+                    # Check for partial matches (substring)
+                    for job_skill in normalized_job_skills:
+                        if (len(user_skill) > 3 and user_skill in job_skill) or \
+                           (len(job_skill) > 3 and job_skill in user_skill):
+                            partial_matches += 1
+                            matched_skills.append(f"{user_skill}~{job_skill}")
+                            break
+            
+            total_matches = exact_matches + partial_matches
+            
+            # SKILL FILTERING RULE: At least 2 skills must match
+            if total_matches < 2:
+                continue
+            
+            # Calculate match score
+            match_score = calculate_skill_match_score(user_skills, all_job_skills)
+            
+            # Prepare job data with match information
             job_data = sanitize_for_json(job)
             job_data["already_applied"] = job.get("job_id") in applied_jobs
             job_data["status"] = "active"
-
+            job_data["match_score"] = match_score  # Backend calculated score
+            job_data["matched_skills_count"] = total_matches
+            job_data["matched_skills"] = matched_skills[:5]  # Show top 5 matched skills
+            
+            # Check if user has done detailed match analysis for this job
+            user_applied_jobs = user.get("overall_jobs_applied", [])
+            detailed_analysis = None
+            for app_record in user_applied_jobs:
+                if isinstance(app_record, dict) and app_record.get("job_id") == job.get("job_id"):
+                    detailed_analysis = app_record
+                    break
+            
+            # If detailed analysis exists, use that instead of basic score
+            if detailed_analysis and detailed_analysis.get("match_analysis_done"):
+                job_data["match_percentage"] = detailed_analysis.get("match_percentage", match_score)
+                job_data["match_analysis_done"] = True
+                job_data["match_level"] = detailed_analysis.get("match_level", "unknown")
+            else:
+                # Use basic score as initial match percentage
+                job_data["match_percentage"] = match_score
+                job_data["match_analysis_done"] = False
+            
+            # Set tailor resume status
+            if detailed_analysis and detailed_analysis.get("tailor_resume_done"):
+                job_data["tailor_resume_done"] = True
+            else:
+                job_data["tailor_resume_done"] = False
+            
             # Calculate days remaining until deadline
             deadline = job.get("application_deadline")
             if deadline:
@@ -314,11 +433,32 @@ async def search_jobs_unified(search_request: JobSearchRequest, current_user: di
                 except Exception:
                     pass
 
-            result.append(job_data)
+            filtered_jobs.append(job_data)
         
-        return {"jobs": result, "total": len(result)}
+        # Sort by match score (highest first), then by posted date (newest first)
+        filtered_jobs.sort(key=lambda x: (-x.get('match_score', 0), -x.get('posted_date', '')), reverse=False)
+        
+        # Apply pagination limit
+        result_jobs = filtered_jobs[:search_request.limit]
+        
+        logger.info(f"Skill-based filtering: {len(all_jobs)} total jobs → {len(filtered_jobs)} jobs with ≥2 skill matches → {len(result_jobs)} returned")
+        
+        return {
+            "jobs": result_jobs,
+            "total": len(filtered_jobs),
+            "filters_applied": {
+                "min_skills_required": 2,
+                "user_skills_count": len(user_skills),
+                "skill_matching_enabled": True,
+                "jobs_before_filtering": len(all_jobs),
+                "jobs_after_skill_filtering": len(filtered_jobs)
+            }
+        }
+        
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error("searching jobs: %s", e)
+        logger.error("Error in skill-based job search: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -357,12 +497,30 @@ async def close_job(job_id: str, current_user: dict = Depends(get_current_user))
 
 @router.post("/jobs")
 async def search_jobs_alias(request: dict, current_user: dict = Depends(get_current_user)):
-    """Alias for /jobs/search - for frontend compatibility"""
-    search_req = JobSearchRequest(
-        query=request.get("keywords"),
-        skills=request.get("user_skills", []),
-        location_type=None,
-        experience_level=None,
-        limit=request.get("per_page", 20)
-    )
-    return await search_jobs_unified(search_req, current_user)
+    """Alias for /jobs/search - for frontend compatibility with skill-based filtering"""
+    try:
+        # Get user skills from request body or user profile
+        user_skills = request.get("user_skills", [])
+        
+        # If no user skills in request, get from user profile
+        if not user_skills:
+            if isinstance(current_user, str):
+                user_id = current_user
+            else:
+                user_id = current_user.get('user_id') if isinstance(current_user, dict) else str(current_user)
+            
+            user = await db.database["users"].find_one({"user_id": user_id})
+            user_skills = user.get("skills", []) if user else []
+        
+        search_req = JobSearchRequest(
+            query=request.get("keywords"),
+            skills=user_skills,  # Use user skills for filtering
+            location_type=None,
+            experience_level=None,
+            limit=request.get("per_page", 20)
+        )
+        return await search_jobs_unified(search_req, current_user)
+        
+    except Exception as e:
+        logger.error("Error in jobs alias endpoint: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
