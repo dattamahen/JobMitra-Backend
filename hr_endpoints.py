@@ -277,40 +277,26 @@ async def toggle_job_status(
     job_id: str,
     current_user: dict = Depends(get_current_hr_user)
 ):
-    """Toggle job active/inactive status"""
+    """Deactivating a job archives and removes it. Activating is not applicable once archived."""
     try:
         hr_user_id = current_user["user_id"]
-        
-        # Get current job
+
         job = await job_db.get_job_by_id(job_id)
         if not job:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Job not found"
-            )
-        
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
+
         if job["posted_by_hr_id"] != hr_user_id:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Access denied"
-            )
-        
-        # Toggle status
-        new_status = not job.get("is_active", True)
-        success = await job_db.update_job(job_id, {"is_active": new_status}, hr_user_id)
-        
-        if not success:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to update job status"
-            )
-        
-        return {
-            "message": f"Job {'activated' if new_status else 'deactivated'} successfully",
-            "job_id": job_id,
-            "is_active": new_status
-        }
-        
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+
+        # If currently active — archive it (hard delete + cascade)
+        if job.get("is_active", True):
+            from archive_jobs import archive_job
+            await archive_job(job_id, reason="closed", archived_by=hr_user_id)
+            return {"message": "Job closed and archived", "job_id": job_id, "is_active": False, "status": "closed"}
+
+        # Already inactive (shouldn't normally reach here after archival)
+        return {"message": "Job was already inactive", "job_id": job_id, "is_active": False, "status": "closed"}
+
     except HTTPException:
         raise
     except Exception as e:
@@ -370,7 +356,7 @@ async def get_all_applications(
     try:
         hr_user_id = current_user["user_id"]
         
-        # Get HR jobs
+        # Get HR jobs — archived jobs are already gone from this collection
         if job_id:
             jobs = await db.database["jobs"].find({"job_id": job_id, "posted_by_hr_id": hr_user_id}).to_list(None)
         else:

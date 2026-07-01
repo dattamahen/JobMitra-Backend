@@ -65,10 +65,12 @@ async def apply_for_job(
         user_id = current_user["user_id"]
         job_id = request.job_id
 
-        # Check if job exists
+        # Check if job exists and is still active
         job = await job_db.get_job_by_id(job_id)
         if not job:
             raise HTTPException(status_code=404, detail="Job not found")
+        if job.get("status") in ("expired", "closed", "filled") or not job.get("is_active", True):
+            raise HTTPException(status_code=410, detail="This job is no longer accepting applications")
 
         # Get user and check for existing application
         user = await db.database["users"].find_one({"user_id": user_id})
@@ -190,8 +192,19 @@ async def get_applications(
         # Only show actually applied records
         all_records = [
             app for app in user.get("overall_jobs_applied", [])
-            if isinstance(app, dict) and app.get("is_applied", False)
+            if isinstance(app, dict) and app.get("is_applied", False) and app.get("job_id")
         ]
+
+        if not all_records:
+            return ApplicationsResponse(applications=[], total_count=0, page=page, per_page=per_page, total_pages=0)
+
+        # Filter to only jobs still in the jobs collection (archived ones are gone)
+        all_job_ids = [app["job_id"] for app in all_records]
+        existing_job_ids = set()
+        async for job in db.database["jobs"].find({"job_id": {"$in": all_job_ids}}, {"job_id": 1}):
+            existing_job_ids.add(job["job_id"])
+        all_records = [app for app in all_records if app["job_id"] in existing_job_ids]
+
         total_count = len(all_records)
 
         if not all_records:
@@ -202,7 +215,7 @@ async def get_applications(
         paginated = all_records[start:start + per_page]
         job_ids = [app.get("job_id") for app in paginated]
 
-        # Fetch job details
+        # Fetch job details (archived jobs won't exist, so missing = archived)
         jobs_cursor = db.database["jobs"].find({"job_id": {"$in": job_ids}})
         jobs_map = {}
         async for job in jobs_cursor:
@@ -211,7 +224,9 @@ async def get_applications(
 
         applications = []
         for app_record in paginated:
-            job = jobs_map.get(app_record.get("job_id"), {})
+            job = jobs_map.get(app_record.get("job_id"))
+            if not job:
+                continue
             job.update({
                 "application_id": app_record.get("application_id"),
                 "status": app_record.get("status", "applied"),

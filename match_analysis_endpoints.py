@@ -110,6 +110,8 @@ async def perform_match_analysis(
         job = await db.database["jobs"].find_one({"job_id": job_id})
         if not job:
             raise HTTPException(status_code=404, detail="Job not found")
+        if job.get("status") in ("expired", "closed", "filled") or not job.get("is_active", True):
+            raise HTTPException(status_code=410, detail="This job is no longer active")
         
         # Get user skills and job requirements
         user_skills = user.get("skills", [])
