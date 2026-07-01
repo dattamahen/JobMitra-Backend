@@ -95,9 +95,18 @@ async def get_dashboard(current_user: dict = Depends(get_current_user)):
         
         profile_completion = calculate_profile_completion(user_profile)
         
-        # Get applications count from user's overall_jobs_applied field (only is_applied=True)
+        # Get applications count — only active jobs
         overall_jobs_applied = user_profile.get("overall_jobs_applied", []) if user_profile else []
-        total_applications = sum(1 for app in overall_jobs_applied if isinstance(app, dict) and app.get("is_applied", False))
+        applied_job_ids = [
+            app["job_id"] for app in overall_jobs_applied
+            if isinstance(app, dict) and app.get("is_applied", False) and app.get("job_id")
+        ]
+        active_applied_count = 0
+        if applied_job_ids:
+            active_applied_count = await db.database["jobs"].count_documents(
+                {"job_id": {"$in": applied_job_ids}}
+            )
+        total_applications = active_applied_count
         
         # Get user mock interviews from database
         user_interviews = await get_user_mock_interviews(user_id, limit=20)
@@ -168,8 +177,7 @@ async def get_dashboard(current_user: dict = Depends(get_current_user)):
             # Get HR-specific metrics from database using aggregation (not loading all docs)
             try:
                 hr_jobs_count = await db.database["jobs"].count_documents({"posted_by_hr_id": user_id})
-                hr_active_jobs = await db.database["jobs"].count_documents({"posted_by_hr_id": user_id, "is_active": True})
-                # Use aggregation to count applications without loading all jobs into memory
+                hr_active_jobs = hr_jobs_count
                 pipeline = [
                     {"$match": {"posted_by_hr_id": user_id}},
                     {"$project": {"app_count": {"$size": {"$ifNull": ["$applications_received", []]}}}},
@@ -185,7 +193,7 @@ async def get_dashboard(current_user: dict = Depends(get_current_user)):
             stats = [
                 {
                     "id": "jobs-posted",
-                    "label": "Jobs Posted",
+                    "label": "Active Jobs Posted",
                     "value": hr_jobs_count,
                     "icon": "work_add",
                     "color": "primary",
@@ -556,7 +564,7 @@ async def get_user_applications_endpoint(user_id: str, current_user: dict = Depe
 		
 		applications = []
 		for app_record in applied_records:
-			job = jobs_map.get(app_record.get("job_id"), {})
+			job = jobs_map.get(app_record.get("job_id"))
 			if job:
 				applications.append({
 					"application_id": app_record.get("application_id"),

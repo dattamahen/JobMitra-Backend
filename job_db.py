@@ -258,16 +258,17 @@ class JobDatabase:
             return False
     
     async def delete_job(self, job_id: str, hr_user_id: str) -> bool:
-        """Delete job posting (only by the HR who posted it)"""
+        """Archive and hard-delete job posting (only by the HR who posted it)"""
         try:
-            # Soft delete - mark as closed instead of actually deleting
-            result = await db.database[self.jobs_collection].update_one(
-                {"job_id": job_id, "posted_by_hr_id": hr_user_id},
-                {"$set": {"is_active": False, "status": "closed", "updated_date": datetime.utcnow()}}
+            job = await db.database[self.jobs_collection].find_one(
+                {"job_id": job_id, "posted_by_hr_id": hr_user_id}
             )
-            
-            return result.modified_count > 0
-            
+            if not job:
+                return False
+
+            from archive_jobs import archive_job
+            return await archive_job(job_id, reason="deleted", archived_by=hr_user_id)
+
         except Exception as e:
             logger.error("deleting job: %s", e)
             return False
@@ -285,7 +286,6 @@ class JobDatabase:
                         "$group": {
                             "_id": None,
                             "total_jobs": {"$sum": 1},
-                            "active_jobs": {"$sum": {"$cond": [{"$eq": ["$is_active", True]}, 1, 0]}},
                             "total_applications": {"$sum": {"$size": {"$ifNull": ["$applications_count", []]}}}
                         }
                     }],
@@ -303,11 +303,11 @@ class JobDatabase:
                                      total_applications_received=0, jobs_expiring_soon=0, recent_jobs=[])
 
             facets = agg_result[0]
-            stats = facets["stats"][0] if facets["stats"] else {"total_jobs": 0, "active_jobs": 0, "total_applications": 0}
+            stats = facets["stats"][0] if facets["stats"] else {"total_jobs": 0, "total_applications": 0}
             recent_jobs = facets["recent_jobs"]
 
             total_jobs = stats["total_jobs"]
-            active_jobs = stats["active_jobs"]
+            active_jobs = total_jobs
             total_applications = stats["total_applications"]
 
             # Convert ObjectIds in recent jobs
@@ -325,7 +325,7 @@ class JobDatabase:
             return HRJobDashboard(
                 total_jobs_posted=total_jobs,
                 active_jobs=active_jobs,
-                inactive_jobs=total_jobs - active_jobs,
+                inactive_jobs=0,
                 total_applications_received=total_applications,
                 jobs_expiring_soon=jobs_expiring_soon,
                 recent_jobs=recent_jobs

@@ -245,18 +245,20 @@ async def _backfill_legacy_job_status():
 
         if not is_active:
             new_status = "closed"
-        elif deadline:
-            try:
-                dl = datetime.fromisoformat(str(deadline)) if isinstance(deadline, str) else deadline
-                if dl < now:
-                    new_status = "expired"
-            except Exception:
-                pass
         elif posted:
             try:
                 pd = datetime.fromisoformat(str(posted)) if isinstance(posted, str) else posted
-                derived_deadline = pd + timedelta(days=default_expiry_days)
-                if derived_deadline < now:
+                age_days = (now - pd).days
+                if age_days > default_expiry_days:
+                    new_status = "expired"
+            except Exception:
+                pass
+
+        # Also check if deadline has passed
+        if new_status == "active" and deadline:
+            try:
+                dl = datetime.fromisoformat(str(deadline)) if isinstance(deadline, str) else deadline
+                if dl < now:
                     new_status = "expired"
             except Exception:
                 pass
@@ -464,32 +466,18 @@ async def search_jobs_unified(search_request: JobSearchRequest, current_user: di
 
 @router.patch("/jobs/{job_id}/close")
 async def close_job(job_id: str, current_user: dict = Depends(get_current_user)):
-    """HR endpoint to manually close/deactivate a job posting."""
+    """HR endpoint to manually close and archive a job posting."""
     try:
         if isinstance(current_user, str):
             user_id = current_user
         else:
             user_id = current_user.get('user_id') if isinstance(current_user, dict) else str(current_user)
 
-        job = await db.database["jobs"].find_one({"job_id": job_id})
-        if not job:
-            raise HTTPException(status_code=404, detail="Job not found")
-
-        result = await db.database["jobs"].update_one(
-            {"job_id": job_id},
-            {
-                "$set": {
-                    "status": "closed",
-                    "is_active": False,
-                    "updated_date": datetime.utcnow().isoformat(),
-                    "closed_by": user_id,
-                }
-            },
-        )
-
-        if result.modified_count > 0:
-            return {"success": True, "message": f"Job {job_id} closed successfully"}
-        return {"success": False, "message": "Job was already closed"}
+        from archive_jobs import archive_job
+        archived = await archive_job(job_id, reason="closed", archived_by=user_id)
+        if archived:
+            return {"success": True, "message": f"Job {job_id} closed and archived"}
+        raise HTTPException(status_code=404, detail="Job not found")
     except HTTPException:
         raise
     except Exception as e:

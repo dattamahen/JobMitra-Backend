@@ -57,32 +57,10 @@ async def ensure_indexes(database: AsyncIOMotorDatabase) -> None:
             ("skills_required", "text")
         ])
 
-        # ── Job Applications Collection ──────────────────────────
-        applications = database["job_applications"]
-        await applications.create_index("job_id")
-        await applications.create_index("user_id")
-        await applications.create_index([("job_id", 1), ("user_id", 1)], unique=True)
-        await applications.create_index([("user_id", 1), ("created_at", -1)])
-
         # ── Mock Interviews Collection ───────────────────────────
         mock_interviews = database["mock_interview_sessions"]
         await mock_interviews.create_index("user_id")
         await mock_interviews.create_index([("user_id", 1), ("created_at", -1)])
-
-        # ── Query Logs Collection ────────────────────────────────
-        query_logs = database["query_logs"]
-        await query_logs.create_index([("created_at", -1)])
-        await query_logs.create_index("user_id")
-        # TTL index — auto-delete logs older than 30 days
-        await query_logs.create_index("created_at", expireAfterSeconds=30 * 24 * 3600)
-
-        # ── User Progress Collection ─────────────────────────────
-        user_progress = database["user_progress"]
-        await user_progress.create_index("user_id", unique=True)
-
-        # ── User Dashboards Collection ───────────────────────────
-        dashboards = database["user_dashboards"]
-        await dashboards.create_index("user_id", unique=True)
 
         logger.info("All database indexes ensured successfully")
 

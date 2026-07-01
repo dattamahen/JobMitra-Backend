@@ -15,9 +15,8 @@ from auth_endpoints import auth_router
 from db import (
     create_user_profile, get_user_profile, update_user_profile,
     search_jobs, create_job_listing,
-    create_job_application, get_user_applications,
+    get_user_applications,
     create_mock_interview, get_user_mock_interviews,
-    get_user_dashboard, update_user_dashboard,
     get_learning_resources, get_user_progress
 )
 from activity_tracker import log_user_activity
@@ -291,22 +290,8 @@ async def get_job(job_id: str):
 # Application Management Endpoints
 @router.post("/applications", tags=["Application Management"])
 async def create_application(application_data: JobApplicationCreate):
-    """Create a new job application."""
-    try:
-        # Add application ID and default status
-        app_dict = application_data.dict()
-        app_dict["application_id"] = f"app_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}_{app_dict['user_id']}"
-        app_dict["current_status"] = "draft"
-        
-        app_id = await create_job_application(app_dict)
-        
-        if app_id:
-            return {"message": "Application created successfully", "application_id": app_id}
-        else:
-            raise HTTPException(status_code=400, detail="Failed to create application")
-            
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error creating application: {str(e)}")
+    """Deprecated — use /api/v1/apply instead."""
+    raise HTTPException(status_code=410, detail="Use POST /api/v1/apply instead")
 
 
 # DEPRECATED: Moved to resume_tailor_endpoints.py
@@ -366,17 +351,8 @@ async def get_user_mock_interviews_endpoint(user_id: str, limit: int = Query(10,
 # Dashboard Endpoints
 @router.get("/users/{user_id}/dashboard", tags=["Dashboard"])
 async def get_user_dashboard_endpoint(user_id: str):
-    """Get user dashboard data."""
-    try:
-        dashboard = await get_user_dashboard(user_id)
-        
-        if dashboard:
-            return dashboard
-        else:
-            raise HTTPException(status_code=404, detail="Dashboard not found")
-            
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error getting dashboard: {str(e)}")
+    """Deprecated — use /api/v1/dashboard instead."""
+    raise HTTPException(status_code=410, detail="Use GET /api/v1/dashboard instead")
 
 
 # Learning Resources Endpoints

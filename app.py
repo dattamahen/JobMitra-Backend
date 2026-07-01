@@ -50,7 +50,6 @@ if settings.APP_ENV != "local":
 logger = logging.getLogger(__name__)
 
 from db import db
-from endpoints import router as core_router
 from dashboard_endpoints import router as dashboard_router
 from api_routes import router as api_router
 from auth_endpoints import auth_router
@@ -98,8 +97,12 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning("Redis cache unavailable: %s", e)
 
-    # Start background job expiry scheduler
-    from job_expiry_scheduler import start_expiry_scheduler
+    # Run immediate sweep on startup, then start periodic background loop
+    if not db.fallback_mode:
+        from job_expiry_scheduler import expire_stale_jobs, start_expiry_scheduler
+        archived = await expire_stale_jobs()
+        if archived:
+            logger.info("Startup sweep: archived %d stale job(s)", archived)
     start_expiry_scheduler()
 
     yield
@@ -232,7 +235,6 @@ def create_app() -> FastAPI:
         )
 
     # Include routers with prefixes
-    app.include_router(core_router, prefix="")  # Core endpoints (ask, resume-enhance, logs)
     app.include_router(dashboard_router, prefix="/api/v1")  # Dashboard and profile endpoints
     app.include_router(api_router, prefix="/api/v1")  # Additional API routes
     app.include_router(auth_router, prefix="/api/v1")  # Authentication routes
