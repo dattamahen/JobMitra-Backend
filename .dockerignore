@@ -12,3 +12,7 @@ README.md
 test_api.py
 seed_data.py
 .amazonq
+.env.dev.example
+cloudbuild.yaml
+deploy-dev.bat
+logs/
