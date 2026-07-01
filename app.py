@@ -98,8 +98,9 @@ async def lifespan(app: FastAPI):
         logger.warning("Redis cache unavailable: %s", e)
 
     # Run immediate sweep on startup, then start periodic background loop
+    from job_expiry_scheduler import start_expiry_scheduler
     if not db.fallback_mode:
-        from job_expiry_scheduler import expire_stale_jobs, start_expiry_scheduler
+        from job_expiry_scheduler import expire_stale_jobs
         archived = await expire_stale_jobs()
         if archived:
             logger.info("Startup sweep: archived %d stale job(s)", archived)
