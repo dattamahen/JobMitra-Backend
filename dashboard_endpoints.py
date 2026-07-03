@@ -1,4 +1,4 @@
-﻿"""
+"""
 Dashboard and Profile API endpoints.
 """
 
@@ -95,7 +95,7 @@ async def get_dashboard(current_user: dict = Depends(get_current_user)):
         
         profile_completion = calculate_profile_completion(user_profile)
         
-        # Get applications count — only active jobs
+        # Get applications count � only active jobs
         overall_jobs_applied = user_profile.get("overall_jobs_applied", []) if user_profile else []
         applied_job_ids = [
             app["job_id"] for app in overall_jobs_applied
@@ -253,7 +253,7 @@ async def get_dashboard(current_user: dict = Depends(get_current_user)):
                     "id": f"{activity['activity_type']}_{activity.get('timestamp', 'unknown')}",
                     "title": activity["description"],
                     "icon": activity.get("icon", "info"),
-                    "timestamp": activity.get("timestamp", datetime.now().isoformat()),
+                    "timestamp": activity.get("timestamp", datetime.utcnow().isoformat() + "Z"),
                     "type": activity["activity_type"],
                     "status": activity.get("status", "completed")
                 }
@@ -265,7 +265,7 @@ async def get_dashboard(current_user: dict = Depends(get_current_user)):
                 "id": interview.get("_id", ""),
                 "title": f"Completed mock interview for {interview.get('role', 'Unknown Role')} position",
                 "icon": "quiz",
-                "timestamp": interview.get("created_at", datetime.now().isoformat()),
+                "timestamp": interview.get("created_at", datetime.utcnow().isoformat() + "Z"),
                 "type": "interview",
                 "status": "completed"
             }
@@ -277,7 +277,7 @@ async def get_dashboard(current_user: dict = Depends(get_current_user)):
             if isinstance(timestamp, str):
                 return timestamp
             elif hasattr(timestamp, 'isoformat'):
-                return timestamp.isoformat()
+                return timestamp.isoformat() + "Z"
             else:
                 return str(timestamp)
         
@@ -291,7 +291,7 @@ async def get_dashboard(current_user: dict = Depends(get_current_user)):
                     "id": "1",
                     "title": "Profile created successfully",
                     "icon": "account_circle",
-                    "timestamp": current_user.get("profile_created_on", datetime.now()).isoformat(),
+                    "timestamp": current_user.get("profile_created_on", datetime.utcnow()).isoformat() + "Z",
                     "type": "profile",
                     "status": "completed"
                 }
@@ -307,7 +307,7 @@ async def get_dashboard(current_user: dict = Depends(get_current_user)):
                 "user_type": user_type,
                 "profile_completion": profile_completion
             },
-            "lastUpdated": datetime.now().isoformat()
+            "lastUpdated": datetime.utcnow().isoformat() + "Z"
         }
         
         # Update dashboard in database
@@ -343,7 +343,7 @@ async def get_dashboard(current_user: dict = Depends(get_current_user)):
                     "id": "1",
                     "title": "Welcome to JobMitra!",
                     "icon": "info",
-                    "timestamp": datetime.now().isoformat(),
+                    "timestamp": datetime.utcnow().isoformat() + "Z",
                     "type": "system",
                     "status": "completed"
                 }
@@ -354,7 +354,7 @@ async def get_dashboard(current_user: dict = Depends(get_current_user)):
                 "email": current_user.get("email", ""),
                 "user_type": current_user.get("user_type", "candidate")
             },
-            "lastUpdated": datetime.now().isoformat()
+            "lastUpdated": datetime.utcnow().isoformat() + "Z"
         }
 
 
@@ -379,8 +379,8 @@ async def get_current_user_profile(current_user: dict = Depends(get_current_user
                 "user_type": current_user.get("user_type", "candidate"),
                 "profile_completion_percentage": current_user.get("profile_completion_count", 0),
                 "skills": current_user.get("skills", []),
-                "created_at": current_user.get("profile_created_on", datetime.now()).isoformat(),
-                "updated_at": datetime.now().isoformat()
+                "created_at": current_user.get("profile_created_on", datetime.now()).isoformat() + "Z",
+                "updated_at": datetime.utcnow().isoformat() + "Z"
             }
         
         # Format profile data for frontend
@@ -391,7 +391,7 @@ async def get_current_user_profile(current_user: dict = Depends(get_current_user
             "first_name": user_profile.get("first_name", ""),
             "last_name": user_profile.get("last_name", ""),
             "phone": user_profile.get("phone", ""),
-            "date_of_birth": user_profile.get("date_of_birth"),
+            "date_of_birth": user_profile.get("date_of_birth").isoformat() + "Z" if hasattr(user_profile.get("date_of_birth"), 'isoformat') else user_profile.get("date_of_birth"),
             "current_job_title": user_profile.get("professional_info", {}).get("current_role", ""),
             "desired_job_title": user_profile.get("professional_info", {}).get("desired_job_title", ""),
             "experience_years": user_profile.get("overall_experience_years", 0),
@@ -426,14 +426,14 @@ async def get_current_user_profile(current_user: dict = Depends(get_current_user
             },
             "profile_completion_percentage": user_profile.get("profile_completion_count", 0),
             "profile_visits": user_profile.get("profile_visits", 0),
-            "last_active": user_profile.get("last_active") if isinstance(user_profile.get("last_active"), str) else (user_profile.get("last_active").isoformat() if user_profile.get("last_active") else datetime.now().isoformat()),
+            "last_active": user_profile.get("last_active") if isinstance(user_profile.get("last_active"), str) else (user_profile.get("last_active").isoformat() + "Z" if user_profile.get("last_active") else datetime.utcnow().isoformat() + "Z"),
             "is_active": user_profile.get("is_active", True),
             "is_public": user_profile.get("profile_settings", {}).get("is_public", True),
             "email_notifications": user_profile.get("profile_settings", {}).get("email_notifications", True),
             "profile_searchable": user_profile.get("profile_settings", {}).get("profile_searchable", True),
             "preferred_locations": user_profile.get("personal_info", {}).get("location", {}).get("city", "").split(",") if user_profile.get("personal_info", {}).get("location", {}).get("city") else [],
-            "created_at": user_profile.get("profile_created_on") if isinstance(user_profile.get("profile_created_on"), str) else (user_profile.get("profile_created_on").isoformat() if user_profile.get("profile_created_on") else datetime.now().isoformat()),
-            "updated_at": user_profile.get("updated_at") if isinstance(user_profile.get("updated_at"), str) else (user_profile.get("updated_at").isoformat() if user_profile.get("updated_at") else datetime.now().isoformat()),
+            "created_at": user_profile.get("profile_created_on") if isinstance(user_profile.get("profile_created_on"), str) else (user_profile.get("profile_created_on").isoformat() + "Z" if user_profile.get("profile_created_on") else datetime.utcnow().isoformat() + "Z"),
+            "updated_at": user_profile.get("updated_at") if isinstance(user_profile.get("updated_at"), str) else (user_profile.get("updated_at").isoformat() + "Z" if user_profile.get("updated_at") else datetime.utcnow().isoformat() + "Z"),
             "user_type": user_profile.get("user_type", "candidate"),
             "user_status": user_profile.get("user_status", "active"),
             "user_plan": user_profile.get("user_plan", "free")
@@ -463,7 +463,7 @@ async def get_interview_history(current_user: dict = Depends(get_current_user)):
 				"session_id": interview.get("session_id", ""),
 				"role": interview.get("role", "Technical Interview"),
 				"score": interview.get("overall_score", 0),
-				"created_at": interview.get("created_at", datetime.now()).isoformat() if hasattr(interview.get("created_at"), 'isoformat') else str(interview.get("created_at", datetime.now())),
+				"created_at": interview.get("created_at", datetime.now()).isoformat() + "Z" if hasattr(interview.get("created_at"), 'isoformat') else str(interview.get("created_at", datetime.now())),
 				"status": "completed"
 			})
 		
@@ -571,7 +571,7 @@ async def get_user_applications_endpoint(user_id: str, current_user: dict = Depe
 					"job_title": job.get("title", ""),
 					"company": job.get("company", ""),
 					"status": app_record.get("status", "applied"),
-					"applied_date": app_record.get("applied_date").isoformat() if hasattr(app_record.get("applied_date"), 'isoformat') else str(app_record.get("applied_date", "")),
+					"applied_date": app_record.get("applied_date").isoformat() + "Z" if hasattr(app_record.get("applied_date"), 'isoformat') else str(app_record.get("applied_date", "")),
 					"match_percentage": app_record.get("match_percentage"),
 					"tailor_resume_done": app_record.get("tailor_resume_done", False),
 					"notes": app_record.get("notes"),
@@ -655,8 +655,8 @@ async def get_user_analytics(current_user: dict = Depends(get_current_user)):
         profile_metrics = {
             "profile_completion": current_user.get("profile_completion_count", 0),
             "profile_visits": current_user.get("profile_visits", 0),
-            "last_active": current_user.get("last_active", datetime.now()).isoformat(),
-            "account_age_days": (datetime.now() - current_user.get("profile_created_on", datetime.now())).days
+            "last_active": current_user.get("last_active", datetime.utcnow()).isoformat() + "Z" if hasattr(current_user.get("last_active", ""), 'isoformat') else current_user.get("last_active", datetime.utcnow().isoformat() + "Z"),
+            "account_age_days": (datetime.utcnow() - current_user.get("profile_created_on", datetime.utcnow())).days
         }
         
         return {
@@ -669,7 +669,7 @@ async def get_user_analytics(current_user: dict = Depends(get_current_user)):
             "interviews": interview_performance,
             "learning": learning_stats,
             "profile": profile_metrics,
-            "generated_at": datetime.now().isoformat()
+            "generated_at": datetime.utcnow().isoformat() + "Z"
         }
         
     except Exception as e:
@@ -697,10 +697,10 @@ async def get_user_analytics(current_user: dict = Depends(get_current_user)):
             "profile": {
                 "profile_completion": current_user.get("profile_completion_count", 0),
                 "profile_visits": 0,
-                "last_active": datetime.now().isoformat(),
+                "last_active": datetime.utcnow().isoformat() + "Z",
                 "account_age_days": 0
             },
-            "generated_at": datetime.now().isoformat()
+            "generated_at": datetime.utcnow().isoformat() + "Z"
         }
 
 
@@ -723,7 +723,7 @@ async def get_learning_resources_endpoint(
                 "level": level,
                 "limit": limit
             },
-            "generated_at": datetime.now().isoformat()
+            "generated_at": datetime.utcnow().isoformat() + "Z"
         }
         
     except Exception as e:
@@ -752,7 +752,7 @@ async def get_learning_progress_endpoint(current_user: dict = Depends(get_curren
                     "longest_streak": 0,
                     "last_activity": None
                 },
-                "updated_at": datetime.now().isoformat()
+                "updated_at": datetime.utcnow().isoformat() + "Z"
             }
         
         # Enhance progress data with additional metrics
@@ -821,7 +821,7 @@ def calculate_job_match_score(job, user_skills, user_certifications, user_experi
                 (user_skill == "node" and "nodejs" in job_skill)):
                 
                 skills_matched += 1
-                matched_skills.append(f"{user_skill} ↔ {job_skill}")
+                matched_skills.append(f"{user_skill} ? {job_skill}")
                 break  # Only count each user skill once
     
     # Calculate match percentage based on user's skills
@@ -943,7 +943,7 @@ async def get_job_listings(
                 user_applied_jobs.append(app)
         
         # Get jobs with a reasonable limit to prevent memory issues
-        # Score in batches — fetch max 200 jobs for scoring (covers most use cases)
+        # Score in batches � fetch max 200 jobs for scoring (covers most use cases)
         MAX_JOBS_FOR_SCORING = 200
         collection = db.database["jobs"]
         cursor = collection.find(query).sort("posted_date", -1).limit(MAX_JOBS_FOR_SCORING)
@@ -1006,10 +1006,10 @@ async def get_job_listings(
                 "companies": ["All Companies"],
                 "salary_ranges": [
                     {"label": "All Ranges", "min": 0, "max": 10000000},
-                    {"label": "₹10-15 LPA", "min": 1000000, "max": 1500000},
-                    {"label": "₹15-20 LPA", "min": 1500000, "max": 2000000},
-                    {"label": "₹20-25 LPA", "min": 2000000, "max": 2500000},
-                    {"label": "₹25+ LPA", "min": 2500000, "max": 10000000}
+                    {"label": "?10-15 LPA", "min": 1000000, "max": 1500000},
+                    {"label": "?15-20 LPA", "min": 1500000, "max": 2000000},
+                    {"label": "?20-25 LPA", "min": 2000000, "max": 2500000},
+                    {"label": "?25+ LPA", "min": 2500000, "max": 10000000}
                 ]
             }
         }

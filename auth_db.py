@@ -119,8 +119,8 @@ async def create_user(user_data: Dict[str, Any]) -> Dict[str, Any]:
             "username": user_data.get("username"),
             "is_active": True,
             "is_verified": False,
-            "created_at": now.isoformat(),
-            "updated_at": now.isoformat(),
+            "created_at": now.isoformat() + "Z",
+            "updated_at": now.isoformat() + "Z",
             "last_login": None,
             
             # Legacy structure for backward compatibility
@@ -185,7 +185,7 @@ async def authenticate_user(email: str, password: str) -> Optional[Dict[str, Any
         await db.database[USERS_COLLECTION].update_one(
             {"_id": user["_id"]},
             {"$set": {
-                "last_login": datetime.utcnow().isoformat(),
+                "last_login": datetime.utcnow().isoformat() + "Z",
                 "last_active": datetime.utcnow()
             }}
         )
@@ -224,7 +224,7 @@ async def update_user_profile(user_id: str, update_data: Dict[str, Any]) -> bool
     """Update user profile with new schema support"""
     try:
         # Add timestamp for last update
-        update_data["updated_at"] = datetime.utcnow().isoformat()
+        update_data["updated_at"] = datetime.utcnow().isoformat() + "Z"
         update_data["last_active"] = datetime.utcnow()
         
         # Handle nested updates for legacy compatibility
@@ -271,7 +271,7 @@ async def change_user_password(user_id: str, new_password: str) -> bool:
             {"user_id": user_id},
             {"$set": {
                 "password_hash": new_hash,
-                "updated_at": datetime.utcnow().isoformat(),
+                "updated_at": datetime.utcnow().isoformat() + "Z",
                 "last_active": datetime.utcnow()
             }}
         )

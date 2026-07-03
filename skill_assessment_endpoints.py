@@ -68,7 +68,7 @@ MOCK_ASSESSMENT_HISTORY = [
         "skill_name": "JavaScript",
         "score": 85,
         "level": "Advanced",
-        "completed_date": datetime.now() - timedelta(days=5),
+        "completed_date": datetime.utcnow() - timedelta(days=5),
         "has_certificate": True
     },
     {
@@ -76,7 +76,7 @@ MOCK_ASSESSMENT_HISTORY = [
         "skill_name": "Python",
         "score": 72,
         "level": "Intermediate",
-        "completed_date": datetime.now() - timedelta(days=12),
+        "completed_date": datetime.utcnow() - timedelta(days=12),
         "has_certificate": True
     }
 ]
@@ -273,7 +273,7 @@ async def get_usage_status():
         "interviews_used": 2,
         "interviews_remaining": 3,
         "weekly_limit": 5,
-        "next_reset": datetime.now() + timedelta(days=3),
+        "next_reset": datetime.utcnow() + timedelta(days=3),
         "can_take_interview": True
     }
 
@@ -313,5 +313,5 @@ async def get_certificate(assessment_id: str):
     return {
         "certificate_url": f"https://certificates.jobmitra.com/{assessment_id}.pdf",
         "certificate_id": f"CERT_{assessment_id.upper()}",
-        "issued_date": datetime.now().isoformat()
+        "issued_date": datetime.utcnow().isoformat() + "Z"
     }

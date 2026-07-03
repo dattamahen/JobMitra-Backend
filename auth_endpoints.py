@@ -1,4 +1,4 @@
-﻿"""
+"""
 Authentication API endpoints for JobMitra
 """
 
@@ -23,6 +23,15 @@ from auth_db import (
 from db import db
 from auth_utils import create_access_token, verify_token, SECRET_KEY
 from activity_tracker import log_user_activity
+
+def _iso(dt) -> str:
+    """Return UTC ISO string with Z suffix so browsers parse it as UTC."""
+    if dt is None:
+        return datetime.utcnow().isoformat() + "Z"
+    if hasattr(dt, 'isoformat'):
+        s = dt.isoformat()
+        return s if s.endswith('Z') else s + "Z"
+    return str(dt)
 
 # Create router
 auth_router = APIRouter(prefix="/auth", tags=["Authentication"])
@@ -136,7 +145,7 @@ async def register_user(request: RegisterRequest):
             full_name=f"{user['first_name']} {user['last_name']}",
             is_active=user.get("is_active", True),
             is_verified=user.get("is_verified", False),
-            created_at=user["profile_created_on"].isoformat()
+            created_at=_iso(user["profile_created_on"])
         )
         
     except ValueError as e:
@@ -202,7 +211,7 @@ async def login_user(request: LoginRequest):
                 is_active=user.get("is_active", True),
                 is_verified=user.get("is_verified", False),
                 profile_completion=user.get("profile_completion_count", 0),
-                created_at=user["profile_created_on"].isoformat()
+                created_at=_iso(user["profile_created_on"])
             )
         )
         
@@ -223,7 +232,7 @@ async def get_current_user_profile(current_user: dict = Depends(get_current_user
             "email": current_user["email"],
             "first_name": current_user["first_name"],
             "last_name": current_user["last_name"],
-            "date_of_birth": current_user.get("date_of_birth"),
+            "date_of_birth": current_user.get("date_of_birth").isoformat() + "Z" if hasattr(current_user.get("date_of_birth"), 'isoformat') else current_user.get("date_of_birth"),
             "phone": current_user.get("phone"),
             "skills": current_user.get("skills", []),
             "technical_skills": current_user.get("technical_skills", []),
@@ -458,7 +467,7 @@ async def update_profile(
             is_active=updated_user.get("is_active", True),
             is_verified=updated_user.get("is_verified", False),
             profile_completion=updated_user.get("profile_completion_count", 0),
-            created_at=updated_user["profile_created_on"].isoformat()
+            created_at=_iso(updated_user["profile_created_on"])
         )
         
     except Exception as e:

@@ -42,6 +42,6 @@ def build_user_response(user: dict) -> UserResponse:
         is_active=user.get("is_active", True),
         is_verified=user.get("is_verified", False),
         profile_completion=user.get("profile_completion_count", 0),
-        created_at=created_on.isoformat() if hasattr(created_on, 'isoformat') else str(created_on),
-        updated_at=user.get("updated_at", created_on.isoformat() if hasattr(created_on, 'isoformat') else str(created_on))
+        created_at=created_on.isoformat() + "Z" if hasattr(created_on, 'isoformat') else str(created_on),
+        updated_at=user.get("updated_at", created_on.isoformat() + "Z" if hasattr(created_on, 'isoformat') else str(created_on))
     )
