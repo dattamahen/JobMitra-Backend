@@ -84,8 +84,8 @@ async def google_signin(request: GoogleSignInRequest):
             profile_visits=user.get('profile_visits', 0),
             full_name=f"{user['first_name']} {user['last_name']}",
             is_active=user.get('is_active', True),
-            created_at=user['profile_created_on'].isoformat(),
-            updated_at=user['last_active'].isoformat() if user.get('last_active') else user['profile_created_on'].isoformat()
+            created_at=user['profile_created_on'].isoformat() + "Z",
+            updated_at=user['last_active'].isoformat() + "Z" if user.get('last_active') else user['profile_created_on'].isoformat() + "Z"
         )
         
         return GoogleSignInResponse(

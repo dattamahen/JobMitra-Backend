@@ -59,7 +59,7 @@ async def log_user_activity(
             "activity_type": config["type"],
             "description": description,
             "icon": config["icon"],
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.utcnow().isoformat() + "Z",
             "status": "completed",
             "metadata": metadata or {},
         }

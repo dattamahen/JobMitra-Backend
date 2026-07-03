@@ -268,7 +268,7 @@ class JobApplicationDatabase:
                 # Convert datetime objects to ISO strings
                 for key, value in job_data.items():
                     if hasattr(value, 'isoformat'):
-                        job_data[key] = value.isoformat()
+                        job_data[key] = value.isoformat() + "Z"
                 
                 jobs_with_applications.append(job_data)
             

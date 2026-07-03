@@ -175,7 +175,7 @@ async def confirm_payment(req: PaymentConfirmRequest):
             "currency": paid_plan.get("currency", "INR"),
             "plan_id": paid_plan.get("plan_id", "pro_149"),
             "status": "confirmed",
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.utcnow().isoformat() + "Z",
         }
 
         # Atomic update: increment credits + push payment + update plan

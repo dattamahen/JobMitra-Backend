@@ -108,7 +108,7 @@ async def use_feature(
             {
                 "$set": {
                     "feature_usage_count": new_count,
-                    "updated_at": datetime.utcnow().isoformat(),
+                    "updated_at": datetime.utcnow().isoformat() + "Z",
                     "last_active": datetime.utcnow()
                 }
             }
