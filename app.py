@@ -70,6 +70,7 @@ from upload_endpoints import router as upload_router
 from prompt_endpoints import router as prompt_router
 from cv_bootstrap_endpoints import router as cv_bootstrap_router
 from professional_summary_endpoints import router as professional_summary_router
+from project_contest_endpoints import router as project_contest_router
 
 
 @asynccontextmanager
@@ -261,6 +262,7 @@ def create_app() -> FastAPI:
     app.include_router(prompt_router)  # Prompt management routes
     app.include_router(cv_bootstrap_router)  # CV bootstrap for new users
     app.include_router(professional_summary_router, prefix="/api/v1")  # Professional summary generation
+    app.include_router(project_contest_router)  # Project contest routes
 
     # Health check endpoint
     @app.get("/", tags=["Health"])

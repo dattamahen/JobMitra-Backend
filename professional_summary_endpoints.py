@@ -53,7 +53,7 @@ Rules:
 
 
 class GenerateAIContentRequest(BaseModel):
-    type: Literal["professional_summary", "job_description"]
+    type: Literal["professional_summary", "job_description", "project_description"]
 
     # Common fields
     skills: Optional[List[str]] = []
@@ -73,6 +73,12 @@ class GenerateAIContentRequest(BaseModel):
     company: Optional[str] = ""
     is_current: Optional[bool] = False
 
+    # Project description fields
+    project_title: Optional[str] = ""
+    project_type: Optional[str] = ""
+    category: Optional[str] = ""
+    tech_stack: Optional[List[str]] = []
+
 
 class GenerateAIContentResponse(BaseModel):
     content: str
@@ -84,6 +90,8 @@ async def generate_ai_content(request: GenerateAIContentRequest):
     try:
         if request.type == "professional_summary":
             content = await _generate_summary(request)
+        elif request.type == "project_description":
+            content = await _generate_project_description(request)
         else:
             content = await _generate_job_description(request)
 
@@ -181,5 +189,44 @@ async def _generate_job_description(request: GenerateAIContentRequest) -> str:
 Generate 4-6 achievement-focused bullet points for this role."""
 
     full_prompt = f"{JOB_DESCRIPTION_PROMPT}\n\n{user_prompt}"
+    ai_response = await llm_service.generate(full_prompt, "gemini")
+    return ai_response.get("content", "").strip().strip('"').strip("'")
+
+
+PROJECT_DESCRIPTION_PROMPT = """You are a technical project mentor who helps final-year students write compelling project descriptions for contests and portfolios.
+
+Write a clear, impressive project description (150-300 words) that:
+
+1. Opens with what the project IS and what problem it solves
+2. Describes the key features and functionality (3-4 main features)
+3. Mentions the technical architecture briefly (tech stack, patterns used)
+4. Highlights what makes this project unique or innovative
+5. Closes with the impact or potential use case
+
+Style rules:
+- Write in THIRD PERSON ("The project...", "This system...")
+- Be specific about technologies and their role in the project
+- Use clear, professional language — not overly academic
+- NO generic filler like "This project aims to..." or "In today's world..."
+- Mention scalability, real-world applicability, or user impact where relevant
+- Keep it concise but informative — suitable for a contest submission
+
+Return ONLY the description text. No quotes, no labels, no markdown."""
+
+
+async def _generate_project_description(request: GenerateAIContentRequest) -> str:
+    tech_str = ", ".join(request.tech_stack) if request.tech_stack else "Not specified"
+    category_label = (request.category or "").replace("_", " ").title()
+
+    user_prompt = f"""Generate a project description for a contest submission:
+
+- Project Title: {request.project_title or 'Not specified'}
+- Project Type: {request.project_type or 'Technical'}
+- Category: {category_label or 'Not specified'}
+- Tech Stack: {tech_str}
+
+Write a compelling 150-300 word description for this project."""
+
+    full_prompt = f"{PROJECT_DESCRIPTION_PROMPT}\n\n{user_prompt}"
     ai_response = await llm_service.generate(full_prompt, "gemini")
     return ai_response.get("content", "").strip().strip('"').strip("'")
