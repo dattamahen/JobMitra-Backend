@@ -38,9 +38,14 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
     except Exception:
         raise HTTPException(status_code=401, detail="Authentication failed")
 
+# Plan normalization
+_PLAN_MAP = {'free': 'F', 'paid': 'P', 'subscribed': 'P', 'pro': 'S', 'premium': 'S'}
+def normalize_plan(p: str) -> str:
+    return _PLAN_MAP.get(str(p).lower(), p if p in ('F', 'P', 'S') else 'F')
+
 # Schemas
 class FeatureUsageResponse(BaseModel):
-    plan: Literal["F", "P", "S"]
+    plan: str
     remaining_count: int
     status: Literal["A", "X"]
 
@@ -64,7 +69,7 @@ PLAN_LIMITS = {
 async def get_feature_usage(current_user: dict = Depends(get_current_user)):
     """Get current user's feature usage information"""
     try:
-        plan = current_user.get("user_plan", "F")
+        plan = normalize_plan(current_user.get("user_plan", "F"))
         count = current_user.get("feature_usage_count", PLAN_LIMITS.get(plan, 5))
         usage_status = "A" if count > 0 else "X"
         
