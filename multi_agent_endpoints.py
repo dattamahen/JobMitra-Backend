@@ -17,7 +17,7 @@ async def list_providers():
 			},
 			{
 				"name": "gemini",
-				"model": "gemini-2.5-flash",
+				"model": "gemini-2.0-flash",
 				"available": gemini_available
 			},
 			{
