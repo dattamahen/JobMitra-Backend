@@ -256,7 +256,9 @@ async def get_current_user_profile(current_user: dict = Depends(get_current_user
             "overall_experience_years": current_user.get("overall_experience_years"),
             "highest_qualification": current_user.get("highest_qualification"),
             "feature_usage_count": current_user.get("feature_usage_count", 5),
-            "user_plan": current_user.get("user_plan", "free")
+            "user_plan": current_user.get("user_plan", "free"),
+            "user_type": current_user.get("user_type", "candidate"),
+            "user_status": current_user.get("user_status", "active")
         }
     except Exception as e:
         logger.error("Error in /auth/me: %s", e)
