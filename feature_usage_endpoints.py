@@ -65,13 +65,13 @@ async def get_feature_usage(current_user: dict = Depends(get_current_user)):
     """Get current user's feature usage information"""
     try:
         plan = current_user.get("user_plan", "F")
-        count = current_user.get("feature_usage_count", PLAN_LIMITS[plan])
-        status = "A" if count > 0 else "X"
+        count = current_user.get("feature_usage_count", PLAN_LIMITS.get(plan, 5))
+        usage_status = "A" if count > 0 else "X"
         
         return FeatureUsageResponse(
             plan=plan,
             remaining_count=count,
-            status=status
+            status=usage_status
         )
     except Exception as e:
         raise HTTPException(
