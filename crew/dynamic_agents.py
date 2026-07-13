@@ -24,7 +24,7 @@ def create_dynamic_agent(agent_config: dict, llm_provider: str = "openai"):
 		Agent: Configured CrewAI agent
 	"""
 	llm = ChatGoogleGenerativeAI(
-		model="gemini-2.5-flash",
+		model="gemini-2.0-flash",
 		google_api_key=os.getenv("GEMINI_API_KEY"),
 		temperature=0.7
 	)

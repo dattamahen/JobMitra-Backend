@@ -14,7 +14,7 @@ load_dotenv()
 def _create_gemini_llm():
 	"""Shared Gemini LLM instance used by all agents."""
 	return ChatGoogleGenerativeAI(
-		model="gemini-2.5-flash",
+		model="gemini-2.0-flash",
 		google_api_key=os.getenv("GEMINI_API_KEY"),
 		temperature=0.7
 	)
