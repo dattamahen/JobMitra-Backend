@@ -49,12 +49,12 @@ PLANS = [
         "created_at": datetime.utcnow(),
         "updated_at": datetime.utcnow(),
     },
-    # ── Paid plan for dev (₹149 on localhost:4700 / dev server) ──
+    # ── Paid plan for dev (₹1 for testing on dev.jobmouka.com) ──
     {
         "plan_id": "pro_149_dev",
         "name": "Pro Plan",
         "description": "Unlock 10 CV downloads and 10 mock interviews",
-        "amount": 149,
+        "amount": 1,
         "currency": "INR",
         "cv_downloads": 10,
         "mock_interviews": 10,
@@ -62,7 +62,7 @@ PLANS = [
         "is_default": False,
         "env": "dev",
         "upi_id": "jobmouka@upi",
-        "payment_link": "https://razorpay.me/@sanchamtechnologysolutionspri?amount=149",
+        "payment_link": "https://razorpay.me/@sanchamtechnologysolutionspri?amount=1",
         "benefits": [
             {"icon": "record_voice_over", "text": "10 AI Mock Interviews", "detail": "practice until you're confident"},
             {"icon": "description", "text": "10 CV Downloads", "detail": "apply to more companies, faster"},
