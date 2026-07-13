@@ -76,6 +76,11 @@ class Settings:
     # Google OAuth
     GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
 
+    # Razorpay
+    RAZORPAY_KEY_ID = os.getenv("RAZORPAY_KEY_ID", "")
+    RAZORPAY_KEY_SECRET = os.getenv("RAZORPAY_KEY_SECRET", "")
+    RAZORPAY_WEBHOOK_SECRET = os.getenv("RAZORPAY_WEBHOOK_SECRET", "")
+
     # Email
     EMAIL_ENABLED = os.getenv("EMAIL_ENABLED", "false").lower() == "true"
     SMTP_HOST = os.getenv("SMTP_HOST", "smtp.gmail.com")
