@@ -94,6 +94,8 @@ async def google_signin(request: GoogleSignInRequest):
             user=user_response
         )
         
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.debug("Google sign-in error: %s ", e)
-        raise HTTPException(status_code=500, detail="Google sign-in failed")
+        logger.error("Google sign-in error: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Google sign-in failed: {str(e)}")

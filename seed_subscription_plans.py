@@ -41,7 +41,7 @@ PLANS = [
         "is_default": False,
         "env": "local",
         "upi_id": "jobmouka@upi",
-        "payment_link": "https://razorpay.me/@sanchamtechnologysolutionspri?amount=2",
+        "payment_link": "https://razorpay.me/@sanchamtechnologysolutionspri",
         "benefits": [
             {"icon": "record_voice_over", "text": "10 AI Mock Interviews", "detail": "practice until you're confident"},
             {"icon": "description", "text": "10 CV Downloads", "detail": "apply to more companies, faster"},
@@ -62,7 +62,7 @@ PLANS = [
         "is_default": False,
         "env": "dev",
         "upi_id": "jobmouka@upi",
-        "payment_link": "https://razorpay.me/@sanchamtechnologysolutionspri?amount=2",
+        "payment_link": "https://razorpay.me/@sanchamtechnologysolutionspri",
         "benefits": [
             {"icon": "record_voice_over", "text": "10 AI Mock Interviews", "detail": "practice until you're confident"},
             {"icon": "description", "text": "10 CV Downloads", "detail": "apply to more companies, faster"},
@@ -83,7 +83,7 @@ PLANS = [
         "is_default": False,
         "env": "prod",
         "upi_id": "jobmouka@upi",
-        "payment_link": "https://razorpay.me/@sanchamtechnologysolutionspri?amount=149",
+        "payment_link": "https://razorpay.me/@sanchamtechnologysolutionspri",
         "benefits": [
             {"icon": "record_voice_over", "text": "10 AI Mock Interviews", "detail": "practice until you're confident"},
             {"icon": "description", "text": "10 CV Downloads", "detail": "apply to more companies, faster"},
