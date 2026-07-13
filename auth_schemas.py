@@ -84,7 +84,7 @@ class UserResponse(BaseModel):
     # User Classification
     user_type: Literal["candidate", "hire"] = "candidate"
     user_status: Literal["active", "inactive", "pending_verification"] = "active"
-    user_plan: Literal["F", "P", "S"] = "F"
+    user_plan: str = "F"
     
     # Feature Usage Tracking
     feature_usage_count: int = 5
@@ -115,6 +115,12 @@ class UserResponse(BaseModel):
     created_at: str
     city: Optional[str] = None
     state: Optional[str] = None
+
+    @validator('user_plan', pre=True)
+    @classmethod
+    def normalize_user_plan(cls, v):
+        mapping = {'free': 'F', 'paid': 'P', 'subscribed': 'P', 'pro': 'S', 'premium': 'S'}
+        return mapping.get(str(v).lower(), v) if v else 'F'
 
 class LoginResponse(BaseModel):
     access_token: str
