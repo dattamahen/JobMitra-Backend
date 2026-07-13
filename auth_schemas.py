@@ -272,6 +272,24 @@ class UserProfileUpdateRequest(BaseModel):
     linkedin_url: Optional[str] = None
     twitter_url: Optional[str] = None
     youtube_url: Optional[str] = None
+    # Legacy field aliases
+    full_name: Optional[str] = None
+    experience_years: Optional[Union[int, str, None]] = None
+    current_job_title: Optional[str] = None
+    preferred_work_types: Optional[List[str]] = None
+    preferred_employment_types: Optional[List[str]] = None
+    social_links: Optional[Dict[str, Any]] = None
+    location: Optional[Union[Dict[str, Any], str]] = None
+
+    @validator('experience_years', pre=True)
+    @classmethod
+    def coerce_experience_years(cls, v):
+        if v is None or v == '':
+            return None
+        try:
+            return int(float(str(v)))
+        except (ValueError, TypeError):
+            return None
     
     @validator('certifications', pre=True)
     @classmethod
