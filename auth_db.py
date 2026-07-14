@@ -47,7 +47,7 @@ async def create_user(user_data: Dict[str, Any]) -> Dict[str, Any]:
         user_doc = {
             "user_id": str(uuid.uuid4()),
             "email": user_data["email"],
-            "password_hash": hash_password(user_data["password"]),
+            "password_hash": hash_password(user_data["password"]) if user_data.get("password") else "",
             
             # Basic Personal Information
             "first_name": user_data["first_name"],

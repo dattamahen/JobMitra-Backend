@@ -3,17 +3,25 @@ Skill Assessment API Endpoints - Placeholder Implementation
 """
 
 import logging
+import json
+import re
+import uuid
 
 logger = logging.getLogger(__name__)
 
 from fastapi import APIRouter, HTTPException, Depends
 from typing import List, Dict, Any, Optional
 from pydantic import BaseModel
-from datetime import datetime, timedelta
+from datetime import datetime
 import random
 from auth_endpoints import get_current_user
 from auth_db import get_user_by_id
 from activity_tracker import log_user_activity
+from multi_llm_service import MultiLLMService
+from prompt_manager import prompt_manager
+from db import get_user_mock_interviews, get_learning_resources
+
+llm_service = MultiLLMService()
 
 router = APIRouter(prefix="/api/v1/skill-assessment", tags=["Skill Assessment"])
 
@@ -48,38 +56,7 @@ class LearningResource(BaseModel):
     skill: str
     rating: Optional[float] = None
 
-# Mock Data
-MOCK_TECHNICAL_SKILLS = [
-    {"skill_id": "js", "skill_name": "JavaScript", "current_level": 75, "level_text": "Advanced", "category": "technical"},
-    {"skill_id": "python", "skill_name": "Python", "current_level": 60, "level_text": "Intermediate", "category": "technical"},
-    {"skill_id": "react", "skill_name": "React", "current_level": 80, "level_text": "Advanced", "category": "technical"},
-    {"skill_id": "nodejs", "skill_name": "Node.js", "current_level": 45, "level_text": "Beginner", "category": "technical"},
-]
 
-MOCK_SOFT_SKILLS = [
-    {"skill_id": "communication", "skill_name": "Communication", "current_level": 85, "level_text": "Expert", "category": "soft"},
-    {"skill_id": "leadership", "skill_name": "Leadership", "current_level": 70, "level_text": "Advanced", "category": "soft"},
-    {"skill_id": "teamwork", "skill_name": "Teamwork", "current_level": 90, "level_text": "Expert", "category": "soft"},
-]
-
-MOCK_ASSESSMENT_HISTORY = [
-    {
-        "id": "1",
-        "skill_name": "JavaScript",
-        "score": 85,
-        "level": "Advanced",
-        "completed_date": datetime.utcnow() - timedelta(days=5),
-        "has_certificate": True
-    },
-    {
-        "id": "2", 
-        "skill_name": "Python",
-        "score": 72,
-        "level": "Intermediate",
-        "completed_date": datetime.utcnow() - timedelta(days=12),
-        "has_certificate": True
-    }
-]
 
 def get_level_text(level: int) -> str:
     """Convert numeric level to text"""
@@ -220,9 +197,23 @@ async def get_soft_skills(current_user: dict = Depends(get_current_user)) -> Lis
 
 @router.get("/history")
 async def get_assessment_history(current_user: dict = Depends(get_current_user)) -> List[AssessmentResult]:
-    """Get user's assessment history"""
-    # For now, return mock data but in real implementation would query user-specific history
-    return [AssessmentResult(**result) for result in MOCK_ASSESSMENT_HISTORY]
+    """Get user's assessment history from DB"""
+    try:
+        interviews = await get_user_mock_interviews(current_user["user_id"])
+        results = []
+        for i, interview in enumerate(interviews):
+            results.append(AssessmentResult(
+                id=interview.get("_id", str(i)),
+                skill_name=interview.get("interview_type", "General"),
+                score=interview.get("overall_score", 0),
+                level=get_level_text(interview.get("overall_score", 0)),
+                completed_date=interview.get("completed_at", interview.get("created_at", datetime.utcnow())),
+                has_certificate=interview.get("overall_score", 0) >= 70,
+            ))
+        return results
+    except Exception as e:
+        logger.error("fetching assessment history: %s", e)
+        return []
 
 @router.post("/take-test/{skill_id}")
 async def take_skill_test(skill_id: str, current_user: dict = Depends(get_current_user)):
@@ -245,26 +236,71 @@ async def take_skill_test(skill_id: str, current_user: dict = Depends(get_curren
 
 @router.post("/mock-interview")
 async def start_mock_interview(request: MockInterviewRequest):
-    """Start a mock interview session"""
+    """Start a skill-focused mock interview session using LLM"""
+    system_prompt = prompt_manager.get_random(
+        "interview_questions", user_id=request.user_id
+    ).get("system_prompt", "You are an expert technical interviewer.")
+
+    prompt = f"""{system_prompt}
+
+Generate exactly 10 focused interview questions specifically about "{request.skill_name}".
+Questions must test deep knowledge of {request.skill_name} only — concepts, best practices, real-world usage, and problem-solving.
+
+STRICT OUTPUT RULES:
+- Return ONLY a valid JSON object
+- Format: {{"questions": ["question 1", "question 2", ...]}}
+- Each question must be a single concise string
+- No markdown, no numbering, no extra text
+- Start with {{ and end with }}"""
+
+    try:
+        ai_response = await llm_service.generate(prompt, "gemini")
+        content = ai_response.get("content", "").strip()
+        content = re.sub(r"^```(?:json)?\s*", "", content)
+        content = re.sub(r"\s*```$", "", content).strip()
+        data = json.loads(content)
+        questions = data.get("questions", [])
+        if not questions:
+            raise ValueError("Empty questions list")
+    except Exception as e:
+        logger.warning("LLM question generation failed, using fallback: %s", e)
+        questions = [
+            f"What are the core concepts of {request.skill_name}?",
+            f"How have you used {request.skill_name} in a real project?",
+            f"What are common pitfalls when working with {request.skill_name}?",
+        ]
+
     return {
         "message": f"Mock interview for {request.skill_name} started",
-        "session_id": f"interview_{random.randint(1000, 9999)}",
-        "questions": [
-            f"Tell me about your experience with {request.skill_name}",
-            f"What are the key concepts in {request.skill_name}?",
-            f"How would you solve a complex problem using {request.skill_name}?"
-        ],
-        "duration_minutes": 15
+        "session_id": str(uuid.uuid4()),
+        "questions": questions,
+        "question_count": len(questions),
+        "duration_minutes": 15,
+        "skill": request.skill_name,
     }
 
 @router.get("/learning-resources/{skill_name}")
-async def get_learning_resources(skill_name: str) -> List[LearningResource]:
-    """Get learning resources for a specific skill"""
-    filtered_resources = [
-        resource for resource in MOCK_LEARNING_RESOURCES 
-        if resource["skill"].lower() == skill_name.lower()
-    ]
-    return [LearningResource(**resource) for resource in filtered_resources]
+async def get_skill_learning_resources(skill_name: str) -> List[LearningResource]:
+    """Get learning resources for a specific skill from DB"""
+    try:
+        resources = await get_learning_resources(skill=skill_name)
+        return [
+            LearningResource(
+                id=str(r.get("_id", r.get("id", ""))),
+                title=r.get("title", ""),
+                description=r.get("description", ""),
+                youtube_url=r.get("youtube_url", r.get("url", "")),
+                channel=r.get("channel", ""),
+                duration=r.get("duration", str(r.get("duration_minutes", ""))),
+                level=r.get("level", "beginner"),
+                skill=r.get("skill", skill_name),
+                rating=r.get("rating"),
+            )
+            for r in resources
+        ]
+    except Exception as e:
+        logger.error("fetching learning resources: %s", e)
+        return []
 
 @router.get("/usage-status")
 async def get_usage_status():
