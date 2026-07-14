@@ -30,46 +30,20 @@ class UserProfileRequest(BaseModel):
 
 
 def _build_question_prompt(system_prompt: str, user_details: dict, interview_type: str = "technical") -> str:
-	"""Build a prompt that enforces strict JSON array output."""
-	experience = user_details.get("experience_years", 0)
-	if experience <= 2:
-		difficulty = "beginner to intermediate"
-	elif experience <= 5:
-		difficulty = "intermediate to advanced"
-	else:
-		difficulty = "advanced, including system design and leadership"
-
-	skills = user_details.get("skills", [])
-	skills_str = ", ".join(skills)
-
-	if interview_type == "behavioral":
-		context_block = f"""Candidate Profile:
-- Role: {user_details.get("role", "Software Engineer")}
-- Experience: {experience} years
-- Core Skills: {skills_str}
-
-Generate exactly 15-18 behavioral interview questions at {difficulty} difficulty level.
-IMPORTANT: At least 10-12 questions MUST be directly based on the candidate's core skills listed above. The remaining questions should cover teamwork, conflict resolution, leadership, ownership, handling pressure, communication, and job-switch scenarios.
-Questions should be realistic and relevant to the candidate's experience level."""
-	else:
-		context_block = f"""Candidate Profile:
-- Role: {user_details.get("role", "Software Engineer")}
-- Experience: {experience} years
-- Core Skills: {skills_str}
-
-Generate exactly 15-18 interview questions at {difficulty} difficulty level.
-IMPORTANT: At least 10-12 questions MUST be directly based on the candidate's core skills listed above (e.g. if skills include Python, Django, React — ask in-depth questions on those specific technologies). The remaining 3-6 questions can cover system design, problem-solving, or general engineering practices."""
-
+	"""Build a prompt combining the JSON system prompt with dynamic candidate context."""
+	skills_str = ", ".join(user_details.get("skills", []))
 	return f"""{system_prompt}
 
-{context_block}
+Candidate Profile:
+- Role: {user_details.get("role", "Software Engineer")}
+- Experience: {user_details.get("experience_years", 0)} years
+- Core Skills: {skills_str}
 
 STRICT OUTPUT RULES:
 - Return ONLY a valid JSON object
 - Format: {{"questions": ["question 1", "question 2", ...]}}
-- Each question must be a single, concise string (1-3 sentences max)
+- Each question must be a single, concise string
 - No markdown, no numbering, no explanations, no extra text
-- No sub-questions or multi-part questions — one clear question per item
 - Start your response with {{ and end with }}"""
 
 
