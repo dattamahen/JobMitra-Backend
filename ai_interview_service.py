@@ -28,7 +28,7 @@ class AIInterviewService:
             raise Exception("GEMINI_API_KEY not found")
         
         genai.configure(api_key=self.gemini_api_key)
-        model = genai.GenerativeModel('gemini-2.0-flash')
+        model = genai.GenerativeModel('gemini-3.5-flash')
         
         system_prompt = prompt_manager.get_random("interview_questions").get("system_prompt", "")
         full_prompt = f"{system_prompt}\n\n{prompt}" if system_prompt else prompt

@@ -103,8 +103,8 @@ async def generate_ai_content(request: GenerateAIContentRequest):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error generating AI content ({request.type}): {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to generate {request.type.replace('_', ' ')}")
+        logger.error(f"Error generating AI content ({request.type}): {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to generate {request.type.replace('_', ' ')}: {str(e)}")
 
 
 async def _generate_summary(request: GenerateAIContentRequest) -> str:

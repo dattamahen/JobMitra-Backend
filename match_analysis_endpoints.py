@@ -1,5 +1,5 @@
 ﻿"""
-Match Analysis and Tailor Resume endpoints with enhanced skill-based matching
+Match Analysis and Tailor Resume endpoints with LLM-powered matching
 """
 
 from fastapi import APIRouter, HTTPException, Depends, status
@@ -7,10 +7,15 @@ from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
 import logging
+import json
+import re
 
 from db import db
 from auth_endpoints import get_current_user
 from resume_tailor_endpoints import calculate_skill_match_score
+from multi_llm_service import MultiLLMService
+
+llm_service = MultiLLMService()
 
 logger = logging.getLogger(__name__)
 
@@ -33,63 +38,80 @@ class TailorResumeResponse(BaseModel):
     message: str
     tailor_done: bool
 
-def perform_detailed_skill_analysis(user_skills: list, job_skills_required: list, job_skills_preferred: list) -> dict:
-    """Perform detailed skill-based match analysis."""
+async def perform_llm_match_analysis(user: dict, job: dict) -> dict:
+    """Use LLM to calculate a realistic match percentage and analysis."""
+    user_skills = user.get("skills", [])
+    job_skills_required = job.get("skills_required", job.get("skills", []))
+    job_skills_preferred = job.get("skills_preferred", [])
+
     if not user_skills:
         return {
             "match_percentage": 0,
             "skill_matches": [],
-            "missing_skills": job_skills_required + job_skills_preferred,
+            "missing_required": job_skills_required,
+            "missing_preferred": job_skills_preferred,
             "match_level": "poor",
             "recommendations": ["Add skills to your profile to improve job matching"]
         }
-    
-    # Combine all job skills
-    all_job_skills = job_skills_required + job_skills_preferred
-    
-    # Calculate match score using our existing function
-    match_percentage = calculate_skill_match_score(user_skills, all_job_skills)
-    
-    # Analyze skill matches in detail
-    normalized_user = [skill.lower().strip() for skill in user_skills]
-    normalized_required = [skill.lower().strip() for skill in job_skills_required]
-    normalized_preferred = [skill.lower().strip() for skill in job_skills_preferred]
-    
-    # Find exact matches
-    required_matches = list(set(normalized_user) & set(normalized_required))
-    preferred_matches = list(set(normalized_user) & set(normalized_preferred))
-    
-    # Find missing skills
-    missing_required = [skill for skill in job_skills_required 
-                       if skill.lower().strip() not in normalized_user]
-    missing_preferred = [skill for skill in job_skills_preferred 
-                        if skill.lower().strip() not in normalized_user]
-    
-    # Determine match level and recommendations
-    total_required = len(job_skills_required)
-    required_match_rate = len(required_matches) / total_required if total_required > 0 else 0
-    
-    if required_match_rate >= 0.8:
-        match_level = "excellent"
-        recommendations = ["Great match! You have most required skills."]
-    elif required_match_rate >= 0.6:
-        match_level = "good"
-        recommendations = [f"Good match! Consider learning: {', '.join(missing_required[:3])}"]
-    elif required_match_rate >= 0.4:
-        match_level = "fair"
-        recommendations = [f"Fair match. Focus on: {', '.join(missing_required[:3])}"]
-    else:
-        match_level = "poor"
-        recommendations = [f"Low match. You need: {', '.join(missing_required[:5])}"]
-    
-    return {
-        "match_percentage": match_percentage,
-        "skill_matches": required_matches + preferred_matches,
-        "missing_required": missing_required,
-        "missing_preferred": missing_preferred,
-        "match_level": match_level,
-        "recommendations": recommendations
-    }
+
+    company = job.get("company", "")
+    company_name = company.get("name", "") if isinstance(company, dict) else str(company)
+
+    prompt = f"""You are an expert technical recruiter. Analyze how well this candidate matches the job and return a realistic match percentage.
+
+CANDIDATE:
+- Skills: {', '.join(user_skills)}
+- Experience: {user.get('overall_experience_years', user.get('experience_years', 0))} years
+- Current Role: {user.get('current_role', 'Not specified')}
+
+JOB:
+- Title: {job.get('title', '')}
+- Company: {company_name}
+- Experience Level: {job.get('experience_level', '')}
+- Required Skills: {', '.join(job_skills_required)}
+- Preferred Skills: {', '.join(job_skills_preferred)}
+- Description: {str(job.get('description', ''))[:500]}
+
+Return ONLY a JSON object:
+{{
+  "match_percentage": <integer 0-100, be realistic>,
+  "match_level": <"excellent"|"good"|"fair"|"poor">,
+  "skill_matches": [<matched skills list>],
+  "missing_required": [<missing required skills>],
+  "missing_preferred": [<missing preferred skills>],
+  "recommendations": [<1-2 actionable suggestions>]
+}}
+
+Be accurate — if candidate lacks key required skills, score should be low. No markdown, no extra text."""
+
+    try:
+        ai_response = await llm_service.generate(prompt, "gemini")
+        content = ai_response.get("content", "").strip()
+        # Strip markdown code blocks if present
+        content = re.sub(r"^```(?:json)?\s*", "", content)
+        content = re.sub(r"\s*```$", "", content).strip()
+        result = json.loads(content)
+        # Ensure match_percentage is an int
+        result["match_percentage"] = int(result.get("match_percentage", 0))
+        return result
+    except Exception as e:
+        logger.warning("LLM match analysis failed, falling back to skill scoring: %s", e)
+        # Fallback to basic skill scoring
+        all_job_skills = job_skills_required + job_skills_preferred
+        match_percentage = calculate_skill_match_score(user_skills, all_job_skills)
+        normalized_user = [s.lower().strip() for s in user_skills]
+        missing_required = [s for s in job_skills_required if s.lower().strip() not in normalized_user]
+        missing_preferred = [s for s in job_skills_preferred if s.lower().strip() not in normalized_user]
+        matched = [s for s in all_job_skills if s.lower().strip() in normalized_user]
+        match_level = "excellent" if match_percentage >= 80 else "good" if match_percentage >= 60 else "fair" if match_percentage >= 40 else "poor"
+        return {
+            "match_percentage": match_percentage,
+            "match_level": match_level,
+            "skill_matches": matched,
+            "missing_required": missing_required,
+            "missing_preferred": missing_preferred,
+            "recommendations": [f"Focus on: {', '.join(missing_required[:3])}" if missing_required else "Great match!"]
+        }
 
 @match_router.post("/match-analysis", response_model=MatchAnalysisResponse)
 async def perform_match_analysis(
@@ -137,11 +159,9 @@ async def perform_match_analysis(
                 analysis_done=True
             )
         
-        # Perform enhanced skill-based analysis
-        analysis_result = perform_detailed_skill_analysis(
-            user_skills, job_skills_required, job_skills_preferred
-        )
-        
+        # Perform LLM-powered match analysis
+        analysis_result = await perform_llm_match_analysis(user, job)
+
         match_percentage = analysis_result["match_percentage"]
         match_level = analysis_result["match_level"]
         recommendations = analysis_result["recommendations"]
@@ -244,16 +264,8 @@ async def tailor_resume(
                 tailor_done=True
             )
         
-        # Get skill-based analysis first
-        user_skills = user.get("skills", [])
-        job_skills_required = job.get("skills_required", job.get("skills", []))
-        job_skills_preferred = job.get("skills_preferred", [])
-        
-        analysis_result = perform_detailed_skill_analysis(
-            user_skills, job_skills_required, job_skills_preferred
-        )
-        
-        # After tailoring, improve match percentage by 15-25 points
+        # LLM-powered analysis as base
+        analysis_result = await perform_llm_match_analysis(user, job)
         base_match = analysis_result["match_percentage"]
         improvement = min(25, max(15, 100 - base_match))  # Don't exceed 100%
         match_percentage = min(99, base_match + improvement)

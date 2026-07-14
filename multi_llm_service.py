@@ -17,7 +17,7 @@ if settings.GEMINI_API_KEY:
     _gemini_configured = True
 
 # Reusable model instance (thread-safe for async)
-_model = genai.GenerativeModel('gemini-2.0-flash') if _gemini_configured else None
+_model = genai.GenerativeModel('gemini-3.5-flash') if _gemini_configured else None
 
 # Request timeout in seconds
 LLM_TIMEOUT = 30
@@ -45,7 +45,7 @@ class MultiLLMService:
 
         brand_map = {
             "openai": {"provider": "openai", "model": "gpt-4"},
-            "gemini": {"provider": "gemini", "model": "gemini-2.0-flash"},
+            "gemini": {"provider": "gemini", "model": "gemini-3.5-flash"},
             "claude": {"provider": "claude", "model": "claude-3-sonnet"},
         }
         brand = brand_map.get(provider.lower(), brand_map["gemini"])

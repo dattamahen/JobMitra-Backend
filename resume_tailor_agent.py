@@ -24,7 +24,7 @@ def run_resume_tailor(user_profile: dict, job_description: str) -> dict:
             raise ValueError("GEMINI_API_KEY environment variable is required")
         
         genai.configure(api_key=gemini_api_key)
-        model = genai.GenerativeModel('gemini-2.0-flash')
+        model = genai.GenerativeModel('gemini-3.5-flash')
         
         # Extract user data
         user_data = {

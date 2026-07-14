@@ -39,29 +39,10 @@ class Database:
         
         if self.fallback_mode:
             self._seed_fallback_data()
-        
+
     def _seed_fallback_data(self):
-        """Add sample data for fallback mode."""
-        self.fallback_data["learning_resources"] = [
-            {
-                "title": "Python Programming Fundamentals",
-                "description": "Learn Python basics for web development",
-                "skill": "Python",
-                "level": "beginner",
-                "type": "course",
-                "url": "https://example.com/python-course",
-                "duration_minutes": 480
-            },
-            {
-                "title": "React.js Complete Guide",
-                "description": "Master React.js for frontend development",
-                "skill": "React",
-                "level": "intermediate",
-                "type": "course",
-                "url": "https://example.com/react-course",
-                "duration_minutes": 720
-            }
-        ]
+        """Fallback mode — no seed data."""
+        pass
         
     async def connect_to_mongo(self):
         """Establish connection to MongoDB with connection pooling."""
@@ -371,30 +352,6 @@ async def get_learning_resources(skill: str = None, level: str = None, limit: in
         for resource in resources:
             if "_id" in resource:
                 resource["_id"] = str(resource["_id"])
-        
-        # If no resources found, return sample data
-        if not resources:
-            sample_resources = [
-                {
-                    "title": "Python Programming Fundamentals",
-                    "description": "Learn Python basics for web development",
-                    "skill": skill or "Python",
-                    "level": level or "beginner",
-                    "type": "course",
-                    "url": "https://example.com/python-course",
-                    "duration_minutes": 480
-                },
-                {
-                    "title": "React.js Complete Guide", 
-                    "description": "Master React.js for frontend development",
-                    "skill": skill or "React",
-                    "level": level or "intermediate",
-                    "type": "course",
-                    "url": "https://example.com/react-course",
-                    "duration_minutes": 720
-                }
-            ]
-            return sample_resources[:limit]
         
         return resources
         

@@ -163,3 +163,4 @@ uploads/
 # Test reports
 tests/reports/
 tests/e2e/reports/
+docs/LLM_USAGE_PLAN.md
