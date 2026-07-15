@@ -1,0 +1,22 @@
+"""
+Validation constants to ensure consistency between frontend and backend
+"""
+
+class JobValidation:
+    TITLE_MIN_LENGTH = 5
+    TITLE_MAX_LENGTH = 100
+    
+    COMPANY_MIN_LENGTH = 2
+    COMPANY_MAX_LENGTH = 100
+    
+    DESCRIPTION_MIN_LENGTH = 50
+    DESCRIPTION_MAX_LENGTH = 2000
+    
+    REQUIREMENTS_MIN_ITEMS = 3
+    REQUIREMENTS_MAX_ITEMS = 15
+    
+    RESPONSIBILITIES_MIN_ITEMS = 3
+    RESPONSIBILITIES_MAX_ITEMS = 15
+    
+    SKILLS_REQUIRED_MIN_ITEMS = 2
+    SKILLS_REQUIRED_MAX_ITEMS = 10
