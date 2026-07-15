@@ -25,7 +25,7 @@ def setup_llm():
         raise ValueError("GEMINI_API_KEY environment variable is required")
     
     llm = ChatGoogleGenerativeAI(
-        model="gemini-3.5-flash",
+        model="gemini-2.0-flash-lite",
         google_api_key=gemini_api_key,
         temperature=0.7
     )

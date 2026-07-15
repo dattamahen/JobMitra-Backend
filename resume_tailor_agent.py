@@ -8,9 +8,11 @@ logger = logging.getLogger(__name__)
 
 import os
 import json
-import google.generativeai as genai
+from google import genai
 from prompt_manager import prompt_manager
 from api_contracts import parse_tailor_response
+
+MODEL = "gemini-2.0-flash-lite"
 
 
 def run_resume_tailor(user_profile: dict, job_description: str) -> dict:
@@ -18,13 +20,11 @@ def run_resume_tailor(user_profile: dict, job_description: str) -> dict:
     try:
         logger.debug("Starting resume tailoring with Gemini...")
         
-        # Configure Gemini
         gemini_api_key = os.getenv("GEMINI_API_KEY")
         if not gemini_api_key:
             raise ValueError("GEMINI_API_KEY environment variable is required")
         
-        genai.configure(api_key=gemini_api_key)
-        model = genai.GenerativeModel('gemini-3.5-flash')
+        client = genai.Client(api_key=gemini_api_key)
         
         # Extract user data
         user_data = {
@@ -117,8 +117,7 @@ IMPORTANT for match scores:
 - "match_improvement": Estimate how well the TAILORED resume matches the JD (0-100). This should always be higher than match_before since you optimized phrasing, keywords, and structure. The improvement should be realistic (typically 10-30 points higher).
 """
         
-        # Call Gemini
-        response = model.generate_content(prompt)
+        response = client.models.generate_content(model=MODEL, contents=prompt)
         result_str = response.text
         
         return parse_tailor_response(result_str)
