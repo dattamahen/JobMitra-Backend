@@ -112,18 +112,21 @@ async def register_user(request: RegisterRequest):
         
         user = await create_user(user_data)
         
-        # Send verification email for HR users
+        # Send verification email for HR users, welcome email for candidates
         if request.user_type in ("hire", "hr"):
             from email_service import email_service
             from auth_utils import generate_verification_token
             token = generate_verification_token()
-            # Store token in DB
             await db.database["users"].update_one(
                 {"user_id": user["user_id"]},
                 {"$set": {"verification_token": token, "user_status": "pending_verification"}}
             )
             user_name = f"{request.first_name} {request.last_name}"
             email_service.send_verification_email(request.email, token, user_name)
+        else:
+            from email_service import email_service
+            user_name = f"{request.first_name} {request.last_name}"
+            email_service.send_welcome_email(request.email, user_name)
         
         # Create response
         return UserResponse(

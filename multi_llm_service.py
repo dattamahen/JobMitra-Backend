@@ -5,22 +5,15 @@ Optimized: API key configured once at initialization, not per-request.
 import asyncio
 import logging
 from typing import Dict, Any
-import google.generativeai as genai
+from google import genai
 from config import settings
 
 logger = logging.getLogger(__name__)
 
-# Configure Gemini API key ONCE at module load
-_gemini_configured = False
-if settings.GEMINI_API_KEY:
-    genai.configure(api_key=settings.GEMINI_API_KEY)
-    _gemini_configured = True
-
-# Reusable model instance (thread-safe for async)
-_model = genai.GenerativeModel('gemini-3.5-flash') if _gemini_configured else None
-
-# Request timeout in seconds
+MODEL = "gemini-2.0-flash-lite"
 LLM_TIMEOUT = 30
+
+_client = genai.Client(api_key=settings.GEMINI_API_KEY) if settings.GEMINI_API_KEY else None
 
 
 class MultiLLMService:
@@ -28,12 +21,12 @@ class MultiLLMService:
 
     async def generate(self, prompt: str, provider: str = "gemini") -> Dict[str, Any]:
         """Generate response with timeout protection."""
-        if not _gemini_configured or _model is None:
+        if not _client:
             raise Exception("GEMINI_API_KEY not configured")
 
         try:
             response = await asyncio.wait_for(
-                asyncio.to_thread(_model.generate_content, prompt),
+                asyncio.to_thread(_client.models.generate_content, model=MODEL, contents=prompt),
                 timeout=LLM_TIMEOUT
             )
         except asyncio.TimeoutError:
@@ -45,7 +38,7 @@ class MultiLLMService:
 
         brand_map = {
             "openai": {"provider": "openai", "model": "gpt-4"},
-            "gemini": {"provider": "gemini", "model": "gemini-3.5-flash"},
+            "gemini": {"provider": "gemini", "model": MODEL},
             "claude": {"provider": "claude", "model": "claude-3-sonnet"},
         }
         brand = brand_map.get(provider.lower(), brand_map["gemini"])
