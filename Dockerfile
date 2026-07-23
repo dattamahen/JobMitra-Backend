@@ -3,7 +3,9 @@ FROM python:3.11-slim
 WORKDIR /app
 
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Install google-genai first, then the rest — avoids namespace conflict with google-auth
+RUN pip install --no-cache-dir google-genai>=1.0.0 && \
+    pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
