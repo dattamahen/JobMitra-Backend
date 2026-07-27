@@ -60,7 +60,6 @@ from match_analysis_endpoints import match_router
 from resume_endpoints import resume_router
 from skill_assessment_endpoints import router as skill_assessment_router
 from feature_usage_endpoints import router as feature_usage_router
-from google_auth_endpoints import router as google_auth_router
 from interview_prompts_endpoints import router as interview_prompts_router
 from multi_agent_endpoints import router as multi_agent_router
 from interview_evaluation_endpoint import router as interview_evaluation_router
@@ -72,6 +71,7 @@ from cv_bootstrap_endpoints import router as cv_bootstrap_router
 from professional_summary_endpoints import router as professional_summary_router
 from project_contest_endpoints import router as project_contest_router
 from razorpay_service import router as razorpay_router
+from pdf_endpoints import router as pdf_router
 
 
 @asynccontextmanager
@@ -240,7 +240,7 @@ def create_app() -> FastAPI:
     # Include routers with prefixes
     app.include_router(dashboard_router, prefix="/api/v1")  # Dashboard and profile endpoints
     app.include_router(api_router, prefix="/api/v1")  # Additional API routes
-    app.include_router(auth_router, prefix="/api/v1")  # Authentication routes
+    app.include_router(auth_router, prefix="/api/v1")  # Authentication routes (includes /auth prefix)
     app.include_router(hr_router, prefix="/api/v1")  # HR job management routes (database-connected)
     app.include_router(application_router, prefix="/api/v1")  # Job application routes
     app.include_router(apply_router, prefix="")  # Apply for job routes (includes /api/v1 prefix)
@@ -248,7 +248,6 @@ def create_app() -> FastAPI:
     app.include_router(resume_router, prefix="")  # Resume builder routes
     app.include_router(skill_assessment_router, prefix="")  # Skill assessment routes
     app.include_router(feature_usage_router, prefix="")  # Feature usage tracking routes
-    app.include_router(google_auth_router, prefix="/api/v1/auth")  # Google authentication routes
     app.include_router(interview_prompts_router, prefix="/api/v1")  # Interview prompts routes
     app.include_router(multi_agent_router, prefix="/api/v1")  # Multi-Agent Interview routes
     app.include_router(interview_evaluation_router, prefix="/api/v1/mock-interview")  # Interview evaluation routes
@@ -265,6 +264,7 @@ def create_app() -> FastAPI:
     app.include_router(professional_summary_router, prefix="/api/v1")  # Professional summary generation
     app.include_router(project_contest_router)  # Project contest routes
     app.include_router(razorpay_router)  # Razorpay payment routes
+    app.include_router(pdf_router)  # PDF generation via Playwright
 
     # Health check endpoint
     @app.get("/", tags=["Health"])

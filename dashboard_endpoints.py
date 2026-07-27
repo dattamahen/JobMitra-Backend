@@ -971,6 +971,10 @@ async def get_job_listings(
             
             all_jobs.append(job)
         
+        # Remove jobs with zero match score (no skill overlap)
+        # Exception: keep jobs the user already applied to (always show their applications)
+        all_jobs = [job for job in all_jobs if job["match_score"] > 0.0 or job.get("already_applied")]
+
         # Sort by match score (highest first), then by posted_date (newest first) for ties
         all_jobs.sort(key=lambda x: (x["match_score"], x.get("posted_date", "")), reverse=True)
         

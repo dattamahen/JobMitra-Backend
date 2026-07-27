@@ -4,6 +4,7 @@ Authentication API endpoints for JobMitra
 
 from fastapi import APIRouter, HTTPException, Depends, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
 import logging
@@ -23,6 +24,9 @@ from auth_db import (
 from db import db
 from auth_utils import create_access_token, verify_token, SECRET_KEY
 from activity_tracker import log_user_activity
+from google_auth import GoogleAuthService
+
+_google_auth = GoogleAuthService()
 
 def _iso(dt) -> str:
     """Return UTC ISO string with Z suffix so browsers parse it as UTC."""
@@ -725,3 +729,76 @@ async def reset_password(request: ResetPasswordRequest):
     )
     
     return {"message": "Password reset successfully"}
+
+
+class GoogleSignInRequest(BaseModel):
+    credential: str
+
+
+@auth_router.post("/google-signin")
+async def google_signin(request: GoogleSignInRequest):
+    """Handle Google Sign-In"""
+    try:
+        google_user_info = _google_auth.verify_google_token(request.credential)
+        if not google_user_info:
+            raise HTTPException(status_code=400, detail="Invalid Google token")
+
+        existing_user = await get_user_by_email(google_user_info['email'])
+
+        if existing_user:
+            await update_user_profile(existing_user['user_id'], {
+                'first_name': google_user_info['first_name'],
+                'last_name': google_user_info['last_name'],
+                'last_active': datetime.utcnow(),
+                'google_id': google_user_info['google_id'],
+                'profile_picture': google_user_info.get('picture', ''),
+                'is_verified': google_user_info.get('email_verified', False)
+            })
+            user = existing_user
+        else:
+            user = await create_user({
+                'email': google_user_info['email'],
+                'first_name': google_user_info['first_name'],
+                'last_name': google_user_info['last_name'],
+                'user_type': 'candidate',
+                'google_id': google_user_info['google_id'],
+                'profile_picture': google_user_info.get('picture', ''),
+                'is_verified': google_user_info.get('email_verified', False)
+            })
+
+        jwt_token = _google_auth.create_jwt_token({
+            'user_id': user['user_id'],
+            'email': user['email']
+        })
+
+        return {
+            "access_token": jwt_token,
+            "token_type": "bearer",
+            "user": UserResponse(
+                user_id=user['user_id'],
+                email=user['email'],
+                first_name=user['first_name'],
+                last_name=user['last_name'],
+                user_type=user.get('user_type', 'candidate'),
+                user_status=user.get('user_status', 'active'),
+                user_plan=user.get('user_plan', 'free'),
+                feature_usage_count=user.get('feature_usage_count', 5),
+                profile_created_on=user['profile_created_on'],
+                last_active=user['last_active'],
+                match_analysis_count=user.get('match_analysis_count', 0),
+                match_tailored_count=user.get('match_tailored_count', 0),
+                mock_interview_count=user.get('mock_interview_count', 0),
+                profile_completion_count=user.get('profile_completion_count', 0),
+                profile_visits=user.get('profile_visits', 0),
+                full_name=f"{user['first_name']} {user['last_name']}",
+                is_active=user.get('is_active', True),
+                created_at=_iso(user['profile_created_on']),
+                updated_at=_iso(user.get('last_active') or user['profile_created_on'])
+            )
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Google sign-in error: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Google sign-in failed: {str(e)}")
