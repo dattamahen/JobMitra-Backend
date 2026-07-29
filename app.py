@@ -1,6 +1,14 @@
 ﻿"""
 FastAPI application factory and configuration.
 """
+import asyncio
+import sys
+
+# Fix for Windows ProactorEventLoop — must be set before any async code runs.
+# Playwright's sync_api uses subprocess transport which is not implemented
+# on ProactorEventLoop (uvicorn default on Windows).
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 from datetime import datetime
 from fastapi import FastAPI, Request, status
@@ -12,7 +20,6 @@ from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 import logging
 import logging.handlers
-import sys
 import os
 
 from config import settings
@@ -296,3 +303,5 @@ def create_app() -> FastAPI:
         }
 
     return app
+
+app = create_app()

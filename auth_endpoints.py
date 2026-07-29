@@ -7,6 +7,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
+import asyncio
 import logging
 import jwt
 
@@ -126,11 +127,11 @@ async def register_user(request: RegisterRequest):
                 {"$set": {"verification_token": token, "user_status": "pending_verification"}}
             )
             user_name = f"{request.first_name} {request.last_name}"
-            email_service.send_verification_email(request.email, token, user_name)
+            asyncio.create_task(asyncio.to_thread(email_service.send_verification_email, request.email, token, user_name))
         else:
             from email_service import email_service
             user_name = f"{request.first_name} {request.last_name}"
-            email_service.send_welcome_email(request.email, user_name)
+            asyncio.create_task(asyncio.to_thread(email_service.send_welcome_email, request.email, user_name))
         
         # Create response
         return UserResponse(
@@ -674,6 +675,11 @@ async def verify_email_endpoint(token: str = None, code: str = None):
          "$unset": {"verification_token": ""}}
     )
 
+    # Send welcome email now that HR account is active
+    from email_service import email_service
+    user_name = f"{user.get('first_name', '')} {user.get('last_name', '')}".strip() or "User"
+    asyncio.create_task(asyncio.to_thread(email_service.send_welcome_email, user["email"], user_name))
+
     return {"message": "Email verified successfully. Your HR account is now active.", "user_id": user["user_id"]}
 
 
@@ -697,13 +703,9 @@ async def forgot_password(request: ForgotPasswordRequest):
         {"$set": {"reset_token": token, "reset_token_expire": expire}}
     )
     
-    # Send email
     user_name = f"{user.get('first_name', '')} {user.get('last_name', '')}".strip() or "User"
-    email_sent = email_service.send_password_reset_email(request.email, token, user_name)
-    
-    if not email_sent:
-        logger.warning("Failed to send reset email for: %s", request.email)
-    
+    asyncio.create_task(asyncio.to_thread(email_service.send_password_reset_email, request.email, token, user_name))
+
     return {"message": "If email exists, reset link will be sent"}
 
 @auth_router.post("/reset-password")
@@ -765,6 +767,9 @@ async def google_signin(request: GoogleSignInRequest):
                 'profile_picture': google_user_info.get('picture', ''),
                 'is_verified': google_user_info.get('email_verified', False)
             })
+            from email_service import email_service
+            user_name = f"{google_user_info['first_name']} {google_user_info['last_name']}"
+            asyncio.create_task(asyncio.to_thread(email_service.send_welcome_email, google_user_info['email'], user_name))
 
         jwt_token = _google_auth.create_jwt_token({
             'user_id': user['user_id'],

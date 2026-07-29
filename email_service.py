@@ -11,12 +11,15 @@ logger = logging.getLogger(__name__)
 
 
 class EmailService:
+    WELCOME_FROM = "careers@jobmouka.com"      # requires Gmail alias verification
+    NOREPLY_FROM = "no-reply@jobmouka.com"     # requires Gmail alias verification
+    _FALLBACK_FROM = "renukadevi@jobmouka.com" # used until aliases are verified
+
     def __init__(self):
         self.smtp_host = settings.SMTP_HOST
         self.smtp_port = settings.SMTP_PORT
         self.smtp_user = settings.SMTP_USER
         self.smtp_password = settings.SMTP_PASSWORD
-        self.from_email = settings.FROM_EMAIL or self.smtp_user
         self.app_name = settings.APP_NAME_EMAIL
         self.frontend_url = settings.FRONTEND_URL
         self.email_enabled = settings.EMAIL_ENABLED
@@ -73,7 +76,8 @@ class EmailService:
 </body>
 </html>"""
 
-    def send_email(self, to_email: str, subject: str, html_content: str) -> bool:
+    def send_email(self, to_email: str, subject: str, html_content: str,
+                   from_email: str = None, reply_to: str = None) -> bool:
         """Send email via SMTP."""
         if not self.email_enabled:
             logger.debug("Email disabled. Would send to %s | Subject: %s", to_email, subject)
@@ -83,22 +87,37 @@ class EmailService:
             logger.warning("SMTP credentials not configured")
             return False
 
+        sender = from_email or self.smtp_user
+
         try:
             msg = MIMEMultipart('alternative')
             msg['Subject'] = subject
-            msg['From'] = f"{self.app_name} <{self.from_email}>"
+            msg['From'] = f"{self.app_name} <{sender}>"
             msg['To'] = to_email
+            if reply_to:
+                msg['Reply-To'] = reply_to
             msg.attach(MIMEText(html_content, 'html'))
 
             with smtplib.SMTP(self.smtp_host, self.smtp_port) as server:
+                server.ehlo()
                 server.starttls()
+                server.ehlo()
                 server.login(self.smtp_user, self.smtp_password)
                 server.send_message(msg)
 
-            logger.debug("Email sent to %s", to_email)
+            logger.info("Email sent to %s from %s", to_email, sender)
             return True
+        except smtplib.SMTPAuthenticationError:
+            logger.error("SMTP authentication failed for user: %s", self.smtp_user)
+            return False
+        except smtplib.SMTPRecipientsRefused:
+            logger.error("Recipient refused: %s", to_email)
+            return False
+        except smtplib.SMTPException as e:
+            logger.error("SMTP error sending to %s: %s", to_email, e)
+            return False
         except Exception as e:
-            logger.error("Failed to send email: %s", e)
+            logger.error("Unexpected error sending email to %s: %s", to_email, e)
             return False
 
     def send_welcome_email(self, to_email: str, user_name: str) -> bool:
@@ -119,7 +138,8 @@ class EmailService:
         <p class="note">If you have any questions, just reply to this email — we're happy to help.</p>
         """
         html = self._build_email("Welcome aboard! 🎉", body)
-        return self.send_email(to_email, f"Welcome to {self.app_name} 🎉", html)
+        return self.send_email(to_email, f"Welcome to {self.app_name} 🎉", html,
+                               from_email=self.WELCOME_FROM, reply_to=self.smtp_user)
 
     def send_password_reset_email(self, to_email: str, reset_token: str, user_name: str) -> bool:
         """Password reset email."""
@@ -137,7 +157,7 @@ class EmailService:
         <p class="note">If you didn't request this, you can safely ignore this email — your password won't change.</p>
         """
         html = self._build_email("Password Reset Request", body)
-        return self.send_email(to_email, f"Reset Your {self.app_name} Password", html)
+        return self.send_email(to_email, f"Reset Your {self.app_name} Password", html, from_email=self.NOREPLY_FROM)
 
     def send_verification_email(self, to_email: str, verification_token: str, user_name: str) -> bool:
         """Email verification for HR / Recruiter accounts."""
@@ -164,7 +184,7 @@ class EmailService:
         </ul>
         """
         html = self._build_email("Verify Your HR Account", body)
-        return self.send_email(to_email, f"Verify Your {self.app_name} HR Account", html)
+        return self.send_email(to_email, f"Verify Your {self.app_name} HR Account", html, from_email=self.NOREPLY_FROM)
 
 
 email_service = EmailService()
