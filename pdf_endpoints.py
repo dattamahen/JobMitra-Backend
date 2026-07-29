@@ -1,20 +1,22 @@
 """
-PDF generation endpoint — uses a child Python process to run Playwright,
-completely bypassing Windows ProactorEventLoop / subprocess transport issues.
+PDF generation endpoint.
+Uses multiprocessing.Process (spawn) so Playwright runs in a completely
+isolated process with its own event loop — no conflict with FastAPI's loop.
 """
-import logging
 import asyncio
-import subprocess
-import sys
-import tempfile
+import logging
+import multiprocessing
 import os
+import tempfile
+
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
 from pydantic import BaseModel
+
 from auth_endpoints import get_current_user
+import pdf_worker
 
 logger = logging.getLogger(__name__)
-
 router = APIRouter(prefix="/api/v1/resume", tags=["PDF"])
 
 
@@ -23,59 +25,24 @@ class PDFRequest(BaseModel):
     filename: str = "resume"
 
 
-# Inline script executed in the child process — no imports from this app needed.
-_PLAYWRIGHT_SCRIPT = """
-import sys, asyncio
-
-# Must be set before playwright imports on Windows
-if sys.platform == "win32":
-    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
-
-html_file  = sys.argv[1]
-output_file = sys.argv[2]
-
-from playwright.sync_api import sync_playwright
-
-with sync_playwright() as p:
-    browser = p.chromium.launch(
-        args=["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"]
-    )
-    page = browser.new_page()
-    with open(html_file, "r", encoding="utf-8") as f:
-        html = f.read()
-    page.set_content(html, wait_until="networkidle")
-    page.pdf(
-        path=output_file,
-        format="A4",
-        print_background=True,
-        margin={"top": "12.7mm", "bottom": "12.7mm", "left": "12.7mm", "right": "12.7mm"},
-    )
-    browser.close()
-"""
-
-
-def _run_playwright_subprocess(html: str) -> bytes:
-    """Write HTML to a temp file, run playwright in a fresh child process,
-    read back the PDF bytes. No asyncio involvement at all."""
+def _generate_pdf_sync(html: str) -> bytes:
+    """Spawn a fresh process, run Playwright inside it, return PDF bytes."""
     with tempfile.TemporaryDirectory() as tmp:
-        html_path = os.path.join(tmp, "input.html")
-        pdf_path  = os.path.join(tmp, "output.pdf")
-        script_path = os.path.join(tmp, "gen.py")
+        pdf_path = os.path.join(tmp, "output.pdf")
 
-        with open(html_path, "w", encoding="utf-8") as f:
-            f.write(html)
-        with open(script_path, "w", encoding="utf-8") as f:
-            f.write(_PLAYWRIGHT_SCRIPT)
+        ctx = multiprocessing.get_context("spawn")
+        error_queue = ctx.Queue()
+        proc = ctx.Process(target=pdf_worker.run, args=(html, pdf_path, error_queue))
+        proc.start()
+        proc.join(timeout=60)
 
-        result = subprocess.run(
-            [sys.executable, script_path, html_path, pdf_path],
-            capture_output=True,
-            text=True,
-            timeout=60,
-        )
+        if proc.exitcode is None:
+            proc.kill()
+            raise RuntimeError("PDF worker timed out after 60s")
 
-        if result.returncode != 0:
-            raise RuntimeError(result.stderr or "Playwright child process failed")
+        err = error_queue.get_nowait() if not error_queue.empty() else "worker exited with no result"
+        if err is not None:
+            raise RuntimeError(f"PDF worker failed:\n{err}")
 
         with open(pdf_path, "rb") as f:
             return f.read()
@@ -83,10 +50,8 @@ def _run_playwright_subprocess(html: str) -> bytes:
 
 @router.post("/generate-pdf-test", include_in_schema=False)
 async def generate_pdf_test(request: PDFRequest):
-    """No-auth test endpoint"""
     try:
-        loop = asyncio.get_running_loop()
-        pdf_bytes = await loop.run_in_executor(None, _run_playwright_subprocess, request.html)
+        pdf_bytes = await asyncio.to_thread(_generate_pdf_sync, request.html)
         return Response(
             content=pdf_bytes,
             media_type="application/pdf",
@@ -103,8 +68,7 @@ async def generate_pdf(
     current_user: dict = Depends(get_current_user),
 ):
     try:
-        loop = asyncio.get_running_loop()
-        pdf_bytes = await loop.run_in_executor(None, _run_playwright_subprocess, request.html)
+        pdf_bytes = await asyncio.to_thread(_generate_pdf_sync, request.html)
 
         if not pdf_bytes:
             raise ValueError("Playwright returned empty PDF")
