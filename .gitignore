@@ -151,6 +151,11 @@ migrate_*.py
 !tests/
 !tests/**
 
+# Test artifact files
+test_*.pdf
+test_*.txt
+test_output*.pdf
+
 # Log files
 logs/
 
