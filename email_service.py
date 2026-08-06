@@ -187,4 +187,37 @@ class EmailService:
         return self.send_email(to_email, f"Verify Your {self.app_name} HR Account", html, from_email=self.NOREPLY_FROM)
 
 
+    ADMIN_EMAIL = "renukadevi@jobmouka.com"
+
+    def send_auth_failure_email(self, user_email: str, user_name: str, failure_type: str, reason: str) -> None:
+        """Send failure notification to user and admin. Fire-and-forget."""
+        type_label = "Google Sign-In" if failure_type == "google" else "Registration"
+
+        # Email to user
+        user_body = f"""
+        <p>Hi{' <strong>' + user_name + '</strong>' if user_name else ''},</p>
+        <p>We noticed a failed <strong>{type_label}</strong> attempt on your account.</p>
+        <p>If this was you, please try again or contact support. If it wasn't you, your account is safe — no action is needed.</p>
+        <div class="btn-wrap">
+          <a href="{self.frontend_url}/login" class="btn">Go to Login</a>
+        </div>
+        <p class="note">If you need help, reply to this email.</p>
+        """
+        user_html = self._build_email(f"{type_label} Failed", user_body)
+        self.send_email(user_email, f"{self.app_name} — {type_label} Failed", user_html,
+                        from_email=self.NOREPLY_FROM)
+
+        # Email to admin
+        admin_body = f"""
+        <p><strong>Auth Failure Alert</strong></p>
+        <p><strong>Type:</strong> {type_label}</p>
+        <p><strong>User Email:</strong> {user_email}</p>
+        <p><strong>Name:</strong> {user_name or 'Unknown'}</p>
+        <p><strong>Reason:</strong> {reason}</p>
+        """
+        admin_html = self._build_email("Auth Failure Alert", admin_body)
+        self.send_email(self.ADMIN_EMAIL, f"[{self.app_name}] Auth Failure — {user_email}",
+                        admin_html, from_email=self.NOREPLY_FROM)
+
+
 email_service = EmailService()

@@ -2,7 +2,7 @@
 Job Application schemas for applicant tracking
 """
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, EmailStr
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 from enum import Enum
@@ -55,7 +55,7 @@ class ApplicantProfile(BaseModel):
     """Simplified applicant profile for HR view"""
     user_id: str
     full_name: str
-    email: str
+    email: EmailStr
     phone: Optional[str] = None
     
     # Professional info
