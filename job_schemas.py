@@ -2,7 +2,7 @@
 Pydantic schemas for job posting functionality
 """
 
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, validator, EmailStr
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 from enum import Enum
@@ -79,7 +79,7 @@ class CompanyInfo(BaseModel):
 
 class HRContact(BaseModel):
     name: str
-    email: str
+    email: EmailStr
     phone: str
     title: Optional[str] = "HR Recruiter"
     department: Optional[str] = "Human Resources"

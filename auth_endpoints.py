@@ -29,6 +29,34 @@ from google_auth import GoogleAuthService
 
 _google_auth = GoogleAuthService()
 
+
+def _notify_auth_failure(google_user_info: dict | None, request, failure_type: str, reason: str) -> None:
+    """Fire-and-forget auth failure notification to user + admin."""
+    try:
+        from email_service import email_service
+        email = (google_user_info or {}).get('email') or getattr(request, 'email', None) or 'unknown'
+        first = (google_user_info or {}).get('first_name') or ''
+        last = (google_user_info or {}).get('last_name') or ''
+        name = f"{first} {last}".strip()
+        asyncio.create_task(asyncio.to_thread(
+            email_service.send_auth_failure_email, email, name, failure_type, reason
+        ))
+    except Exception as ex:
+        logger.warning("Could not schedule failure notification: %s", ex)
+
+
+def _notify_reg_failure(request, reason: str) -> None:
+    """Fire-and-forget registration failure notification."""
+    try:
+        from email_service import email_service
+        email = getattr(request, 'email', 'unknown')
+        name = f"{getattr(request, 'first_name', '')} {getattr(request, 'last_name', '')}".strip()
+        asyncio.create_task(asyncio.to_thread(
+            email_service.send_auth_failure_email, email, name, "registration", reason
+        ))
+    except Exception as ex:
+        logger.warning("Could not schedule failure notification: %s", ex)
+
 def _iso(dt) -> str:
     """Return UTC ISO string with Z suffix so browsers parse it as UTC."""
     if dt is None:
@@ -157,15 +185,11 @@ async def register_user(request: RegisterRequest):
         )
         
     except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Registration failed"
-        )
+        if not isinstance(e, HTTPException):
+            _notify_reg_failure(request, str(e))
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Registration failed")
 
 @auth_router.post("/login", response_model=LoginResponse)
 async def login_user(request: LoginRequest):
@@ -802,8 +826,12 @@ async def google_signin(request: GoogleSignInRequest):
             )
         }
 
-    except HTTPException:
+    except HTTPException as http_exc:
+        # Send failure notification for invalid token (400) or server errors (500)
+        if http_exc.status_code in (400, 500):
+            _notify_auth_failure(google_user_info, request, "google", http_exc.detail)
         raise
     except Exception as e:
         logger.error("Google sign-in error: %s", e, exc_info=True)
+        _notify_auth_failure(None, request, "google", str(e))
         raise HTTPException(status_code=500, detail=f"Google sign-in failed: {str(e)}")

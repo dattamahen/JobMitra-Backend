@@ -2,15 +2,29 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+import asyncio
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from auth_schemas import UserResponse
 from google_auth import GoogleAuthService
-from auth_db import create_user, get_user_by_email
+from auth_db import create_user, get_user_by_email, update_user_profile
 from datetime import datetime
 
 router = APIRouter()
 google_auth = GoogleAuthService()
+
+ADMIN_EMAIL = "renukadevi@jobmouka.com"
+
+
+def _fire_failure_email(email: str, name: str, reason: str) -> None:
+    try:
+        from email_service import email_service
+        asyncio.create_task(asyncio.to_thread(
+            email_service.send_auth_failure_email, email, name, "google", reason
+        ))
+    except Exception as ex:
+        logger.warning("Could not schedule failure notification: %s", ex)
+
 
 class GoogleSignInRequest(BaseModel):
     credential: str
@@ -23,18 +37,18 @@ class GoogleSignInResponse(BaseModel):
 @router.post("/google-signin", response_model=GoogleSignInResponse)
 async def google_signin(request: GoogleSignInRequest):
     """Handle Google Sign-In"""
+    google_user_info = None
     try:
         # Verify Google token
         google_user_info = google_auth.verify_google_token(request.credential)
         if not google_user_info:
+            _fire_failure_email('unknown', '', 'Invalid Google token')
             raise HTTPException(status_code=400, detail="Invalid Google token")
         
         # Check if user exists
         existing_user = await get_user_by_email(google_user_info['email'])
         
         if existing_user:
-            # Update user info from Google
-            from auth_db import update_user_profile
             update_data = {
                 'first_name': google_user_info['first_name'],
                 'last_name': google_user_info['last_name'],
@@ -51,13 +65,16 @@ async def google_signin(request: GoogleSignInRequest):
                 'email': google_user_info['email'],
                 'first_name': google_user_info['first_name'],
                 'last_name': google_user_info['last_name'],
-                'user_type': 'candidate',  # Default to candidate
+                'user_type': 'candidate',
                 'google_id': google_user_info['google_id'],
                 'profile_picture': google_user_info.get('picture', ''),
                 'is_verified': google_user_info.get('email_verified', False)
             }
-            
             user = await create_user(user_data)
+            # Send welcome email for first-time registration
+            from email_service import email_service
+            user_name = f"{google_user_info['first_name']} {google_user_info['last_name']}"
+            asyncio.create_task(asyncio.to_thread(email_service.send_welcome_email, google_user_info['email'], user_name))
         
         # Generate JWT token
         jwt_token = google_auth.create_jwt_token({
@@ -65,7 +82,6 @@ async def google_signin(request: GoogleSignInRequest):
             'email': user['email']
         })
         
-        # Convert user to response format
         user_response = UserResponse(
             user_id=user['user_id'],
             email=user['email'],
@@ -98,4 +114,7 @@ async def google_signin(request: GoogleSignInRequest):
         raise
     except Exception as e:
         logger.error("Google sign-in error: %s", e, exc_info=True)
+        email = (google_user_info or {}).get('email', 'unknown')
+        name = f"{(google_user_info or {}).get('first_name', '')} {(google_user_info or {}).get('last_name', '')}".strip()
+        _fire_failure_email(email, name, str(e))
         raise HTTPException(status_code=500, detail=f"Google sign-in failed: {str(e)}")
