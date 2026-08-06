@@ -264,12 +264,52 @@ async def tailor_resume(
                 tailor_done=True
             )
         
-        # LLM-powered analysis as base
+        # LLM-powered analysis: get base match score
         analysis_result = await perform_llm_match_analysis(user, job)
         base_match = analysis_result["match_percentage"]
-        improvement = min(25, max(15, 100 - base_match))  # Don't exceed 100%
-        match_percentage = min(99, base_match + improvement)
-        
+
+        # Ask LLM for realistic post-tailor match score
+        job_skills_required = job.get("skills_required", job.get("skills", []))
+        job_skills_preferred = job.get("skills_preferred", [])
+        company = job.get("company", "")
+        company_name = company.get("name", "") if isinstance(company, dict) else str(company)
+
+        tailor_prompt = f"""You are an expert technical recruiter. A candidate's resume has been tailored/optimized for this job.
+
+CANDIDATE (after resume tailoring):
+- Skills: {', '.join(user.get('skills', []))}
+- Experience: {user.get('overall_experience_years', user.get('experience_years', 0))} years
+- Current Role: {user.get('current_role', 'Not specified')}
+- Original match score before tailoring: {base_match}%
+
+JOB:
+- Title: {job.get('title', '')}
+- Company: {company_name}
+- Experience Level: {job.get('experience_level', '')}
+- Required Skills: {', '.join(job_skills_required)}
+- Preferred Skills: {', '.join(job_skills_preferred)}
+
+The resume has been rewritten to highlight relevant skills, use job-specific keywords, and optimize for ATS.
+Estimate the new match percentage after tailoring. It should be realistically higher than {base_match}% (typically 10-30 points improvement).
+
+Return ONLY a JSON object:
+{{"match_percentage": <integer 0-100>, "improvement": <integer points gained>}}
+
+No markdown, no extra text."""
+
+        try:
+            ai_response = await llm_service.generate(tailor_prompt, "gemini")
+            content = ai_response.get("content", "").strip()
+            content = re.sub(r"^```(?:json)?\s*", "", content)
+            content = re.sub(r"\s*```$", "", content).strip()
+            tailor_result = json.loads(content)
+            match_percentage = min(99, int(tailor_result.get("match_percentage", base_match)))
+            improvement = match_percentage - base_match
+        except Exception as e:
+            logger.warning("LLM post-tailor scoring failed, using fallback: %s", e)
+            improvement = min(25, max(15, 100 - base_match))
+            match_percentage = min(99, base_match + improvement)
+
         logger.info(f"Resume tailoring for user {user_id}, job {job_id}: {base_match}% -> {match_percentage}%")
         
         if app_record:
