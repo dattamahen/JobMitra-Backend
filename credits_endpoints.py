@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Credits & Payments"])
 
 # Fallback constants (used only if DB lookup fails)
-_FALLBACK_FREE = {"cv_downloads": 3, "mock_interviews": 2, "amount": 0}
+_FALLBACK_FREE = {"cv_downloads": 2, "mock_interviews": 2, "amount": 0}
 _FALLBACK_PAID = {"cv_downloads": 10, "mock_interviews": 10, "amount": 149, "upi_id": "jobmouka@upi"}
 
 MAX_PAYMENT_HISTORY = 50
@@ -60,7 +60,7 @@ async def _get_paid_plan() -> dict:
                 "is_active": True,
                 "is_default": False,
                 "amount": {"$gt": 0},
-                "env": settings.APP_ENV,
+                "env": {"$in": [settings.APP_ENV]},
             },
             {"_id": 0}
         )
@@ -83,6 +83,34 @@ class DeductCreditRequest(BaseModel):
 
 
 # ── Helpers ──────────────────────────────────────────────────
+
+async def _check_and_deduct(user_id: str, credit_type: str) -> None:
+    """
+    Atomically verify and deduct one credit.
+    Raises HTTP 403 if no credits remain.
+    Used as a backend guard — call this inside protected endpoints.
+    """
+    users = db.database["users"]
+    field = (
+        "credits.cv_downloads_remaining"
+        if credit_type == "cv_download"
+        else "credits.mock_interviews_remaining"
+    )
+    result = await users.find_one_and_update(
+        {"user_id": user_id, field: {"$gt": 0}},
+        {
+            "$inc": {field: -1},
+            "$set": {"updated_at": datetime.utcnow()},
+        },
+        projection={"_id": 0, "user_id": 1},
+    )
+    if result is None:
+        label = "CV download" if credit_type == "cv_download" else "mock interview"
+        raise HTTPException(
+            status_code=403,
+            detail=f"No {label} credits remaining. Please purchase more.",
+        )
+
 
 async def _get_credits(user_id: str) -> dict:
     """

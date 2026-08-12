@@ -1,6 +1,7 @@
-﻿from fastapi import APIRouter, HTTPException
+﻿from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from typing import List, Dict, Any
+from fastapi.security import HTTPBearer
 from multi_llm_service import MultiLLMService
 from db import create_mock_interview, get_user_mock_interviews
 from prompt_manager import prompt_manager
@@ -11,6 +12,8 @@ from api_contracts import (
     parse_evaluation_response,
 )
 from activity_tracker import log_user_activity
+from auth_endpoints import get_current_user
+from credits_endpoints import _check_and_deduct
 import logging
 from datetime import datetime
 
@@ -29,9 +32,14 @@ class InterviewSubmission(BaseModel):
     questions_and_answers: List[QuestionAnswer]
 
 @router.post("/submit-for-evaluation")
-async def submit_interview_for_evaluation(submission: InterviewSubmission):
+async def submit_interview_for_evaluation(
+    submission: InterviewSubmission,
+    current_user: dict = Depends(get_current_user),
+):
     """Submit interview for LLM evaluation"""
     try:
+        user_id = current_user["user_id"]
+        await _check_and_deduct(user_id, "mock_interview")
         # Prepare evaluation prompt
         user_info = f"Role: {submission.user_profile.get('role', 'N/A')}\n"
         user_info += f"Experience: {submission.user_profile.get('experience_years', 0)} years\n"
@@ -81,7 +89,7 @@ Provide scores from 0-100. Return ONLY the JSON object, nothing else."""
         evaluation_data = evaluation_result.model_dump()
         
         # Save interview to database
-        user_id = submission.user_profile.get('user_id', 'unknown')
+        user_id = current_user["user_id"]
         interview_record = {
             "session_id": submission.session_id,
             "user_id": user_id,
