@@ -14,6 +14,7 @@ from fastapi.responses import Response
 from pydantic import BaseModel
 
 from auth_endpoints import get_current_user
+from credits_endpoints import _check_and_deduct
 import pdf_worker
 
 logger = logging.getLogger(__name__)
@@ -68,6 +69,7 @@ async def generate_pdf(
     current_user: dict = Depends(get_current_user),
 ):
     try:
+        await _check_and_deduct(current_user["user_id"], "cv_download")
         pdf_bytes = await asyncio.to_thread(_generate_pdf_sync, request.html)
 
         if not pdf_bytes:
