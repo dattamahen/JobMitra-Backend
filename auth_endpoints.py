@@ -558,10 +558,7 @@ async def logout_user(credentials: HTTPAuthorizationCredentials = Depends(securi
         payload = verify_token(token)
         user_id = payload.get("user_id", "unknown") if payload else "unknown"
 
-        return {
-            "message": "Logged out successfully",
-            "user_id": user_id
-        }
+        return {"message": "Logged out successfully"}
 
     except Exception as e:
         raise HTTPException(
