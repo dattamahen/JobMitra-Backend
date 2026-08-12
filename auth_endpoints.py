@@ -324,10 +324,9 @@ async def update_profile(
             update_data["highest_qualification"] = request.highest_qualification
         if request.previous_organizations:
             update_data["previous_organizations"] = [org.dict() for org in request.previous_organizations]
-        if request.skills:
-            update_data["skills"] = request.skills
         if request.technical_skills:
             update_data["technical_skills"] = request.technical_skills
+            update_data["skills"] = [s["name"] for s in request.technical_skills if s.get("name")]
         if request.work_experience:
             update_data["work_experience"] = request.work_experience
         if request.education:
@@ -559,10 +558,7 @@ async def logout_user(credentials: HTTPAuthorizationCredentials = Depends(securi
         payload = verify_token(token)
         user_id = payload.get("user_id", "unknown") if payload else "unknown"
 
-        return {
-            "message": "Logged out successfully",
-            "user_id": user_id
-        }
+        return {"message": "Logged out successfully"}
 
     except Exception as e:
         raise HTTPException(
