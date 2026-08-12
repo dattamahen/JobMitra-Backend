@@ -79,6 +79,7 @@ from professional_summary_endpoints import router as professional_summary_router
 from project_contest_endpoints import router as project_contest_router
 from razorpay_service import router as razorpay_router
 from pdf_endpoints import router as pdf_router
+from sitemap_routes import sitemap_router
 
 
 @asynccontextmanager
@@ -272,6 +273,7 @@ def create_app() -> FastAPI:
     app.include_router(project_contest_router)  # Project contest routes
     app.include_router(razorpay_router)  # Razorpay payment routes
     app.include_router(pdf_router)  # PDF generation via Playwright
+    app.include_router(sitemap_router)  # Sitemap & robots.txt for SEO
 
     # Health check endpoint
     @app.get("/", tags=["Health"])
