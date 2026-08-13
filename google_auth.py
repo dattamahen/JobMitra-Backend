@@ -11,38 +11,38 @@ from config import settings
 
 class GoogleAuthService:
     def __init__(self):
-        self.client_id = settings.GOOGLE_CLIENT_ID
+        self.client_ids = list(filter(None, [
+            settings.GOOGLE_CLIENT_ID,
+            settings.GOOGLE_ANDROID_CLIENT_ID
+        ]))
         
     def verify_google_token(self, credential: str) -> Optional[Dict[str, Any]]:
         """Verify Google ID token and return user info"""
-        try:
-            # Verify the token
-            idinfo = id_token.verify_oauth2_token(
-                credential, 
-                requests.Request(), 
-                self.client_id
-            )
-            
-            # Verify the issuer
-            if idinfo['iss'] not in ['accounts.google.com', 'https://accounts.google.com']:
-                raise ValueError('Wrong issuer.')
-                
-            return {
-                'google_id': idinfo['sub'],
-                'email': idinfo['email'],
-                'first_name': idinfo.get('given_name', ''),
-                'last_name': idinfo.get('family_name', ''),
-                'full_name': idinfo.get('name', ''),
-                'picture': idinfo.get('picture', ''),
-                'email_verified': idinfo.get('email_verified', False)
-            }
-            
-        except ValueError as e:
-            logger.debug("Google token verification failed: %s ", e)
-            return None
-        except Exception as e:
-            logger.error("verifying Google token: %s", e)
-            return None
+        for client_id in self.client_ids:
+            try:
+                idinfo = id_token.verify_oauth2_token(
+                    credential,
+                    requests.Request(),
+                    client_id
+                )
+                if idinfo['iss'] not in ['accounts.google.com', 'https://accounts.google.com']:
+                    continue
+                return {
+                    'google_id': idinfo['sub'],
+                    'email': idinfo['email'],
+                    'first_name': idinfo.get('given_name', ''),
+                    'last_name': idinfo.get('family_name', ''),
+                    'full_name': idinfo.get('name', ''),
+                    'picture': idinfo.get('picture', ''),
+                    'email_verified': idinfo.get('email_verified', False)
+                }
+            except ValueError as e:
+                logger.debug("Token verification failed for client_id %s: %s", client_id, e)
+                continue
+            except Exception as e:
+                logger.error("Error verifying Google token: %s", e)
+                continue
+        return None
     
     def create_jwt_token(self, user_data: Dict[str, Any]) -> str:
         """Create JWT token for authenticated user"""
