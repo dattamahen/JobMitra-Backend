@@ -75,6 +75,7 @@ class Settings:
 
     # Google OAuth
     GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
+    GOOGLE_ANDROID_CLIENT_ID = os.getenv("GOOGLE_ANDROID_CLIENT_ID", "")
 
     # Razorpay
     RAZORPAY_KEY_ID = os.getenv("RAZORPAY_KEY_ID", "")
