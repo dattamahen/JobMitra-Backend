@@ -10,7 +10,7 @@ from config import settings
 
 logger = logging.getLogger(__name__)
 
-MODEL = "gemini-2.0-flash-lite"
+MODEL = "gemini-2.0-flash"
 LLM_TIMEOUT = 30
 
 _client = genai.Client(api_key=settings.GEMINI_API_KEY) if settings.GEMINI_API_KEY else None
