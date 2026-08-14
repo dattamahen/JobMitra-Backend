@@ -15,7 +15,7 @@ from prompt_manager import prompt_manager
 
 logger = logging.getLogger(__name__)
 
-MODEL = "gemini-2.0-flash"
+MODEL = "gemini-3.6-flash"
 
 class AIInterviewService:
     def __init__(self):
