@@ -15,9 +15,29 @@ class GoogleAuthService:
             settings.GOOGLE_CLIENT_ID,
             settings.GOOGLE_ANDROID_CLIENT_ID
         ]))
+        logger.info("GoogleAuthService init: %d client_id(s) loaded. WEB=%s ANDROID=%s",
+            len(self.client_ids),
+            bool(settings.GOOGLE_CLIENT_ID),
+            bool(settings.GOOGLE_ANDROID_CLIENT_ID)
+        )
         
     def verify_google_token(self, credential: str) -> Optional[Dict[str, Any]]:
         """Verify Google ID token and return user info"""
+        if not self.client_ids:
+            logger.error("No Google client IDs configured — set GOOGLE_CLIENT_ID and GOOGLE_ANDROID_CLIENT_ID env vars")
+            return None
+        # Log token header for debugging (no sensitive data)
+        try:
+            import base64, json as _json
+            header = credential.split('.')[0]
+            header += '=' * (4 - len(header) % 4)
+            logger.info("Token aud/azp check — first 20 chars of token: %s", credential[:20])
+            payload_b64 = credential.split('.')[1]
+            payload_b64 += '=' * (4 - len(payload_b64) % 4)
+            payload = _json.loads(base64.urlsafe_b64decode(payload_b64))
+            logger.info("Token aud=%s azp=%s iss=%s", payload.get('aud'), payload.get('azp'), payload.get('iss'))
+        except Exception:
+            pass
         for client_id in self.client_ids:
             try:
                 idinfo = id_token.verify_oauth2_token(
