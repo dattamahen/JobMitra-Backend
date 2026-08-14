@@ -12,7 +12,7 @@ from google import genai
 from prompt_manager import prompt_manager
 from api_contracts import parse_tailor_response
 
-MODEL = "gemini-2.0-flash"
+MODEL = "gemini-3.6-flash"
 
 
 def run_resume_tailor(user_profile: dict, job_description: str) -> dict:
