@@ -74,7 +74,17 @@ async def generate_pdf(
         if not pdf_bytes:
             raise ValueError("Playwright returned empty PDF")
 
-        response = Response(
+        # Send emails in parallel before returning — ensures delivery in Cloud Run
+        first_name = current_user.get("first_name", "")
+        last_name = current_user.get("last_name", "")
+        user_email = current_user.get("email", "")
+        await asyncio.gather(
+            asyncio.to_thread(email_service.send_cv_download_admin_notification, first_name, last_name, user_email),
+            asyncio.to_thread(email_service.send_cv_download_user_nudge, user_email, first_name),
+            return_exceptions=True,
+        )
+
+        return Response(
             content=pdf_bytes,
             media_type="application/pdf",
             headers={
@@ -82,19 +92,6 @@ async def generate_pdf(
                 "Content-Length": str(len(pdf_bytes)),
             },
         )
-
-        # Fire-and-forget: notify admin + nudge user in parallel
-        first_name = current_user.get("first_name", "")
-        last_name = current_user.get("last_name", "")
-        user_email = current_user.get("email", "")
-        asyncio.create_task(asyncio.to_thread(
-            email_service.send_cv_download_admin_notification, first_name, last_name, user_email
-        ))
-        asyncio.create_task(asyncio.to_thread(
-            email_service.send_cv_download_user_nudge, user_email, first_name
-        ))
-
-        return response
     except Exception as e:
         logger.error("PDF generation failed: %s", repr(e), exc_info=True)
         raise HTTPException(status_code=500, detail=f"PDF generation failed: {repr(e)}")

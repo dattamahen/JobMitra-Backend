@@ -172,7 +172,6 @@ class EmailService:
             to_email,
             PasswordResetEmail.SUBJECT.format(**ctx),
             html,
-            from_email=self.NOREPLY_FROM,
         )
 
     def send_verification_email(self, to_email: str, verification_token: str, user_name: str) -> bool:
@@ -189,7 +188,6 @@ class EmailService:
             to_email,
             VerificationEmail.SUBJECT.format(**ctx),
             html,
-            from_email=self.NOREPLY_FROM,
         )
 
     def send_auth_failure_email(self, user_email: str, user_name: str,
@@ -216,7 +214,6 @@ class EmailService:
             user_email,
             AuthFailureEmail.USER_SUBJECT.format(**ctx),
             user_html,
-            from_email=self.NOREPLY_FROM,
         )
 
         admin_html = self._build_email(
@@ -227,7 +224,6 @@ class EmailService:
             self.ADMIN_EMAIL,
             AuthFailureEmail.ADMIN_SUBJECT.format(**ctx),
             admin_html,
-            from_email=self.NOREPLY_FROM,
         )
 
     # ------------------------------------------------------------------ #
@@ -255,7 +251,6 @@ class EmailService:
             self.ADMIN_EMAIL,
             NewUserAdminEmail.SUBJECT.format(**ctx),
             html,
-            from_email=self.NOREPLY_FROM,
         )
 
     # ------------------------------------------------------------------ #
@@ -276,7 +271,6 @@ class EmailService:
             self.ADMIN_EMAIL,
             CvDownloadAdminEmail.SUBJECT.format(**ctx),
             html,
-            from_email=self.NOREPLY_FROM,
         )
 
     def send_cv_download_user_nudge(self, to_email: str, first_name: str) -> bool:
@@ -290,7 +284,6 @@ class EmailService:
             to_email,
             CvDownloadUserNudgeEmail.SUBJECT.format(**ctx),
             html,
-            from_email=self.NOREPLY_FROM,
         )
 
 
