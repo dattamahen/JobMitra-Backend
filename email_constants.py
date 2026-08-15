@@ -96,6 +96,21 @@ class AuthFailureEmail:
     """
 
 
+class NewUserAdminEmail:
+    SUBJECT = "[{app_name}] New User Registered \u2014 {first_name} {last_name}"
+    HEADLINE = "New User Registration"
+    BODY = """
+    <p>A new user has registered on <strong>{app_name}</strong>.</p>
+    <table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:14px;">
+      <tr><td style="padding:8px 0;color:#6b7280;width:140px;">First Name</td><td style="padding:8px 0;color:#111827;"><strong>{first_name}</strong></td></tr>
+      <tr><td style="padding:8px 0;color:#6b7280;">Last Name</td><td style="padding:8px 0;color:#111827;"><strong>{last_name}</strong></td></tr>
+      <tr><td style="padding:8px 0;color:#6b7280;">Email</td><td style="padding:8px 0;color:#4831af;"><strong>{user_email}</strong></td></tr>
+      <tr><td style="padding:8px 0;color:#6b7280;">Sign-up Method</td><td style="padding:8px 0;color:#111827;"><strong>{signup_method}</strong></td></tr>
+      <tr><td style="padding:8px 0;color:#6b7280;">User Type</td><td style="padding:8px 0;color:#111827;"><strong>{user_type}</strong></td></tr>
+    </table>
+    """
+
+
 class CvDownloadAdminEmail:
     SUBJECT = "[{app_name}] CV Downloaded \u2014 {first_name} {last_name}"
     HEADLINE = "CV Download Activity"

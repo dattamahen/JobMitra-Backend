@@ -13,6 +13,7 @@ from email_constants import (
     PasswordResetEmail,
     VerificationEmail,
     AuthFailureEmail,
+    NewUserAdminEmail,
     CvDownloadAdminEmail,
     CvDownloadUserNudgeEmail,
 )
@@ -226,6 +227,34 @@ class EmailService:
             self.ADMIN_EMAIL,
             AuthFailureEmail.ADMIN_SUBJECT.format(**ctx),
             admin_html,
+            from_email=self.NOREPLY_FROM,
+        )
+
+    # ------------------------------------------------------------------ #
+    #  New user notifications                                              #
+    # ------------------------------------------------------------------ #
+
+    def send_new_user_admin_notification(
+        self, first_name: str, last_name: str, user_email: str,
+        signup_method: str = "Email", user_type: str = "Candidate"
+    ) -> bool:
+        """Notify admin whenever a new user profile is created."""
+        ctx = dict(
+            app_name=self.app_name,
+            first_name=first_name,
+            last_name=last_name,
+            user_email=user_email,
+            signup_method=signup_method,
+            user_type=user_type.capitalize(),
+        )
+        html = self._build_email(
+            NewUserAdminEmail.HEADLINE,
+            NewUserAdminEmail.BODY.format(**ctx),
+        )
+        return self.send_email(
+            self.ADMIN_EMAIL,
+            NewUserAdminEmail.SUBJECT.format(**ctx),
+            html,
             from_email=self.NOREPLY_FROM,
         )
 
