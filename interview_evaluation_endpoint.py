@@ -13,7 +13,6 @@ from api_contracts import (
 )
 from activity_tracker import log_user_activity
 from auth_endpoints import get_current_user
-from credits_endpoints import _check_and_deduct
 import logging
 from datetime import datetime
 
@@ -39,7 +38,6 @@ async def submit_interview_for_evaluation(
     """Submit interview for LLM evaluation"""
     try:
         user_id = current_user["user_id"]
-        await _check_and_deduct(user_id, "mock_interview")
         # Prepare evaluation prompt
         user_info = f"Role: {submission.user_profile.get('role', 'N/A')}\n"
         user_info += f"Experience: {submission.user_profile.get('experience_years', 0)} years\n"
