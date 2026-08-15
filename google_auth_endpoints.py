@@ -16,30 +16,26 @@ router = APIRouter()
 google_auth = GoogleAuthService()
 
 
-def _fire_failure_email(email: str, name: str, reason: str) -> None:
+async def _fire_failure_email(email: str, name: str, reason: str) -> None:
     try:
         from email_service import email_service
-        asyncio.create_task(asyncio.to_thread(
-            email_service.send_auth_failure_email, email, name, "google", reason
-        ))
+        await asyncio.to_thread(email_service.send_auth_failure_email, email, name, "google", reason)
     except Exception as ex:
-        logger.warning("Could not schedule failure notification: %s", ex)
+        logger.warning("Could not send failure notification: %s", ex)
 
 
-def _fire_new_user_emails(first_name: str, last_name: str, email: str) -> None:
-    """Fire welcome + admin notification for a newly created Google user."""
-    try:
-        from email_service import email_service
-        user_name = f"{first_name} {last_name}"
-        asyncio.create_task(asyncio.to_thread(
-            email_service.send_welcome_email, email, user_name
-        ))
-        asyncio.create_task(asyncio.to_thread(
-            email_service.send_new_user_admin_notification,
-            first_name, last_name, email, "Google", "candidate"
-        ))
-    except Exception as ex:
-        logger.warning("Could not schedule new-user emails: %s", ex)
+async def _fire_new_user_emails(first_name: str, last_name: str, email: str) -> None:
+    """Send welcome + admin notification for a newly created Google user."""
+    from email_service import email_service
+    user_name = f"{first_name} {last_name}"
+    results = await asyncio.gather(
+        asyncio.to_thread(email_service.send_welcome_email, email, user_name),
+        asyncio.to_thread(email_service.send_new_user_admin_notification, first_name, last_name, email, "Google", "candidate"),
+        return_exceptions=True,
+    )
+    for i, r in enumerate(results):
+        if isinstance(r, Exception):
+            logger.error("new_user email task %d failed: %s", i, r)
 
 
 class GoogleSignInRequest(BaseModel):
@@ -82,7 +78,7 @@ async def google_signin(request: GoogleSignInRequest):
                 'profile_picture': google_user_info.get('picture', ''),
                 'is_verified': google_user_info.get('email_verified', False)
             })
-            _fire_new_user_emails(
+            await _fire_new_user_emails(
                 google_user_info['first_name'],
                 google_user_info['last_name'],
                 google_user_info['email']
@@ -125,7 +121,7 @@ async def google_signin(request: GoogleSignInRequest):
         logger.error("Google sign-in error: %s", e, exc_info=True)
         email = (google_user_info or {}).get('email', 'unknown')
         name = f"{(google_user_info or {}).get('first_name', '')} {(google_user_info or {}).get('last_name', '')}".strip()
-        _fire_failure_email(email, name, str(e))
+        await _fire_failure_email(email, name, str(e))
         raise HTTPException(status_code=500, detail=f"Google sign-in failed: {str(e)}")
 
 
@@ -182,7 +178,7 @@ async def google_signin_code(request: GoogleSignInCodeRequest):
                 'profile_picture': google_user_info.get('picture', ''),
                 'is_verified': google_user_info.get('email_verified', False)
             })
-            _fire_new_user_emails(
+            await _fire_new_user_emails(
                 google_user_info['first_name'],
                 google_user_info['last_name'],
                 google_user_info['email']

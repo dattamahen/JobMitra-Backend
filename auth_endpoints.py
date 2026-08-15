@@ -30,32 +30,26 @@ from google_auth import GoogleAuthService
 _google_auth = GoogleAuthService()
 
 
-def _notify_auth_failure(google_user_info: dict | None, request, failure_type: str, reason: str) -> None:
-    """Fire-and-forget auth failure notification to user + admin."""
+async def _notify_auth_failure(google_user_info: dict | None, request, failure_type: str, reason: str) -> None:
     try:
         from email_service import email_service
         email = (google_user_info or {}).get('email') or getattr(request, 'email', None) or 'unknown'
         first = (google_user_info or {}).get('first_name') or ''
         last = (google_user_info or {}).get('last_name') or ''
         name = f"{first} {last}".strip()
-        asyncio.create_task(asyncio.to_thread(
-            email_service.send_auth_failure_email, email, name, failure_type, reason
-        ))
+        await asyncio.to_thread(email_service.send_auth_failure_email, email, name, failure_type, reason)
     except Exception as ex:
-        logger.warning("Could not schedule failure notification: %s", ex)
+        logger.warning("Could not send failure notification: %s", ex)
 
 
-def _notify_reg_failure(request, reason: str) -> None:
-    """Fire-and-forget registration failure notification."""
+async def _notify_reg_failure(request, reason: str) -> None:
     try:
         from email_service import email_service
         email = getattr(request, 'email', 'unknown')
         name = f"{getattr(request, 'first_name', '')} {getattr(request, 'last_name', '')}".strip()
-        asyncio.create_task(asyncio.to_thread(
-            email_service.send_auth_failure_email, email, name, "registration", reason
-        ))
+        await asyncio.to_thread(email_service.send_auth_failure_email, email, name, "registration", reason)
     except Exception as ex:
-        logger.warning("Could not schedule failure notification: %s", ex)
+        logger.warning("Could not send failure notification: %s", ex)
 
 def _iso(dt) -> str:
     """Return UTC ISO string with Z suffix so browsers parse it as UTC."""
@@ -155,15 +149,18 @@ async def register_user(request: RegisterRequest):
                 {"$set": {"verification_token": token, "user_status": "pending_verification"}}
             )
             user_name = f"{request.first_name} {request.last_name}"
-            asyncio.create_task(asyncio.to_thread(email_service.send_verification_email, request.email, token, user_name))
+            await asyncio.to_thread(email_service.send_verification_email, request.email, token, user_name)
         else:
             from email_service import email_service
             user_name = f"{request.first_name} {request.last_name}"
-            asyncio.create_task(asyncio.to_thread(email_service.send_welcome_email, request.email, user_name))
-            asyncio.create_task(asyncio.to_thread(
-                email_service.send_new_user_admin_notification,
-                request.first_name, request.last_name, request.email, "Email", request.user_type
-            ))
+            results = await asyncio.gather(
+                asyncio.to_thread(email_service.send_welcome_email, request.email, user_name),
+                asyncio.to_thread(email_service.send_new_user_admin_notification, request.first_name, request.last_name, request.email, "Email", request.user_type),
+                return_exceptions=True,
+            )
+            for i, r in enumerate(results):
+                if isinstance(r, Exception):
+                    logger.error("register email task %d failed: %s", i, r)
         
         # Create response
         return UserResponse(
@@ -192,7 +189,7 @@ async def register_user(request: RegisterRequest):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
         if not isinstance(e, HTTPException):
-            _notify_reg_failure(request, str(e))
+            await _notify_reg_failure(request, str(e))
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Registration failed")
 
 @auth_router.post("/login", response_model=LoginResponse)
@@ -702,10 +699,9 @@ async def verify_email_endpoint(token: str = None, code: str = None):
          "$unset": {"verification_token": ""}}
     )
 
-    # Send welcome email now that HR account is active
     from email_service import email_service
     user_name = f"{user.get('first_name', '')} {user.get('last_name', '')}".strip() or "User"
-    asyncio.create_task(asyncio.to_thread(email_service.send_welcome_email, user["email"], user_name))
+    await asyncio.to_thread(email_service.send_welcome_email, user["email"], user_name)
 
     return {"message": "Email verified successfully. Your HR account is now active.", "user_id": user["user_id"]}
 
@@ -731,7 +727,7 @@ async def forgot_password(request: ForgotPasswordRequest):
     )
     
     user_name = f"{user.get('first_name', '')} {user.get('last_name', '')}".strip() or "User"
-    asyncio.create_task(asyncio.to_thread(email_service.send_password_reset_email, request.email, token, user_name))
+    await asyncio.to_thread(email_service.send_password_reset_email, request.email, token, user_name)
 
     return {"message": "If email exists, reset link will be sent"}
 
@@ -796,7 +792,7 @@ async def google_signin(request: GoogleSignInRequest):
             })
             from email_service import email_service
             user_name = f"{google_user_info['first_name']} {google_user_info['last_name']}"
-            asyncio.create_task(asyncio.to_thread(email_service.send_welcome_email, google_user_info['email'], user_name))
+            await asyncio.to_thread(email_service.send_welcome_email, google_user_info['email'], user_name)
 
         jwt_token = _google_auth.create_jwt_token({
             'user_id': user['user_id'],
@@ -832,9 +828,9 @@ async def google_signin(request: GoogleSignInRequest):
     except HTTPException as http_exc:
         # Send failure notification for invalid token (400) or server errors (500)
         if http_exc.status_code in (400, 500):
-            _notify_auth_failure(google_user_info, request, "google", http_exc.detail)
+            await _notify_auth_failure(google_user_info, request, "google", http_exc.detail)
         raise
     except Exception as e:
         logger.error("Google sign-in error: %s", e, exc_info=True)
-        _notify_auth_failure(None, request, "google", str(e))
+        await _notify_auth_failure(None, request, "google", str(e))
         raise HTTPException(status_code=500, detail=f"Google sign-in failed: {str(e)}")
