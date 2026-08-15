@@ -3,6 +3,7 @@ Email service for sending emails via SMTP.
 All user-facing copy is sourced from email_constants.py.
 """
 import logging
+import os
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -99,15 +100,22 @@ class EmailService:
     def send_email(self, to_email: str, subject: str, html_content: str,
                    from_email: str = None, reply_to: str = None) -> bool:
         """Send email via SMTP."""
-        if not self.email_enabled:
-            logger.debug("Email disabled. Would send to %s | Subject: %s", to_email, subject)
+        # Re-read at send time — Cloud Run secrets may not be available at import time
+        email_enabled = os.getenv("EMAIL_ENABLED", "false").lower() == "true"
+        smtp_user = os.getenv("SMTP_USER", self.smtp_user)
+        smtp_password = os.getenv("SMTP_PASSWORD", self.smtp_password)
+
+        logger.info("Email send attempt: enabled=%s, user=%s, to=%s", email_enabled, smtp_user, to_email)
+
+        if not email_enabled:
+            logger.info("Email disabled (EMAIL_ENABLED=%s). Skipping send to %s", os.getenv('EMAIL_ENABLED'), to_email)
             return True
 
-        if not self.smtp_user or not self.smtp_password:
-            logger.warning("SMTP credentials not configured")
+        if not smtp_user or not smtp_password:
+            logger.warning("SMTP credentials not configured (SMTP_USER=%s)", bool(smtp_user))
             return False
 
-        sender = from_email or self.smtp_user
+        sender = from_email or smtp_user
 
         try:
             msg = MIMEMultipart('alternative')
@@ -122,7 +130,7 @@ class EmailService:
                 server.ehlo()
                 server.starttls()
                 server.ehlo()
-                server.login(self.smtp_user, self.smtp_password)
+                server.login(smtp_user, smtp_password)
                 server.send_message(msg)
 
             logger.info("Email sent to %s from %s", to_email, sender)
