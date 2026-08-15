@@ -16,6 +16,7 @@ from pydantic import BaseModel
 from auth_endpoints import get_current_user
 from credits_endpoints import _check_and_deduct
 import pdf_worker
+from email_service import email_service
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/resume", tags=["PDF"])
@@ -75,7 +76,7 @@ async def generate_pdf(
         if not pdf_bytes:
             raise ValueError("Playwright returned empty PDF")
 
-        return Response(
+        response = Response(
             content=pdf_bytes,
             media_type="application/pdf",
             headers={
@@ -83,6 +84,19 @@ async def generate_pdf(
                 "Content-Length": str(len(pdf_bytes)),
             },
         )
+
+        # Fire-and-forget: notify admin + nudge user in parallel
+        first_name = current_user.get("first_name", "")
+        last_name = current_user.get("last_name", "")
+        user_email = current_user.get("email", "")
+        asyncio.create_task(asyncio.to_thread(
+            email_service.send_cv_download_admin_notification, first_name, last_name, user_email
+        ))
+        asyncio.create_task(asyncio.to_thread(
+            email_service.send_cv_download_user_nudge, user_email, first_name
+        ))
+
+        return response
     except Exception as e:
         logger.error("PDF generation failed: %s", repr(e), exc_info=True)
         raise HTTPException(status_code=500, detail=f"PDF generation failed: {repr(e)}")

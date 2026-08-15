@@ -1,19 +1,30 @@
 """
-Email service for sending emails via SMTP
+Email service for sending emails via SMTP.
+All user-facing copy is sourced from email_constants.py.
 """
 import logging
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+
 from config import settings
+from email_constants import (
+    WelcomeEmail,
+    PasswordResetEmail,
+    VerificationEmail,
+    AuthFailureEmail,
+    CvDownloadAdminEmail,
+    CvDownloadUserNudgeEmail,
+)
 
 logger = logging.getLogger(__name__)
 
 
 class EmailService:
-    WELCOME_FROM = "careers@jobmouka.com"      # requires Gmail alias verification
-    NOREPLY_FROM = "no-reply@jobmouka.com"     # requires Gmail alias verification
-    _FALLBACK_FROM = "renukadevi@jobmouka.com" # used until aliases are verified
+    ADMIN_EMAIL = "renukadevi@jobmouka.com"
+    WELCOME_FROM = "careers@jobmouka.com"
+    NOREPLY_FROM = "no-reply@jobmouka.com"
+    _FALLBACK_FROM = "renukadevi@jobmouka.com"  # until aliases are verified
 
     def __init__(self):
         self.smtp_host = settings.SMTP_HOST
@@ -23,6 +34,10 @@ class EmailService:
         self.app_name = settings.APP_NAME_EMAIL
         self.frontend_url = settings.FRONTEND_URL
         self.email_enabled = settings.EMAIL_ENABLED
+
+    # ------------------------------------------------------------------ #
+    #  Shared HTML shell                                                   #
+    # ------------------------------------------------------------------ #
 
     def _build_email(self, headline: str, body_html: str) -> str:
         """Single shared template — headline and body_html are context-specific."""
@@ -76,6 +91,10 @@ class EmailService:
 </body>
 </html>"""
 
+    # ------------------------------------------------------------------ #
+    #  Core send                                                           #
+    # ------------------------------------------------------------------ #
+
     def send_email(self, to_email: str, subject: str, html_content: str,
                    from_email: str = None, reply_to: str = None) -> bool:
         """Send email via SMTP."""
@@ -120,104 +139,130 @@ class EmailService:
             logger.error("Unexpected error sending email to %s: %s", to_email, e)
             return False
 
+    # ------------------------------------------------------------------ #
+    #  Transactional emails                                                #
+    # ------------------------------------------------------------------ #
+
     def send_welcome_email(self, to_email: str, user_name: str) -> bool:
         """Welcome email for newly registered candidates."""
-        body = f"""
-        <p>Hi <strong>{user_name}</strong>,</p>
-        <p>Welcome to <strong>{self.app_name}</strong> — your AI-powered career platform. We're thrilled to have you on board!</p>
-        <p>Here's what you can do right now:</p>
-        <ul class="feature-list">
-          <li>Build an ATS-optimized resume with AI</li>
-          <li>Search and apply to 10,000+ job listings</li>
-          <li>Practice mock interviews with AI feedback</li>
-          <li>Get match analysis for every job you apply to</li>
-        </ul>
-        <div class="btn-wrap">
-          <a href="{self.frontend_url}/dashboard" class="btn">Go to Dashboard</a>
-        </div>
-        <p class="note">If you have any questions, just reply to this email — we're happy to help.</p>
-        """
-        html = self._build_email("Welcome aboard! 🎉", body)
-        return self.send_email(to_email, f"Welcome to {self.app_name} 🎉", html,
-                               from_email=self.WELCOME_FROM, reply_to=self.smtp_user)
+        ctx = dict(user_name=user_name, app_name=self.app_name, frontend_url=self.frontend_url)
+        html = self._build_email(
+            WelcomeEmail.HEADLINE,
+            WelcomeEmail.BODY.format(**ctx),
+        )
+        return self.send_email(
+            to_email,
+            WelcomeEmail.SUBJECT.format(**ctx),
+            html,
+            from_email=self.WELCOME_FROM,
+            reply_to=self.smtp_user,
+        )
 
     def send_password_reset_email(self, to_email: str, reset_token: str, user_name: str) -> bool:
         """Password reset email."""
         reset_link = f"{self.frontend_url}/login?token={reset_token}"
-        body = f"""
-        <p>Hi <strong>{user_name}</strong>,</p>
-        <p>We received a request to reset your <strong>{self.app_name}</strong> password. Click the button below to set a new one:</p>
-        <div class="btn-wrap">
-          <a href="{reset_link}" class="btn">Reset My Password</a>
-        </div>
-        <p>Or copy and paste this link into your browser:</p>
-        <div class="link-box">{reset_link}</div>
-        <hr class="divider"/>
-        <p class="note">⏱ This link expires in <strong>1 hour</strong>.</p>
-        <p class="note">If you didn't request this, you can safely ignore this email — your password won't change.</p>
-        """
-        html = self._build_email("Password Reset Request", body)
-        return self.send_email(to_email, f"Reset Your {self.app_name} Password", html, from_email=self.NOREPLY_FROM)
+        ctx = dict(user_name=user_name, app_name=self.app_name,
+                   frontend_url=self.frontend_url, reset_link=reset_link)
+        html = self._build_email(
+            PasswordResetEmail.HEADLINE,
+            PasswordResetEmail.BODY.format(**ctx),
+        )
+        return self.send_email(
+            to_email,
+            PasswordResetEmail.SUBJECT.format(**ctx),
+            html,
+            from_email=self.NOREPLY_FROM,
+        )
 
     def send_verification_email(self, to_email: str, verification_token: str, user_name: str) -> bool:
         """Email verification for HR / Recruiter accounts."""
         verify_link = f"{self.frontend_url}/login?verify={verification_token}"
         code = verification_token[:6].upper()
-        body = f"""
-        <p>Hi <strong>{user_name}</strong>,</p>
-        <p>Thank you for registering as an HR / Recruiter on <strong>{self.app_name}</strong>.</p>
-        <p>To activate your account and start posting jobs, please verify your email:</p>
-        <div class="btn-wrap">
-          <a href="{verify_link}" class="btn">Verify My Account</a>
-        </div>
-        <p style="text-align:center;font-size:14px;color:#6b7280;">Or use this one-time code:</p>
-        <div class="code-box"><span class="code">{code}</span></div>
-        <p>Or copy and paste this link:</p>
-        <div class="link-box">{verify_link}</div>
-        <hr class="divider"/>
-        <p class="note">⏱ This link expires in <strong>24 hours</strong>.</p>
-        <p style="font-size:14px;color:#4b5563;margin-top:16px;">Once verified, you'll be able to:</p>
-        <ul class="feature-list">
-          <li>Post job openings</li>
-          <li>View and manage applications</li>
-          <li>Access candidate profiles</li>
-        </ul>
-        """
-        html = self._build_email("Verify Your HR Account", body)
-        return self.send_email(to_email, f"Verify Your {self.app_name} HR Account", html, from_email=self.NOREPLY_FROM)
+        ctx = dict(user_name=user_name, app_name=self.app_name,
+                   frontend_url=self.frontend_url, verify_link=verify_link, code=code)
+        html = self._build_email(
+            VerificationEmail.HEADLINE,
+            VerificationEmail.BODY.format(**ctx),
+        )
+        return self.send_email(
+            to_email,
+            VerificationEmail.SUBJECT.format(**ctx),
+            html,
+            from_email=self.NOREPLY_FROM,
+        )
 
-
-    ADMIN_EMAIL = "renukadevi@jobmouka.com"
-
-    def send_auth_failure_email(self, user_email: str, user_name: str, failure_type: str, reason: str) -> None:
+    def send_auth_failure_email(self, user_email: str, user_name: str,
+                                failure_type: str, reason: str) -> None:
         """Send failure notification to user and admin. Fire-and-forget."""
         type_label = "Google Sign-In" if failure_type == "google" else "Registration"
+        name_part = f" <strong>{user_name}</strong>" if user_name else ""
 
-        # Email to user
-        user_body = f"""
-        <p>Hi{' <strong>' + user_name + '</strong>' if user_name else ''},</p>
-        <p>We noticed a failed <strong>{type_label}</strong> attempt on your account.</p>
-        <p>If this was you, please try again or contact support. If it wasn't you, your account is safe — no action is needed.</p>
-        <div class="btn-wrap">
-          <a href="{self.frontend_url}/login" class="btn">Go to Login</a>
-        </div>
-        <p class="note">If you need help, reply to this email.</p>
-        """
-        user_html = self._build_email(f"{type_label} Failed", user_body)
-        self.send_email(user_email, f"{self.app_name} — {type_label} Failed", user_html,
-                        from_email=self.NOREPLY_FROM)
+        ctx = dict(
+            app_name=self.app_name,
+            frontend_url=self.frontend_url,
+            type_label=type_label,
+            name_part=name_part,
+            user_email=user_email,
+            user_name=user_name or "Unknown",
+            reason=reason,
+        )
 
-        # Email to admin
-        admin_body = f"""
-        <p><strong>Auth Failure Alert</strong></p>
-        <p><strong>Type:</strong> {type_label}</p>
-        <p><strong>User Email:</strong> {user_email}</p>
-        <p><strong>Name:</strong> {user_name or 'Unknown'}</p>
-        <p><strong>Reason:</strong> {reason}</p>
-        """
-        admin_html = self._build_email("Auth Failure Alert", admin_body)
-        self.send_email(self.ADMIN_EMAIL, f"[{self.app_name}] Auth Failure — {user_email}",
-                        admin_html, from_email=self.NOREPLY_FROM)
+        user_html = self._build_email(
+            AuthFailureEmail.USER_HEADLINE.format(**ctx),
+            AuthFailureEmail.USER_BODY.format(**ctx),
+        )
+        self.send_email(
+            user_email,
+            AuthFailureEmail.USER_SUBJECT.format(**ctx),
+            user_html,
+            from_email=self.NOREPLY_FROM,
+        )
+
+        admin_html = self._build_email(
+            AuthFailureEmail.ADMIN_HEADLINE,
+            AuthFailureEmail.ADMIN_BODY.format(**ctx),
+        )
+        self.send_email(
+            self.ADMIN_EMAIL,
+            AuthFailureEmail.ADMIN_SUBJECT.format(**ctx),
+            admin_html,
+            from_email=self.NOREPLY_FROM,
+        )
+
+    # ------------------------------------------------------------------ #
+    #  CV download notifications                                           #
+    # ------------------------------------------------------------------ #
+
+    def send_cv_download_admin_notification(
+        self, first_name: str, last_name: str, user_email: str
+    ) -> bool:
+        """Notify admin when a user downloads their CV."""
+        ctx = dict(app_name=self.app_name, first_name=first_name,
+                   last_name=last_name, user_email=user_email)
+        html = self._build_email(
+            CvDownloadAdminEmail.HEADLINE,
+            CvDownloadAdminEmail.BODY.format(**ctx),
+        )
+        return self.send_email(
+            self.ADMIN_EMAIL,
+            CvDownloadAdminEmail.SUBJECT.format(**ctx),
+            html,
+            from_email=self.NOREPLY_FROM,
+        )
+
+    def send_cv_download_user_nudge(self, to_email: str, first_name: str) -> bool:
+        """Encourage user to leverage JD tailoring and mock interviews after CV download."""
+        ctx = dict(app_name=self.app_name, frontend_url=self.frontend_url, first_name=first_name)
+        html = self._build_email(
+            CvDownloadUserNudgeEmail.HEADLINE,
+            CvDownloadUserNudgeEmail.BODY.format(**ctx),
+        )
+        return self.send_email(
+            to_email,
+            CvDownloadUserNudgeEmail.SUBJECT.format(**ctx),
+            html,
+            from_email=self.NOREPLY_FROM,
+        )
 
 
 email_service = EmailService()
