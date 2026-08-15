@@ -29,15 +29,27 @@ class UserProfileRequest(BaseModel):
 	interview_type: Optional[str] = "technical"
 
 
+def _experience_label(years: int) -> str:
+	if years <= 1: return "Entry-level (0-1 years) — focus on fundamentals and learning"
+	if years <= 4: return "Mid-level (2-4 years) — focus on independent execution and ownership"
+	if years <= 8: return "Senior (5-8 years) — focus on leadership, strategy, and cross-functional impact"
+	return "Principal/Expert (9+ years) — focus on organizational influence and domain mastery"
+
+
 def _build_question_prompt(system_prompt: str, user_details: dict, interview_type: str = "technical") -> str:
 	"""Build a prompt combining the JSON system prompt with dynamic candidate context."""
-	skills_str = ", ".join(user_details.get("skills", []))
+	skills = user_details.get("skills", [])
+	skills_str = ", ".join(skills) if skills else "General professional skills"
+	experience_years = user_details.get("experience_years", 0)
 	return f"""{system_prompt}
 
 Candidate Profile:
-- Role: {user_details.get("role", "Software Engineer")}
-- Experience: {user_details.get("experience_years", 0)} years
-- Core Skills: {skills_str}
+- Role: {user_details.get("role", "Professional")}
+- Experience Level: {_experience_label(experience_years)} ({experience_years} years)
+- Skills to focus on: {skills_str}
+- Interview Type: {interview_type}
+
+IMPORTANT: Generate questions ONLY relevant to the above role and skills. Do NOT default to generic software engineering questions unless the role and skills are software-related.
 
 STRICT OUTPUT RULES:
 - Return ONLY a valid JSON object
@@ -111,7 +123,7 @@ async def get_interview_prompt(user_profile: UserProfileRequest):
 				user_profile.interview_type,
 			)
 
-			ai_response = await llm_service.generate(final_prompt, "gemini")
+			ai_response = await llm_service.generate(final_prompt, user_profile.ai_provider or "gemini")
 			questions = _parse_questions(ai_response.get("content", ""))
 
 			return InterviewQuestionResponse(
