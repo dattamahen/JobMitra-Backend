@@ -68,8 +68,10 @@ async def generate_pdf(
     request: PDFRequest,
     current_user: dict = Depends(get_current_user),
 ):
+    logger.info("generate_pdf called for user: %s", current_user.get("email", "unknown"))
     try:
         pdf_bytes = await asyncio.to_thread(_generate_pdf_sync, request.html)
+        logger.info("PDF generated: %d bytes", len(pdf_bytes) if pdf_bytes else 0)
 
         if not pdf_bytes:
             raise ValueError("Playwright returned empty PDF")
