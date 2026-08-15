@@ -160,6 +160,10 @@ async def register_user(request: RegisterRequest):
             from email_service import email_service
             user_name = f"{request.first_name} {request.last_name}"
             asyncio.create_task(asyncio.to_thread(email_service.send_welcome_email, request.email, user_name))
+            asyncio.create_task(asyncio.to_thread(
+                email_service.send_new_user_admin_notification,
+                request.first_name, request.last_name, request.email, "Email", request.user_type
+            ))
         
         # Create response
         return UserResponse(
