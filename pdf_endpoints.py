@@ -78,11 +78,16 @@ async def generate_pdf(
         first_name = current_user.get("first_name", "")
         last_name = current_user.get("last_name", "")
         user_email = current_user.get("email", "")
-        await asyncio.gather(
+        results = await asyncio.gather(
             asyncio.to_thread(email_service.send_cv_download_admin_notification, first_name, last_name, user_email),
             asyncio.to_thread(email_service.send_cv_download_user_nudge, user_email, first_name),
             return_exceptions=True,
         )
+        for i, r in enumerate(results):
+            if isinstance(r, Exception):
+                logger.error("CV email task %d failed: %s", i, r, exc_info=r)
+            else:
+                logger.info("CV email task %d result: %s", i, r)
 
         return Response(
             content=pdf_bytes,
