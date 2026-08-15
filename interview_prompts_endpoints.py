@@ -49,7 +49,12 @@ Candidate Profile:
 - Skills to focus on: {skills_str}
 - Interview Type: {interview_type}
 
-IMPORTANT: Generate questions ONLY relevant to the above role and skills. Do NOT default to generic software engineering questions unless the role and skills are software-related.
+IMPORTANT:
+- Generate questions ONLY relevant to the above role and skills
+- Treat each skill at face value based on its plain English meaning — do NOT reinterpret skill names through a technical lens
+- Example: 'Event Coordination' means organizing and managing events (conferences, meetings, logistics) — NOT software event-driven architecture
+- Example: 'Python' means the programming language — NOT the snake
+- If the role and skills seem mismatched, trust the SKILLS over the role title when generating questions
 
 STRICT OUTPUT RULES:
 - Return ONLY a valid JSON object
