@@ -59,23 +59,25 @@ async def submit_interview_for_evaluation(
 {user_info}Interview Questions and Answers:
 {qa_text}
 
-Provide your evaluation in EXACTLY this JSON format (no markdown, no extra text):
+Provide a 360-degree evaluation in EXACTLY this JSON format (no markdown, no extra text):
 {{
     "overall_score": 85,
-    "feedback": "Provide a comprehensive 2-3 sentence summary of the candidate's overall performance, highlighting strengths and areas for improvement.",
-    "question_scores": [
-        {{"question_id": "q_1", "score": 80, "feedback": "Specific feedback for this answer"}},
-        {{"question_id": "q_2", "score": 90, "feedback": "Specific feedback for this answer"}}
+    "feedback_points": [
+        "Point 1: observation about knowledge depth across answers",
+        "Point 2: observation about practical application and trade-offs",
+        "Point 3: observation about communication clarity and structure",
+        "Point 4: observation about problem-solving mindset",
+        "Point 5: the single most impactful thing to improve before the next interview"
     ]
 }}
 
-Evaluate based on:
-1. Technical accuracy and depth of knowledge
-2. Communication clarity and structure
-3. Problem-solving approach
-4. Practical examples and real-world understanding
-
-Provide scores from 0-100. Return ONLY the JSON object, nothing else."""
+Rules:
+- feedback_points must be 5 to 7 items
+- Each point is one clear, specific, actionable sentence
+- No generic praise — every point must be grounded in the actual answers given
+- Calibrate strictly to {submission.user_profile.get('experience_years', 0)} years of experience
+- overall_score is 0-100
+- Return ONLY the JSON object, nothing else."""
 
         # Get evaluation from LLM
         ai_response = await llm_service.generate(evaluation_prompt, "gemini")
@@ -94,8 +96,7 @@ Provide scores from 0-100. Return ONLY the JSON object, nothing else."""
             "interview_type": submission.user_profile.get('role', 'Technical'),
             "questions_count": len(submission.questions_and_answers),
             "overall_score": evaluation_data.get("overall_score", 0),
-            "feedback": evaluation_data.get("feedback", ""),
-            "question_scores": evaluation_data.get("question_scores", []),
+            "feedback_points": evaluation_data.get("feedback_points", []),
             "questions_and_answers": [
                 {
                     "question_id": qa.question_id,

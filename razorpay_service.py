@@ -109,7 +109,7 @@ async def razorpay_webhook(
         settings.RAZORPAY_WEBHOOK_SECRET.encode(),
         body,
         hashlib.sha256
-    ).hexdigest()  # hmac.new is valid (alias for hmac.HMAC)
+    ).hexdigest()
 
     if not hmac.compare_digest(expected, x_razorpay_signature or ""):
         logger.warning("Invalid Razorpay webhook signature")

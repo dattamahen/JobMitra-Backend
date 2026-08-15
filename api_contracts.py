@@ -42,8 +42,7 @@ class QuestionScore(BaseModel):
 
 class InterviewEvaluationResult(BaseModel):
     overall_score: int = Field(..., ge=0, le=100)
-    feedback: str
-    question_scores: List[QuestionScore]
+    feedback_points: List[str] = Field(..., description="5-7 bullet point observations covering the full 360 evaluation")
 
 class InterviewEvaluationResponse(BaseModel):
     """Response for POST /api/v1/mock-interview/submit-for-evaluation"""
@@ -174,9 +173,8 @@ def parse_evaluation_response(
         cleaned = re.sub(r"^```(?:json)?\s*", "", raw_content.strip())
         cleaned = re.sub(r"\s*```$", "", cleaned).strip()
 
-        # Try extracting JSON object from mixed content
         match = re.search(
-            r"\{[\s\S]*\"overall_score\"[\s\S]*\"question_scores\"[\s\S]*\}",
+            r"\{[\s\S]*\"overall_score\"[\s\S]*\"feedback_points\"[\s\S]*\}",
             cleaned,
         )
         if match:
@@ -184,37 +182,23 @@ def parse_evaluation_response(
 
         data = json.loads(cleaned)
 
-        scores = data.get("question_scores", [])
-        validated_scores = []
-        for i, qs in enumerate(scores):
-            validated_scores.append(QuestionScore(
-                question_id=qs.get("question_id", question_ids[i] if i < len(question_ids) else f"q_{i+1}"),
-                score=max(0, min(100, int(qs.get("score", 75)))),
-                feedback=str(qs.get("feedback", "No feedback available")),
-            ))
-
-        # Fill missing question scores
-        for i in range(len(validated_scores), len(question_ids)):
-            validated_scores.append(QuestionScore(
-                question_id=question_ids[i],
-                score=75,
-                feedback="Evaluation pending",
-            ))
+        points = data.get("feedback_points", [])
+        if not isinstance(points, list) or not points:
+            points = ["Interview completed. Please review your answers for improvement."]
 
         return InterviewEvaluationResult(
             overall_score=max(0, min(100, int(data.get("overall_score", 75)))),
-            feedback=str(data.get("feedback", "Interview evaluation completed.")),
-            question_scores=validated_scores,
+            feedback_points=[str(p) for p in points],
         )
 
     except Exception as e:
         logger.warning("Evaluation parse failed: %s — using fallback", e)
         return InterviewEvaluationResult(
             overall_score=75,
-            feedback="Interview completed. Detailed evaluation could not be fully processed.",
-            question_scores=[
-                QuestionScore(question_id=qid, score=75, feedback="Good response")
-                for qid in question_ids
+            feedback_points=[
+                "Interview completed successfully.",
+                "Review your answers for depth and specificity.",
+                "Focus on providing concrete examples with measurable outcomes.",
             ],
         )
 

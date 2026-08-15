@@ -300,12 +300,26 @@ async def get_user_applications(user_id: str, limit: int = 20) -> List[Dict[str,
 
 # Mock Interview Functions
 async def create_mock_interview(interview_data: Dict[str, Any]) -> Optional[str]:
-    """Create a new mock interview session."""
+    """Create a new mock interview session. Enforces max 10 per user — deletes oldest if exceeded."""
     try:
         interview_data["created_at"] = datetime.utcnow()
         interview_data["updated_at"] = datetime.utcnow()
-        
+
         collection = db.database[COLLECTIONS["mock_interviews"]]
+        user_id = interview_data.get("user_id")
+
+        # Enforce max 10 interviews per user
+        if user_id:
+            count = await collection.count_documents({"user_id": user_id})
+            if count >= 10:
+                oldest = await collection.find_one(
+                    {"user_id": user_id},
+                    sort=[("created_at", 1)]
+                )
+                if oldest:
+                    await collection.delete_one({"_id": oldest["_id"]})
+                    logger.info("Deleted oldest interview for user %s (limit reached)", user_id)
+
         result = await collection.insert_one(interview_data)
         return str(result.inserted_id)
     except Exception as e:
