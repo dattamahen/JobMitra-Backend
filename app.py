@@ -80,6 +80,7 @@ from project_contest_endpoints import router as project_contest_router
 from razorpay_service import router as razorpay_router
 from pdf_endpoints import router as pdf_router
 from sitemap_routes import sitemap_router
+from cv_jd_endpoints import cv_jd_router
 
 
 @asynccontextmanager
@@ -274,6 +275,7 @@ def create_app() -> FastAPI:
     app.include_router(razorpay_router)  # Razorpay payment routes
     app.include_router(pdf_router)  # PDF generation via Playwright
     app.include_router(sitemap_router)  # Sitemap & robots.txt for SEO
+    app.include_router(cv_jd_router)  # CV tailoring by raw JD
 
     # Health check endpoint
     @app.get("/", tags=["Health"])
