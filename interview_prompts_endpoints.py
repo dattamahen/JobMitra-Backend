@@ -49,12 +49,23 @@ Candidate Profile:
 - Skills to focus on: {skills_str}
 - Interview Type: {interview_type}
 
-IMPORTANT:
-- Generate questions ONLY relevant to the above role and skills
-- Treat each skill at face value based on its plain English meaning — do NOT reinterpret skill names through a technical lens
-- Example: 'Event Coordination' means organizing and managing events (conferences, meetings, logistics) — NOT software event-driven architecture
-- Example: 'Python' means the programming language — NOT the snake
-- If the role and skills seem mismatched, trust the SKILLS over the role title when generating questions
+QUESTION STRUCTURE ENFORCEMENT:
+- You MUST follow the Tier 1 / Tier 2 / Tier 3 breakdown defined above — do not skip any tier
+- Tier 1 questions must be SHORT and SPECIFIC — single concept, answerable in 1-2 sentences
+- Tier 2 questions must be PRACTICAL — require a real example or step-by-step answer
+- Tier 3 questions must be STRATEGIC — require thinking beyond day-to-day execution
+- Total questions: 17-20. Do NOT generate fewer than 17.
+
+SKILL INTERPRETATION:
+- Treat each skill at face value based on its plain English meaning
+- 'Event Coordination' = organizing events (logistics, scheduling) — NOT software events
+- 'Python' = the programming language — NOT the snake
+- If role and skills seem mismatched, trust the SKILLS over the role title
+
+USER EXPERIENCE GOAL:
+- Questions should make the candidate feel: 'I need to prepare more for this'
+- Mix confidence-building (Tier 1) with challenging (Tier 2) and thought-provoking (Tier 3)
+- The overall experience should feel like a real, well-structured interview — not a quiz
 
 STRICT OUTPUT RULES:
 - Return ONLY a valid JSON object
