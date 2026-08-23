@@ -18,9 +18,9 @@ app_env = os.getenv("APP_ENV", "local")
 
 env_file = f".env.{app_env}"
 if os.path.exists(env_file):
-    load_dotenv(env_file, override=True)
+    load_dotenv(env_file, override=False)
 elif os.path.exists(".env"):
-    load_dotenv(".env", override=True)
+    load_dotenv(".env", override=False)
     logger.warning(".env.%s not found, loaded fallback .env", app_env)
 
 
