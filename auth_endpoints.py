@@ -763,6 +763,7 @@ class GoogleSignInRequest(BaseModel):
 @auth_router.post("/google-signin")
 async def google_signin(request: GoogleSignInRequest):
     """Handle Google Sign-In"""
+    google_user_info = None
     try:
         google_user_info = _google_auth.verify_google_token(request.credential)
         if not google_user_info:
