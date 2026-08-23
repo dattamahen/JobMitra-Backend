@@ -297,13 +297,11 @@ def create_app() -> FastAPI:
     # CORS test endpoint
     @app.get("/cors-test", tags=["Health"])
     async def cors_test():
-        """
-        Simple endpoint to test CORS configuration.
-        """
         return {
             "message": "CORS is working!",
             "timestamp": datetime.utcnow(),
-            "access_from": "Angular frontend should be able to access this"
+            "cors_origins": settings.CORS_ORIGINS,
+            "cors_allow_credentials": settings.CORS_ALLOW_CREDENTIALS
         }
 
     return app
