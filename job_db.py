@@ -407,9 +407,14 @@ class JobDatabase:
             return 0
 
     async def get_active_job_count(self) -> int:
-        """Get count of active jobs (consistent with job search query)"""
+        """Get count of active jobs — HR jobs + internal job postings."""
         try:
-            return await db.database[self.jobs_collection].count_documents({"is_active": True})
+            import asyncio
+            hr_jobs, internal_jobs = await asyncio.gather(
+                db.database[self.jobs_collection].count_documents({"is_active": True}),
+                db.database["internal_jobs"].count_documents({"is_active": True, "status": "active"})
+            )
+            return hr_jobs + internal_jobs
         except Exception as e:
             logger.error("getting active job count: %s", e)
             return 0
