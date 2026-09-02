@@ -258,8 +258,9 @@ async def parse_job_from_text(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("LLM parse error: %s", e)
-        raise HTTPException(status_code=500, detail="Failed to parse job details from content")
+        import traceback
+        logger.error("LLM parse error: %s\n%s", e, traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Failed to parse job details: {type(e).__name__}: {str(e)[:200]}")
 
 
 @internal_job_router.post("/upload-and-parse")
