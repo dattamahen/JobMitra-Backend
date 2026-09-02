@@ -28,7 +28,7 @@ class Settings:
     # App Info
     APP_NAME = "JobMitra Backend API"
     DESCRIPTION = "AI-powered job search and career development platform"
-    VERSION = "1.0.0"
+    VERSION = "1.1.1"
     APP_ENV = os.getenv("APP_ENV", "local")
 
     # Server

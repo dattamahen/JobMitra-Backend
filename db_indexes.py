@@ -62,6 +62,23 @@ async def ensure_indexes(database: AsyncIOMotorDatabase) -> None:
         await mock_interviews.create_index("user_id")
         await mock_interviews.create_index([("user_id", 1), ("created_at", -1)])
 
+        # ── Internal Jobs Collection ─────────────────────────────
+        internal_jobs = database["internal_jobs"]
+        await internal_jobs.create_index("internal_job_id", unique=True)
+        await internal_jobs.create_index("posted_by_user_id")
+        await internal_jobs.create_index("is_active")
+        await internal_jobs.create_index("expires_at")
+        await internal_jobs.create_index([("is_active", 1), ("posted_date", -1)])
+        await internal_jobs.create_index([
+            ("title", "text"), ("description", "text"),
+            ("company", "text"), ("skills_required", "text")
+        ])
+
+        # ── Internal Job OTPs ────────────────────────────────────
+        otps = database["internal_job_otps"]
+        await otps.create_index("email", unique=True)
+        await otps.create_index("expires_at", expireAfterSeconds=0)  # TTL index
+
         logger.info("All database indexes ensured successfully")
 
     except Exception as e:
