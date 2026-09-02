@@ -23,6 +23,9 @@ CATEGORIES = {
     "resume_validation": "resume_validation.json",
     "resume_enhancement": "resume_enhancement.json",
     "query_analysis": "query_analysis.json",
+    "job_image_parse": "job_image_parse.json",
+    "job_text_parse": "job_text_parse.json",
+    "job_moderation": "job_moderation.json",
 }
 
 
