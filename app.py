@@ -81,6 +81,7 @@ from razorpay_service import router as razorpay_router
 from pdf_endpoints import router as pdf_router
 from sitemap_routes import sitemap_router
 from cv_jd_endpoints import cv_jd_router
+from internal_job_endpoints import internal_job_router
 
 
 @asynccontextmanager
@@ -115,6 +116,11 @@ async def lifespan(app: FastAPI):
         archived = await expire_stale_jobs()
         if archived:
             logger.info("Startup sweep: archived %d stale job(s)", archived)
+        # Expire internal jobs older than 15 days
+        from internal_job_db import internal_job_db as _ijdb
+        expired_internal = await _ijdb.expire_stale()
+        if expired_internal:
+            logger.info("Startup sweep: expired %d internal job(s)", expired_internal)
     start_expiry_scheduler()
 
     yield
@@ -276,6 +282,7 @@ def create_app() -> FastAPI:
     app.include_router(pdf_router)  # PDF generation via Playwright
     app.include_router(sitemap_router)  # Sitemap & robots.txt for SEO
     app.include_router(cv_jd_router)  # CV tailoring by raw JD
+    app.include_router(internal_job_router)  # Internal Job Market (Refer & Hire)
 
     # Health check endpoint
     @app.get("/", tags=["Health"])
