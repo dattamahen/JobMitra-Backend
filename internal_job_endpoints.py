@@ -17,7 +17,7 @@ import string
 from datetime import datetime, timedelta
 from typing import Optional
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from pydantic import BaseModel
 
 from auth_endpoints import get_current_user
@@ -32,6 +32,7 @@ from internal_job_schemas import (
     SendOTPRequest,
     VerifyOTPRequest,
 )
+from prompt_manager import prompt_manager
 
 logger = logging.getLogger(__name__)
 
@@ -55,13 +56,48 @@ def _is_content_safe(text: str) -> bool:
     return not bool(_BLOCKED_RE.search(text))
 
 
-def _check_job_content(job: InternalJobPostRequest) -> None:
+async def _llm_check_job_content(job: InternalJobPostRequest) -> None:
+    """LLM moderation at final POST gate — blocks objectionable jobs before DB write."""
+    # Fast regex pre-check first (no API cost)
     combined = f"{job.title} {job.company} {job.description} {' '.join(job.skills_required)}"
     if not _is_content_safe(combined):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Job content violates our community guidelines. Government jobs, adult content, illegal activities, and harmful content are not allowed."
+            detail="Job content violates our community guidelines."
         )
+
+    # LLM final check
+    try:
+        import json
+        from openai import AsyncOpenAI
+        client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        mod_variant = prompt_manager.get_random("job_moderation")
+        prompt = (
+            mod_variant["system_prompt"]
+            + f"\n\nJob Title: {job.title}"
+            + f"\nCompany: {job.company}"
+            + f"\nDescription: {job.description[:500]}"
+            + f"\nSkills: {', '.join(job.skills_required)}"
+            + f"\nRequirements: {'; '.join((job.requirements or [])[:3])}"
+        )
+
+        response = await client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=mod_variant.get("temperature", 0.0),
+            max_tokens=mod_variant.get("max_tokens", 100)
+        )
+        result = json.loads(response.choices[0].message.content)
+        if not result.get("safe", True):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=result.get("reason", "Job content violates community guidelines.")
+            )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.warning("LLM moderation check failed, falling back to regex: %s", e)
+        # If LLM fails, regex already passed above — allow through
 
 
 # ── OTP helpers ───────────────────────────────────────────────────────────────
@@ -188,34 +224,22 @@ async def parse_job_from_text(
         from openai import AsyncOpenAI
         client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-        prompt = f"""Extract job posting details from the following text and return a JSON object with these exact fields:
-- title (string)
-- company (string)
-- description (string, min 50 chars)
-- skills_required (array of strings)
-- experience_level (one of: entry, mid, senior, lead)
-- employment_type (one of: full-time, part-time, contract, internship)
-- job_type (one of: remote, onsite, hybrid)
-- location_city (string)
-- location_state (string)
-- requirements (array of strings, min 3 items)
-- responsibilities (array of strings, min 3 items)
-
-If any field is missing, use sensible defaults. Return ONLY valid JSON, no markdown.
-
-Text:
-{body.raw_text[:3000]}"""
+        variant = prompt_manager.get_random("job_text_parse")
+        prompt = variant["system_prompt"] + f"\n\nText:\n{body.raw_text[:3000]}"
 
         response = await client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[{"role": "user", "content": prompt}],
-            temperature=0.2,
-            max_tokens=1500
+            temperature=variant.get("temperature", 0.2),
+            max_tokens=variant.get("max_tokens", 1500)
         )
         import json
         parsed = json.loads(response.choices[0].message.content)
 
-        # Safety check on parsed content
+        if parsed.get("rejected"):
+            raise HTTPException(status_code=422, detail=parsed.get("reason", "Job content violates community guidelines"))
+
+        # Fallback regex safety net
         combined = f"{parsed.get('title','')} {parsed.get('description','')} {parsed.get('company','')}"
         if not _is_content_safe(combined):
             raise HTTPException(status_code=422, detail="Parsed content violates community guidelines")
@@ -232,59 +256,77 @@ Text:
 @internal_job_router.post("/upload-and-parse")
 async def upload_and_parse(
     file: UploadFile = File(...),
-    official_email: str = "",
-    otp_token: str = "",
+    official_email: str = Form(...),
+    otp_token: str = Form(...),
     current_user: dict = Depends(get_current_user)
 ):
     """
     Accept image or CSV file, extract text, then parse via LLM.
     Returns structured job for preview.
     """
-    if not official_email or not otp_token:
-        raise HTTPException(status_code=400, detail="official_email and otp_token are required")
-
     if not await _validate_otp_token(official_email, otp_token):
         raise HTTPException(status_code=401, detail="Invalid or expired verification token")
 
     content_type = file.content_type or ""
     raw_bytes = await file.read()
 
-    raw_text = ""
-
     if "csv" in content_type or file.filename.endswith(".csv"):
         raw_text = raw_bytes.decode("utf-8", errors="ignore")
+        if not raw_text.strip():
+            raise HTTPException(status_code=422, detail="Could not extract text from the uploaded file")
+        body = ParseJobFromMediaRequest(raw_text=raw_text, official_email=official_email, otp_token=otp_token)
+        return await parse_job_from_text(body, current_user)
 
     elif "image" in content_type or file.filename.lower().endswith((".png", ".jpg", ".jpeg", ".webp")):
-        # Use OpenAI vision to extract text from image
         import base64
+        import json
         from openai import AsyncOpenAI
         client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
         b64 = base64.b64encode(raw_bytes).decode()
         ext = file.filename.rsplit(".", 1)[-1].lower() if "." in file.filename else "jpeg"
         mime = f"image/{ext}"
+
+        vision_variant = prompt_manager.get_random("job_image_parse")
+        vision_prompt = vision_variant["system_prompt"]
+
         vision_resp = await client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[{
                 "role": "user",
                 "content": [
-                    {"type": "text", "text": "Extract all text from this job posting image. Return only the raw text."},
+                    {"type": "text", "text": vision_prompt},
                     {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{b64}"}}
                 ]
             }],
-            max_tokens=1000
+            temperature=vision_variant.get("temperature", 0.1),
+            max_tokens=vision_variant.get("max_tokens", 1500)
         )
-        raw_text = vision_resp.choices[0].message.content or ""
+
+        raw_content = vision_resp.choices[0].message.content or ""
+        if not raw_content.strip():
+            raise HTTPException(status_code=422, detail="Could not extract job details from the image")
+
+        try:
+            parsed = json.loads(raw_content)
+        except json.JSONDecodeError:
+            cleaned = raw_content.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
+            try:
+                parsed = json.loads(cleaned)
+            except json.JSONDecodeError:
+                logger.error("Vision response not valid JSON: %s", raw_content[:300])
+                raise HTTPException(status_code=422, detail="Could not parse job details from the image. Please try manual entry.")
+
+        if parsed.get("rejected"):
+            raise HTTPException(status_code=422, detail=parsed.get("reason", "Image content violates community guidelines"))
+
+        # Fallback regex safety net
+        combined = f"{parsed.get('title','')} {parsed.get('description','')} {parsed.get('company','')}"
+        if not _is_content_safe(combined):
+            raise HTTPException(status_code=422, detail="Image content violates community guidelines")
+
+        return {"parsed_job": parsed, "message": "Review the details below before posting"}
     else:
         raise HTTPException(status_code=400, detail="Only image (PNG/JPG) and CSV files are supported")
-
-    if not raw_text.strip():
-        raise HTTPException(status_code=422, detail="Could not extract text from the uploaded file")
-
-    # Reuse parse endpoint logic
-    class _Body:
-        pass
-    body = ParseJobFromMediaRequest(raw_text=raw_text, official_email=official_email, otp_token=otp_token)
-    return await parse_job_from_text(body, current_user)
 
 
 @internal_job_router.post("/post")
@@ -296,7 +338,7 @@ async def post_internal_job(
     if not await _validate_otp_token(job.official_email, job.otp_token):
         raise HTTPException(status_code=401, detail="Invalid or expired verification token. Please verify your company email again.")
 
-    _check_job_content(job)
+    await _llm_check_job_content(job)
 
     user_id = current_user["user_id"]
     user_email = current_user["email"]
