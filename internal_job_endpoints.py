@@ -234,7 +234,16 @@ async def parse_job_from_text(
             max_tokens=variant.get("max_tokens", 1500)
         )
         import json
-        parsed = json.loads(response.choices[0].message.content)
+        raw_content = response.choices[0].message.content or ""
+        try:
+            parsed = json.loads(raw_content)
+        except json.JSONDecodeError:
+            cleaned = raw_content.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
+            try:
+                parsed = json.loads(cleaned)
+            except json.JSONDecodeError:
+                logger.error("Text parse LLM response not valid JSON: %s", raw_content[:300])
+                raise HTTPException(status_code=422, detail="Could not parse job details from the provided text. Please try manual entry.")
 
         if parsed.get("rejected"):
             raise HTTPException(status_code=422, detail=parsed.get("reason", "Job content violates community guidelines"))
