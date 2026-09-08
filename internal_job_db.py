@@ -107,10 +107,9 @@ class InternalJobDatabase:
         """Jobs posted by a specific user — for Refer & Hire section."""
         try:
             skip = (page - 1) * per_page
-            total = await db.database[COLLECTION].count_documents({"posted_by_user_id": user_id})
-            cursor = db.database[COLLECTION].find(
-                {"posted_by_user_id": user_id}
-            ).sort("posted_date", -1).skip(skip).limit(per_page)
+            query = {"posted_by_user_id": user_id, "is_active": True}
+            total = await db.database[COLLECTION].count_documents(query)
+            cursor = db.database[COLLECTION].find(query).sort("posted_date", -1).skip(skip).limit(per_page)
             jobs = []
             async for job in cursor:
                 job["_id"] = str(job["_id"])
@@ -246,11 +245,19 @@ class InternalJobDatabase:
 
     async def delete_by_poster(self, job_id: str, user_id: str) -> bool:
         try:
-            result = await db.database[COLLECTION].update_one(
-                {"internal_job_id": job_id, "posted_by_user_id": user_id},
+            # Check existence first to give a clearer error path
+            job = await db.database[COLLECTION].find_one({"internal_job_id": job_id})
+            if not job:
+                logger.warning("delete_by_poster: job %s not found", job_id)
+                return False
+            if job.get("posted_by_user_id") != user_id:
+                logger.warning("delete_by_poster: user %s does not own job %s (owner: %s)", user_id, job_id, job.get("posted_by_user_id"))
+                return False
+            await db.database[COLLECTION].update_one(
+                {"internal_job_id": job_id},
                 {"$set": {"is_active": False, "status": "removed"}}
             )
-            return result.modified_count > 0
+            return True
         except Exception as e:
             logger.error("delete internal job: %s", e)
             return False
