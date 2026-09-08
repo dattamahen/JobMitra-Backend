@@ -203,6 +203,62 @@ def parse_evaluation_response(
         )
 
 
+def parse_job_text_response(raw_content: str) -> dict:
+    """
+    Parse LLM job-text-parse output into a validated dict.
+    Handles markdown fences, extra whitespace, and missing fields.
+    """
+    try:
+        cleaned = re.sub(r"^```(?:json)?\s*", "", raw_content.strip())
+        cleaned = re.sub(r"\s*```$", "", cleaned).strip()
+        start = cleaned.find("{")
+        end = cleaned.rfind("}") + 1
+        if start != -1 and end > start:
+            data = json.loads(cleaned[start:end])
+        else:
+            raise ValueError("No JSON object found")
+
+        if data.get("rejected"):
+            return data
+
+        # Normalise experience_level
+        exp = (data.get("experience_level") or "mid").lower()
+        if exp not in ("entry", "mid", "senior", "lead"):
+            exp = "mid"
+
+        # Normalise employment_type
+        emp = (data.get("employment_type") or "full-time").lower().replace(" ", "-")
+        if emp not in ("full-time", "part-time", "contract", "internship"):
+            emp = "full-time"
+
+        # Normalise job_type
+        jt = (data.get("job_type") or "onsite").lower()
+        if jt not in ("remote", "onsite", "hybrid"):
+            jt = "onsite"
+
+        skills = data.get("skills_required", [])
+        if isinstance(skills, str):
+            skills = [s.strip() for s in skills.split(",") if s.strip()]
+
+        return {
+            "rejected": False,
+            "title": (data.get("title") or "").strip(),
+            "company": (data.get("company") or "").strip(),
+            "description": (data.get("description") or "").strip(),
+            "skills_required": skills,
+            "experience_level": exp,
+            "employment_type": emp,
+            "job_type": jt,
+            "location_city": (data.get("location_city") or "").strip(),
+            "location_state": (data.get("location_state") or "").strip(),
+            "requirements": data.get("requirements") or [],
+            "responsibilities": data.get("responsibilities") or [],
+        }
+    except Exception as e:
+        logger.warning("Job text parse failed: %s — raw: %s", e, raw_content[:200])
+        return None
+
+
 def parse_tailor_response(raw_content: str) -> dict:
     """
     Parse LLM resume tailor output into a dict matching TailoredResume + changes.

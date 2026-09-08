@@ -63,7 +63,8 @@ class JobDatabase:
                 "status": "active",
                 "posted_by_hr_id": hr_user_id,
                 "views_count": 0,
-                "applications_count": [],
+                "applications_count": 0,
+                "applications_received": [],
                 "source": "internal",
                 "job_score": None,
                 "match_percentage": None
@@ -122,7 +123,7 @@ class JobDatabase:
                     "posted_date": job.get("posted_date", datetime.utcnow()),
                     "application_deadline": job.get("application_deadline"),
                     "is_active": job.get("is_active", True),
-                    "applications_count": len(job.get("applications_count", [])),
+                    "applications_count": len(job.get("applications_received", [])),
                     "views_count": job.get("views_count", 0),
                     "description": job.get("description", ""),
                     "requirements": job.get("requirements", []),
@@ -286,7 +287,7 @@ class JobDatabase:
                         "$group": {
                             "_id": None,
                             "total_jobs": {"$sum": 1},
-                            "total_applications": {"$sum": {"$size": {"$ifNull": ["$applications_count", []]}}}
+                            "total_applications": {"$sum": {"$ifNull": ["$applications_count", 0]}}
                         }
                     }],
                     "recent_jobs": [
@@ -350,18 +351,11 @@ class JobDatabase:
             return False
     
     async def add_job_application(self, job_id: str, user_id: str) -> bool:
-        """Add user to job applications array"""
+        """Add user to job applications — increments count only (detail stored in applications_received)."""
         try:
-            # First, ensure applications_count is an array (handle legacy integer format)
-            await db.database[self.jobs_collection].update_one(
-                {"job_id": job_id, "applications_count": {"$type": "number"}},
-                {"$set": {"applications_count": []}}
-            )
-            
-            # Now add user to the array
             result = await db.database[self.jobs_collection].update_one(
                 {"job_id": job_id},
-                {"$addToSet": {"applications_count": user_id}}
+                {"$inc": {"applications_count": 1}}
             )
             return result.modified_count > 0
         except Exception as e:
