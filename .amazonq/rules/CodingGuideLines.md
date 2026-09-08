@@ -1,4 +1,4 @@
-You are generating code for an Angular 18+ + FastAPI backend project. Follow these rules strictly:
+You are generating code for an Angular 20+ + FastAPI backend project. Follow these rules strictly:
 FRONTEND:
 - Use standalone components, @if/@for/@switch.
 - Prefer signals (signal, computed, effect) over manual RxJS.
