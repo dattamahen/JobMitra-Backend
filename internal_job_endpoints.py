@@ -343,19 +343,6 @@ async def post_internal_job(
     return {"message": "Job posted successfully", "internal_job_id": job_id, "expires_in_days": 15}
 
 
-@internal_job_router.get("/{job_id}")
-async def get_internal_job(
-    job_id: str,
-    current_user: dict = Depends(get_current_user)
-):
-    """Get a single internal job."""
-    job = await internal_job_db.get_by_id(job_id)
-    if not job:
-        raise HTTPException(status_code=404, detail="Job not found or has expired")
-    await internal_job_db.increment_views(job_id)
-    return job
-
-
 @internal_job_router.get("/my-applications")
 async def get_my_internal_applications(
     current_user: dict = Depends(get_current_user)
@@ -490,3 +477,16 @@ async def delete_my_post(
     if not success:
         raise HTTPException(status_code=404, detail="Job not found or you don't have permission")
     return {"message": "Job removed successfully"}
+
+
+@internal_job_router.get("/{job_id}")
+async def get_internal_job(
+    job_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get a single internal job."""
+    job = await internal_job_db.get_by_id(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found or has expired")
+    await internal_job_db.increment_views(job_id)
+    return job
