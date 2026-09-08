@@ -9,7 +9,6 @@ Internal Job Postings API endpoints.
 
 import asyncio
 import logging
-import os
 import random
 import re
 import secrets
@@ -33,6 +32,7 @@ from internal_job_schemas import (
     VerifyOTPRequest,
 )
 from prompt_manager import prompt_manager
+from api_contracts import parse_job_text_response
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +58,6 @@ def _is_content_safe(text: str) -> bool:
 
 async def _llm_check_job_content(job: InternalJobPostRequest) -> None:
     """LLM moderation at final POST gate — blocks objectionable jobs before DB write."""
-    # Fast regex pre-check first (no API cost)
     combined = f"{job.title} {job.company} {job.description} {' '.join(job.skills_required)}"
     if not _is_content_safe(combined):
         raise HTTPException(
@@ -66,11 +65,9 @@ async def _llm_check_job_content(job: InternalJobPostRequest) -> None:
             detail="Job content violates our community guidelines."
         )
 
-    # LLM final check
     try:
         import json
-        from openai import AsyncOpenAI
-        client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        from multi_llm_service import MultiLLMService
         mod_variant = prompt_manager.get_random("job_moderation")
         prompt = (
             mod_variant["system_prompt"]
@@ -80,14 +77,9 @@ async def _llm_check_job_content(job: InternalJobPostRequest) -> None:
             + f"\nSkills: {', '.join(job.skills_required)}"
             + f"\nRequirements: {'; '.join((job.requirements or [])[:3])}"
         )
-
-        response = await client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[{"role": "user", "content": prompt}],
-            temperature=mod_variant.get("temperature", 0.0),
-            max_tokens=mod_variant.get("max_tokens", 100)
-        )
-        result = json.loads(response.choices[0].message.content)
+        llm = MultiLLMService()
+        res = await llm.generate(prompt)
+        result = json.loads(res["content"])
         if not result.get("safe", True):
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -97,7 +89,6 @@ async def _llm_check_job_content(job: InternalJobPostRequest) -> None:
         raise
     except Exception as e:
         logger.warning("LLM moderation check failed, falling back to regex: %s", e)
-        # If LLM fails, regex already passed above — allow through
 
 
 # ── OTP helpers ───────────────────────────────────────────────────────────────
@@ -221,34 +212,21 @@ async def parse_job_from_text(
         raise HTTPException(status_code=422, detail="Content violates community guidelines")
 
     try:
-        from openai import AsyncOpenAI
-        client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        from multi_llm_service import MultiLLMService
 
         variant = prompt_manager.get_random("job_text_parse")
         prompt = variant["system_prompt"] + f"\n\nText:\n{body.raw_text[:3000]}"
 
-        response = await client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[{"role": "user", "content": prompt}],
-            temperature=variant.get("temperature", 0.2),
-            max_tokens=variant.get("max_tokens", 1500)
-        )
-        import json
-        raw_content = response.choices[0].message.content or ""
-        try:
-            parsed = json.loads(raw_content)
-        except json.JSONDecodeError:
-            cleaned = raw_content.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
-            try:
-                parsed = json.loads(cleaned)
-            except json.JSONDecodeError:
-                logger.error("Text parse LLM response not valid JSON: %s", raw_content[:300])
-                raise HTTPException(status_code=422, detail="Could not parse job details from the provided text. Please try manual entry.")
+        llm = MultiLLMService()
+        res = await llm.generate(prompt)
+        raw_content = res["content"] or ""
 
+        parsed = parse_job_text_response(raw_content)
+        if parsed is None:
+            raise HTTPException(status_code=422, detail="Could not parse job details from the provided text. Please try manual entry.")
         if parsed.get("rejected"):
             raise HTTPException(status_code=422, detail=parsed.get("reason", "Job content violates community guidelines"))
 
-        # Fallback regex safety net
         combined = f"{parsed.get('title','')} {parsed.get('description','')} {parsed.get('company','')}"
         if not _is_content_safe(combined):
             raise HTTPException(status_code=422, detail="Parsed content violates community guidelines")
@@ -290,46 +268,34 @@ async def upload_and_parse(
     elif "image" in content_type or file.filename.lower().endswith((".png", ".jpg", ".jpeg", ".webp")):
         import base64
         import json
-        from openai import AsyncOpenAI
-        client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-        b64 = base64.b64encode(raw_bytes).decode()
+        from google import genai
+        from google.genai import types
+        from config import settings
+
+        client = genai.Client(api_key=settings.GEMINI_API_KEY)
+        vision_variant = prompt_manager.get_random("job_image_parse")
+        vision_prompt = vision_variant["system_prompt"]
         ext = file.filename.rsplit(".", 1)[-1].lower() if "." in file.filename else "jpeg"
         mime = f"image/{ext}"
 
-        vision_variant = prompt_manager.get_random("job_image_parse")
-        vision_prompt = vision_variant["system_prompt"]
-
-        vision_resp = await client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[{
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": vision_prompt},
-                    {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{b64}"}}
-                ]
-            }],
-            temperature=vision_variant.get("temperature", 0.1),
-            max_tokens=vision_variant.get("max_tokens", 1500)
+        vision_resp = await asyncio.to_thread(
+            client.models.generate_content,
+            model="gemini-2.0-flash",
+            contents=[
+                types.Part.from_bytes(data=raw_bytes, mime_type=mime),
+                vision_prompt
+            ]
         )
-
-        raw_content = vision_resp.choices[0].message.content or ""
+        raw_content = vision_resp.text or ""
         if not raw_content.strip():
             raise HTTPException(status_code=422, detail="Could not extract job details from the image")
 
-        try:
-            parsed = json.loads(raw_content)
-        except json.JSONDecodeError:
-            cleaned = raw_content.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
-            try:
-                parsed = json.loads(cleaned)
-            except json.JSONDecodeError:
-                logger.error("Vision response not valid JSON: %s", raw_content[:300])
-                raise HTTPException(status_code=422, detail="Could not parse job details from the image. Please try manual entry.")
-
+        parsed = parse_job_text_response(raw_content)
+        if parsed is None:
+            raise HTTPException(status_code=422, detail="Could not parse job details from the image. Please try manual entry.")
         if parsed.get("rejected"):
             raise HTTPException(status_code=422, detail=parsed.get("reason", "Image content violates community guidelines"))
 
-        # Fallback regex safety net
         combined = f"{parsed.get('title','')} {parsed.get('description','')} {parsed.get('company','')}"
         if not _is_content_safe(combined):
             raise HTTPException(status_code=422, detail="Image content violates community guidelines")

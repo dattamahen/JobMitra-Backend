@@ -65,10 +65,23 @@ class JobApplicationDatabase:
             # Insert application
             await db.database[self.applications_collection].insert_one(application)
             
-            # Update job application count
+            # Update job application count and embed applicant summary
+            user_name = f"{user.get('first_name', '')} {user.get('last_name', '')}".strip()
             await db.database[self.jobs_collection].update_one(
                 {"job_id": job_id},
-                {"$inc": {"applications_count": 1}}
+                {
+                    "$inc": {"applications_count": 1},
+                    "$push": {
+                        "applications_received": {
+                            "application_id": application_id,
+                            "user_id": user_id,
+                            "user_email": user.get("email", ""),
+                            "user_name": user_name,
+                            "applied_date": datetime.utcnow(),
+                            "status": ApplicationStatus.APPLIED.value
+                        }
+                    }
+                }
             )
             
             # Add job to user's applied jobs list
