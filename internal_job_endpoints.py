@@ -490,3 +490,4 @@ async def get_internal_job(
         raise HTTPException(status_code=404, detail="Job not found or has expired")
     await internal_job_db.increment_views(job_id)
     return job
+
