@@ -59,7 +59,7 @@ def sanitize_for_json(obj):
         return obj
 
 @router.get("/jobs/{job_id}/tailor-preview")
-async def get_tailor_preview(job_id: str, current_user: dict = Depends(get_current_user)) -> TailorPreviewResponse:
+async def get_tailor_preview(job_id: str, current_user: dict = Depends(get_current_user), source: str = "jobs") -> TailorPreviewResponse:
     """Get preview of tailored resume changes using AI"""
     logger.debug("\n=== Tailor Preview Request ===")
     logger.debug("Job ID: %s ", job_id)
@@ -75,8 +75,11 @@ async def get_tailor_preview(job_id: str, current_user: dict = Depends(get_curre
     logger.debug("User ID: %s ", user_id)
     
     try:
-        # Fetch job details
-        job = await db.database["jobs"].find_one({"job_id": job_id})
+        # Fetch job details from the correct collection
+        if source == "internal_jobs":
+            job = await db.database["internal_jobs"].find_one({"internal_job_id": job_id})
+        else:
+            job = await db.database["jobs"].find_one({"job_id": job_id})
         if not job:
             raise HTTPException(status_code=404, detail="Job not found")
         
@@ -166,7 +169,7 @@ Responsibilities:
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/jobs/{job_id}/tailor-resume")
-async def tailor_resume(job_id: str, current_user: dict = Depends(get_current_user)) -> TailorResumeResponse:
+async def tailor_resume(job_id: str, current_user: dict = Depends(get_current_user), source: str = "jobs") -> TailorResumeResponse:
     """Tailor resume for specific job"""
     try:
         # Handle if current_user is a string
@@ -175,7 +178,7 @@ async def tailor_resume(job_id: str, current_user: dict = Depends(get_current_us
         else:
             user_id = current_user.get('user_id') if isinstance(current_user, dict) else str(current_user)
         # Get the preview (which runs the AI and caches result)
-        preview = await get_tailor_preview(job_id, current_user)
+        preview = await get_tailor_preview(job_id, current_user, source)
         
         # Mark as tailored
         await db.database["users"].update_one(
