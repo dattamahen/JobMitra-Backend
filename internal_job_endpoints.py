@@ -351,10 +351,23 @@ async def get_my_internal_applications(
     user = await db.database["users"].find_one({"user_id": current_user["user_id"]})
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    applications = [
-        app for app in user.get("internal_job_applications", [])
-        if isinstance(app, dict)
-    ]
+    applications = []
+    for app in user.get("internal_job_applications", []):
+        if not isinstance(app, dict):
+            continue
+        # Normalize to ApplicationData shape expected by frontend
+        applied_date = app.get("applied_date", "")
+        if hasattr(applied_date, "isoformat"):
+            applied_date = applied_date.isoformat()
+        applications.append({
+            "application_id": app.get("application_id", f"{current_user['user_id']}_{app.get('internal_job_id', '')}"),
+            "job_title": app.get("job_title", ""),
+            "company": app.get("company", ""),
+            "status": app.get("status", "applied"),
+            "applied_date": applied_date,
+            "application_source": "internal_referral",
+            "internal_job_id": app.get("internal_job_id", ""),
+        })
     return {"applications": applications, "total_count": len(applications)}
 
 
