@@ -395,7 +395,7 @@ async def search_internal_jobs(
         page=page,
         per_page=per_page
     )
-    return await internal_job_db.search(filters)
+    return await internal_job_db.search(filters, user_id=current_user["user_id"])
 
 
 @internal_job_router.post("/apply")
