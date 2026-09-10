@@ -125,7 +125,7 @@ class InternalJobDatabase:
             logger.error("get jobs by poster: %s", e)
             return {"jobs": [], "total_count": 0, "page": page, "per_page": per_page, "total_pages": 0}
 
-    async def search(self, filters: InternalJobSearchFilters) -> Dict[str, Any]:
+    async def search(self, filters: InternalJobSearchFilters, user_id: Optional[str] = None) -> Dict[str, Any]:
         """Search active internal jobs — for Internal Job Market (paid)."""
         try:
             query: Dict[str, Any] = {"is_active": True, "status": "active"}
@@ -147,12 +147,27 @@ class InternalJobDatabase:
             if filters.job_type and filters.job_type != "all":
                 query["job_type"] = filters.job_type
 
+            # Fetch user's applied internal job IDs to stamp already_applied
+            applied_ids: set = set()
+            if user_id:
+                user = await db.database["users"].find_one(
+                    {"user_id": user_id},
+                    {"internal_job_applications": 1}
+                )
+                if user:
+                    applied_ids = {
+                        a["internal_job_id"]
+                        for a in user.get("internal_job_applications", [])
+                        if isinstance(a, dict) and a.get("is_applied")
+                    }
+
             skip = (filters.page - 1) * filters.per_page
             total = await db.database[COLLECTION].count_documents(query)
             cursor = db.database[COLLECTION].find(query).sort("posted_date", -1).skip(skip).limit(filters.per_page)
             jobs = []
             async for job in cursor:
                 job["_id"] = str(job["_id"])
+                job["already_applied"] = job["internal_job_id"] in applied_ids
                 jobs.append(job)
             return {
                 "jobs": jobs,
