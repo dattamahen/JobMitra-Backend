@@ -24,6 +24,7 @@ match_router = APIRouter(prefix="/api/v1", tags=["Match Analysis"])
 
 class MatchAnalysisRequest(BaseModel):
     job_id: str
+    source: str = "jobs"  # "jobs" or "internal_jobs"
 
 class MatchAnalysisResponse(BaseModel):
     match_percentage: int
@@ -128,8 +129,10 @@ async def perform_match_analysis(
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
         
-        # Get job details
-        job = await db.database["jobs"].find_one({"job_id": job_id})
+        # Get job details from the correct collection
+        collection = "internal_jobs" if request.source == "internal_jobs" else "jobs"
+        id_field = "internal_job_id" if request.source == "internal_jobs" else "job_id"
+        job = await db.database[collection].find_one({id_field: job_id})
         if not job:
             raise HTTPException(status_code=404, detail="Job not found")
         if job.get("status") in ("expired", "closed", "filled") or not job.get("is_active", True):

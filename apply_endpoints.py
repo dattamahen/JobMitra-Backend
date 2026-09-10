@@ -27,6 +27,7 @@ class ApplyJobRequest(BaseModel):
     job_id: str
     force_apply: bool = False
     use_tailored: bool = False
+    source: str = "jobs"  # "jobs" or "internal_jobs"
 
 
 class ApplyJobResponse(BaseModel):
@@ -66,7 +67,10 @@ async def apply_for_job(
         job_id = request.job_id
 
         # Check if job exists and is still active
-        job = await job_db.get_job_by_id(job_id)
+        if request.source == "internal_jobs":
+            job = await db.database["internal_jobs"].find_one({"internal_job_id": job_id})
+        else:
+            job = await job_db.get_job_by_id(job_id)
         if not job:
             raise HTTPException(status_code=404, detail="Job not found")
         if job.get("status") in ("expired", "closed", "filled") or not job.get("is_active", True):
@@ -135,9 +139,11 @@ async def apply_for_job(
                 {"$push": {"overall_jobs_applied": new_record.dict()}}
             )
 
-        # --- Write 2: jobs.applications_received[] ---
-        await db.database["jobs"].update_one(
-            {"job_id": job_id},
+        # --- Write 2: jobs/internal_jobs applications_received[] ---
+        target_collection = "internal_jobs" if request.source == "internal_jobs" else "jobs"
+        id_field = "internal_job_id" if request.source == "internal_jobs" else "job_id"
+        await db.database[target_collection].update_one(
+            {id_field: job_id},
             {"$addToSet": {
                 "applications_received": {
                     "user_id": user_id,

@@ -27,6 +27,9 @@ class UserProfileRequest(BaseModel):
 	ai_provider: Optional[str] = "gemini"
 	generate_questions: Optional[bool] = True
 	interview_type: Optional[str] = "technical"
+	job_title: Optional[str] = None
+	job_description: Optional[str] = None
+	job_skills_required: Optional[List[str]] = None
 
 
 def _experience_label(years: int) -> str:
@@ -41,13 +44,26 @@ def _build_question_prompt(system_prompt: str, user_details: dict, interview_typ
 	skills = user_details.get("skills", [])
 	skills_str = ", ".join(skills) if skills else "General professional skills"
 	experience_years = user_details.get("experience_years", 0)
+
+	job_context = ""
+	if user_details.get("job_title"):
+		job_skills = ", ".join(user_details.get("job_skills_required") or [])
+		job_context = f"""
+
+Target Job Context:
+- Job Title: {user_details["job_title"]}
+- Job Required Skills: {job_skills or "Not specified"}
+- Job Description: {str(user_details.get("job_description") or "")[:400]}
+
+Focus questions specifically on the skills and responsibilities of this job."""
+
 	return f"""{system_prompt}
 
 Candidate Profile:
 - Role: {user_details.get("role", "Professional")}
 - Experience Level: {_experience_label(experience_years)} ({experience_years} years)
 - Skills to focus on: {skills_str}
-- Interview Type: {interview_type}
+- Interview Type: {interview_type}{job_context}
 
 QUESTION STRUCTURE ENFORCEMENT:
 - You MUST follow the Tier 1 / Tier 2 / Tier 3 breakdown defined above — do not skip any tier
@@ -131,6 +147,9 @@ async def get_interview_prompt(user_profile: UserProfileRequest):
 				"role": user_profile.role,
 				"experience_years": user_profile.experience_years,
 				"skills": user_profile.skills,
+				"job_title": user_profile.job_title,
+				"job_description": user_profile.job_description,
+				"job_skills_required": user_profile.job_skills_required,
 			}
 
 			final_prompt = _build_question_prompt(
