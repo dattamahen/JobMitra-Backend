@@ -142,21 +142,54 @@ async def apply_for_job(
         # --- Write 2: jobs/internal_jobs applications_received[] ---
         target_collection = "internal_jobs" if request.source == "internal_jobs" else "jobs"
         id_field = "internal_job_id" if request.source == "internal_jobs" else "job_id"
-        await db.database[target_collection].update_one(
-            {id_field: job_id},
-            {"$addToSet": {
-                "applications_received": {
-                    "user_id": user_id,
-                    "application_id": application_id,
-                    "user_name": f"{user.get('first_name', '')} {user.get('last_name', '')}".strip(),
-                    "user_email": user.get('email', ''),
-                    "applied_date": datetime.utcnow(),
-                    "match_percentage": match_percentage,
-                    "status": "applied",
-                    "resume_tailored": request.use_tailored
-                }
-            }}
+        app_entry = {
+            "user_id": user_id,
+            "application_id": application_id,
+            "user_name": f"{user.get('first_name', '')} {user.get('last_name', '')}".strip(),
+            "user_email": user.get('email', ''),
+            "applied_date": datetime.utcnow(),
+            "match_percentage": match_percentage,
+            "status": "applied",
+            "resume_tailored": request.use_tailored
+        }
+        # Only push if not already present (idempotent)
+        existing_in_job = await db.database[target_collection].find_one(
+            {id_field: job_id, "applications_received.user_id": user_id}
         )
+        if not existing_in_job:
+            await db.database[target_collection].update_one(
+                {id_field: job_id},
+                {
+                    "$push": {"applications_received": app_entry},
+                    "$inc": {"applications_count": 1}
+                }
+            )
+        else:
+            # Update existing entry
+            await db.database[target_collection].update_one(
+                {id_field: job_id, "applications_received.user_id": user_id},
+                {"$set": {"applications_received.$": app_entry}}
+            )
+
+        # --- Write 3: for internal jobs, also sync internal_job_applications[] ---
+        if request.source == "internal_jobs":
+            existing_internal = await db.database["users"].find_one(
+                {"user_id": user_id, "internal_job_applications.internal_job_id": job_id}
+            )
+            if not existing_internal:
+                await db.database["users"].update_one(
+                    {"user_id": user_id},
+                    {"$push": {"internal_job_applications": {
+                        "application_id": application_id,
+                        "internal_job_id": job_id,
+                        "job_title": job.get("title", ""),
+                        "company": job.get("company", ""),
+                        "application_source": "internal_referral",
+                        "status": "applied",
+                        "applied_date": datetime.utcnow(),
+                        "is_applied": True
+                    }}}
+                )
 
         # Log activity
         await log_user_activity(
@@ -165,6 +198,23 @@ async def apply_for_job(
             f"Applied for {job.get('title', 'Unknown')} at {job.get('company', 'Unknown')}",
             {"job_id": job_id, "company": job.get('company'), "position": job.get('title'), "tailored": request.use_tailored}
         )
+
+        # Emails for internal job applications
+        if request.source == "internal_jobs":
+            from email_service import email_service
+            applicant_name = f"{user.get('first_name','')} {user.get('last_name','')}".strip()
+            applied_date_str = datetime.utcnow().strftime("%d %b %Y, %H:%M UTC")
+            poster_email = job.get("official_email") or job.get("posted_by_email", "")
+            import asyncio
+            if poster_email:
+                await asyncio.to_thread(
+                    email_service.send_internal_job_applied_poster,
+                    poster_email, job, user, applied_date_str, match_percentage
+                )
+            await asyncio.to_thread(
+                email_service.send_internal_job_applied_candidate,
+                user.get("email", ""), applicant_name, job, applied_date_str, match_percentage
+            )
 
         message = "Applied with tailored resume" if request.use_tailored else "Successfully applied for the job"
 

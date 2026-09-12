@@ -343,6 +343,30 @@ async def post_internal_job(
     return {"message": "Job posted successfully", "internal_job_id": job_id, "expires_in_days": 15}
 
 
+@internal_job_router.get("/debug-state")
+async def debug_state(current_user: dict = Depends(get_current_user)):
+    """Debug: show raw DB state for current user's applications and posted jobs."""
+    user_id = current_user["user_id"]
+    user = await db.database["users"].find_one({"user_id": user_id}, {"internal_job_applications": 1})
+    apps = user.get("internal_job_applications", []) if user else []
+    # Serialize datetimes
+    for a in apps:
+        for k, v in a.items():
+            if hasattr(v, "isoformat"):
+                a[k] = v.isoformat() + "Z"
+    # Check internal_jobs collection directly
+    applied_job_ids = [a.get("internal_job_id") for a in apps if isinstance(a, dict)]
+    jobs_with_applicant = []
+    async for job in db.database["internal_jobs"].find({"applications_received.user_id": user_id}):
+        jobs_with_applicant.append({"internal_job_id": job["internal_job_id"], "title": job["title"], "applications_count": job.get("applications_count", 0), "applications_received_count": len(job.get("applications_received", []))})
+    return {
+        "user_id": user_id,
+        "internal_job_applications_in_users_doc": apps,
+        "applied_job_ids_from_users_doc": applied_job_ids,
+        "jobs_where_user_appears_in_applications_received": jobs_with_applicant
+    }
+
+
 @internal_job_router.get("/my-applications")
 async def get_my_internal_applications(
     current_user: dict = Depends(get_current_user)
@@ -393,12 +417,7 @@ async def search_internal_jobs(
     per_page: int = 10,
     current_user: dict = Depends(get_current_user)
 ):
-    """Internal Job Market — paid feature. Search all active internal jobs."""
-    if not _is_paid(current_user):
-        raise HTTPException(
-            status_code=status.HTTP_402_PAYMENT_REQUIRED,
-            detail="Internal Job Market requires an active subscription (₹149/month). Please subscribe to access this feature."
-        )
+    """Internal Job Market — browse is free, applying requires subscription."""
     filters = InternalJobSearchFilters(
         keywords=keywords,
         location=location,
@@ -444,37 +463,25 @@ async def apply_internal_job(
     if not success:
         raise HTTPException(status_code=400, detail="You have already applied for this job")
 
-    # Notify job poster
+    applied_date_str = datetime.utcnow().strftime("%d %b %Y, %H:%M UTC")
+    match_pct = None
+
+    # Fetch full applicant profile for rich email
+    from auth_db import get_user_by_id
+    applicant_profile = await get_user_by_id(current_user["user_id"])
+
+    # Email 1: notify poster with candidate profile snapshot
     poster_email = job.get("official_email") or job.get("posted_by_email", "")
     if poster_email:
-        subject = f"New application for '{job['title']}' on JobMouka"
-        html = email_service._build_email(
-            "New Job Application Received 📩",
-            f"""
-            <p>Someone applied to your internal job posting <strong>"{job['title']}"</strong>.</p>
-            <table style="width:100%;font-size:14px;margin:12px 0;">
-              <tr><td style="color:#6b7280;width:120px;">Applicant</td><td><strong>{user_name}</strong></td></tr>
-              <tr><td style="color:#6b7280;">Email</td><td>{current_user['email']}</td></tr>
-              <tr><td style="color:#6b7280;">Applied On</td><td>{datetime.utcnow().strftime('%d %b %Y, %H:%M UTC')}</td></tr>
-            </table>
-            <p class="note">Log in to JobMouka to view all applications under Refer &amp; Hire.</p>
-            """
+        await asyncio.to_thread(
+            email_service.send_internal_job_applied_poster,
+            poster_email, job, applicant_profile or current_user, applied_date_str, match_pct
         )
-        await asyncio.to_thread(email_service.send_email, poster_email, subject, html)
 
-    # Always notify admin
-    admin_html = email_service._build_email(
-        "Internal Job Application",
-        f"""
-        <p><strong>Internal Job Application</strong></p>
-        <p>Job: {job['title']} @ {job['company']}</p>
-        <p>Applicant: {user_name} ({current_user['email']})</p>
-        <p>Job ID: {body.internal_job_id}</p>
-        """
-    )
+    # Email 2: confirmation to applicant
     await asyncio.to_thread(
-        email_service.send_email, ADMIN_EMAIL,
-        f"[JobMouka] Internal Job Apply — {job['title']}", admin_html
+        email_service.send_internal_job_applied_candidate,
+        current_user["email"], user_name, job, applied_date_str, match_pct
     )
 
     return {"message": "Application submitted successfully", "success": True}

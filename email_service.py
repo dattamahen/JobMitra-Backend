@@ -17,6 +17,8 @@ from email_constants import (
     NewUserAdminEmail,
     CvDownloadAdminEmail,
     CvDownloadUserNudgeEmail,
+    InternalJobAppliedPosterEmail,
+    InternalJobAppliedCandidateEmail,
 )
 
 logger = logging.getLogger(__name__)
@@ -293,6 +295,96 @@ class EmailService:
             CvDownloadUserNudgeEmail.SUBJECT.format(**ctx),
             html,
         )
+
+
+    def send_internal_job_applied_poster(self, poster_email: str, job: dict, applicant: dict, applied_date: str, match_percentage=None) -> bool:
+        """Notify job poster with full candidate profile snapshot."""
+        def _row(label, value):
+            if not value:
+                return ""
+            return f'<tr><td style="padding:10px 14px;color:#6b7280;width:38%;border-bottom:1px solid #e5e7eb;">{label}</td><td style="padding:10px 14px;color:#111827;border-bottom:1px solid #e5e7eb;">{value}</td></tr>'
+
+        skills = applicant.get("skills") or []
+        skills_block = ""
+        if skills:
+            chips = "".join(f'<span style="display:inline-block;background:#ede9fe;color:#4831af;border-radius:20px;padding:4px 12px;font-size:12px;font-weight:600;margin:3px;">{s}</span>' for s in skills[:12])
+            skills_block = f'<p style="font-size:14px;font-weight:600;color:#1a1a2e;margin:20px 0 8px;">&#127919; Skills</p><div style="margin-bottom:8px;">{chips}</div>'
+            if len(skills) > 12:
+                skills_block += f'<p style="font-size:12px;color:#6b7280;">+{len(skills)-12} more skills on profile</p>'
+
+        summary = (applicant.get("professional_summary") or "")[:300]
+        summary_block = ""
+        if summary:
+            summary_block = f'<p style="font-size:14px;font-weight:600;color:#1a1a2e;margin:20px 0 8px;">&#128203; Professional Summary</p><p style="font-size:14px;color:#4b5563;background:#f9fafb;border-radius:8px;padding:12px 16px;">{summary}{"..." if len(applicant.get("professional_summary","")) > 300 else ""}</p>'
+
+        links = []
+        if applicant.get("linkedin_link"):
+            links.append(f'<a href="{applicant["linkedin_link"]}" style="color:#4831af;margin-right:16px;">&#128279; LinkedIn</a>')
+        if applicant.get("github_link"):
+            links.append(f'<a href="{applicant["github_link"]}" style="color:#4831af;margin-right:16px;">&#128187; GitHub</a>')
+        if applicant.get("portfolio_link"):
+            links.append(f'<a href="{applicant["portfolio_link"]}" style="color:#4831af;">&#127760; Portfolio</a>')
+        links_block = ""
+        if links:
+            links_block = f'<p style="font-size:14px;font-weight:600;color:#1a1a2e;margin:20px 0 8px;">&#128279; Links</p><p>{" ".join(links)}</p>'
+
+        city = applicant.get("city") or ""
+        state = applicant.get("state") or ""
+        location = ", ".join(filter(None, [city, state]))
+
+        exp = applicant.get("overall_experience_years")
+        exp_str = f"{exp} year{'s' if exp != 1 else ''}" if exp else ""
+
+        match_row = _row("Match Score", f"{match_percentage}%" if match_percentage else "")
+
+        job_id = job.get("internal_job_id", "")
+        wa_text = (
+            f"\U0001f680 *{job.get('title', '')}* at *{job.get('company', '')}*\n"
+            f"\U0001f4cb Job ID: {job_id}\n\n"
+            f"Apply now on JobMouka:\n"
+            f"\U0001f310 https://www.jobmouka.com\n"
+            f"\U0001f4f1 Play Store: https://play.google.com/store/apps/details?id=com.jobmouka.app"
+        )
+        import urllib.parse
+        whatsapp_share_url = f"https://wa.me/?text={urllib.parse.quote(wa_text)}"
+
+        ctx = dict(
+            app_name=self.app_name,
+            frontend_url=self.frontend_url,
+            job_title=job.get("title", ""),
+            company=job.get("company", ""),
+            applicant_name=f"{applicant.get('first_name','')} {applicant.get('last_name','')}".strip(),
+            applicant_email=applicant.get("email", ""),
+            phone_row=_row("Phone", applicant.get("phone", "")),
+            experience_row=_row("Experience", exp_str),
+            current_role_row=_row("Current Role", applicant.get("current_role") or applicant.get("professional_info", {}).get("current_role", "")),
+            location_row=_row("Location", location),
+            applied_date=applied_date,
+            match_row=match_row,
+            skills_block=skills_block,
+            summary_block=summary_block,
+            links_block=links_block,
+            whatsapp_share_url=whatsapp_share_url,
+        )
+        html = self._build_email(InternalJobAppliedPosterEmail.HEADLINE, InternalJobAppliedPosterEmail.BODY.format(**ctx))
+        return self.send_email(poster_email, InternalJobAppliedPosterEmail.SUBJECT.format(**ctx), html, reply_to=applicant.get("email"))
+
+    def send_internal_job_applied_candidate(self, to_email: str, applicant_name: str, job: dict, applied_date: str, match_percentage=None) -> bool:
+        """Confirmation email to the candidate who just applied."""
+        match_row = ""
+        if match_percentage:
+            match_row = f'<tr><td style="padding:6px 0;color:#6b7280;">Match Score</td><td style="padding:6px 0;color:#16a34a;font-weight:700;">{match_percentage}%</td></tr>'
+        ctx = dict(
+            app_name=self.app_name,
+            frontend_url=self.frontend_url,
+            applicant_name=applicant_name,
+            job_title=job.get("title", ""),
+            company=job.get("company", ""),
+            applied_date=applied_date,
+            match_row=match_row,
+        )
+        html = self._build_email(InternalJobAppliedCandidateEmail.HEADLINE, InternalJobAppliedCandidateEmail.BODY.format(**ctx))
+        return self.send_email(to_email, InternalJobAppliedCandidateEmail.SUBJECT.format(**ctx), html)
 
 
 email_service = EmailService()
