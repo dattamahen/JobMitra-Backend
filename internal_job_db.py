@@ -107,12 +107,20 @@ class InternalJobDatabase:
         """Jobs posted by a specific user — for Refer & Hire section."""
         try:
             skip = (page - 1) * per_page
-            query = {"posted_by_user_id": user_id, "is_active": True}
+            query = {"posted_by_user_id": user_id}
             total = await db.database[COLLECTION].count_documents(query)
             cursor = db.database[COLLECTION].find(query).sort("posted_date", -1).skip(skip).limit(per_page)
             jobs = []
             async for job in cursor:
                 job["_id"] = str(job["_id"])
+                # Serialize datetime fields inside applications_received[]
+                for app in job.get("applications_received", []):
+                    if isinstance(app.get("applied_date"), datetime):
+                        app["applied_date"] = app["applied_date"].isoformat() + "Z"
+                # Serialize top-level datetime fields
+                for field in ("posted_date", "expires_at"):
+                    if isinstance(job.get(field), datetime):
+                        job[field] = job[field].isoformat() + "Z"
                 jobs.append(job)
             return {
                 "jobs": jobs,
@@ -158,7 +166,7 @@ class InternalJobDatabase:
                     applied_ids = {
                         a["internal_job_id"]
                         for a in user.get("internal_job_applications", [])
-                        if isinstance(a, dict) and a.get("is_applied")
+                        if isinstance(a, dict) and a.get("internal_job_id")
                     }
 
             skip = (filters.page - 1) * filters.per_page
@@ -168,6 +176,9 @@ class InternalJobDatabase:
             async for job in cursor:
                 job["_id"] = str(job["_id"])
                 job["already_applied"] = job["internal_job_id"] in applied_ids
+                for field in ("posted_date", "expires_at"):
+                    if isinstance(job.get(field), datetime):
+                        job[field] = job[field].isoformat() + "Z"
                 jobs.append(job)
             return {
                 "jobs": jobs,
@@ -260,18 +271,34 @@ class InternalJobDatabase:
 
     async def delete_by_poster(self, job_id: str, user_id: str) -> bool:
         try:
-            # Check existence first to give a clearer error path
             job = await db.database[COLLECTION].find_one({"internal_job_id": job_id})
             if not job:
                 logger.warning("delete_by_poster: job %s not found", job_id)
                 return False
             if job.get("posted_by_user_id") != user_id:
-                logger.warning("delete_by_poster: user %s does not own job %s (owner: %s)", user_id, job_id, job.get("posted_by_user_id"))
+                logger.warning("delete_by_poster: user %s does not own job %s", user_id, job_id)
                 return False
-            await db.database[COLLECTION].update_one(
-                {"internal_job_id": job_id},
-                {"$set": {"is_active": False, "status": "removed"}}
-            )
+
+            # 1. Hard-delete the job document
+            await db.database[COLLECTION].delete_one({"internal_job_id": job_id})
+
+            # 2. Remove internal_job_applications[] entries from every applicant
+            applicant_ids = [
+                a["user_id"] for a in job.get("applications_received", [])
+                if isinstance(a, dict) and a.get("user_id")
+            ]
+            if applicant_ids:
+                await db.database["users"].update_many(
+                    {"user_id": {"$in": applicant_ids}},
+                    {"$pull": {"internal_job_applications": {"internal_job_id": job_id}}}
+                )
+                # 3. Remove overall_jobs_applied[] entries written by apply_endpoints for this job
+                await db.database["users"].update_many(
+                    {"user_id": {"$in": applicant_ids}},
+                    {"$pull": {"overall_jobs_applied": {"job_id": job_id}}}
+                )
+
+            logger.info("Cascade-deleted internal job %s and cleaned %d applicant records", job_id, len(applicant_ids))
             return True
         except Exception as e:
             logger.error("delete internal job: %s", e)
