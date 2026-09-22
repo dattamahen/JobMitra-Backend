@@ -169,3 +169,6 @@ uploads/
 tests/reports/
 tests/e2e/reports/
 docs/LLM_USAGE_PLAN.md
+
+# Amazon Q rules (local only)
+.amazonq/

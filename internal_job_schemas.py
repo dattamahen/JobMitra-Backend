@@ -49,6 +49,17 @@ class VerifyOTPRequest(BaseModel):
     official_email: EmailStr
     otp: str
 
+    @classmethod
+    def __get_validators__(cls):
+        yield cls.validate
+
+    from pydantic import field_validator
+
+    @field_validator('otp', mode='before')
+    @classmethod
+    def coerce_otp_to_str(cls, v):
+        return str(v) if v is not None else v
+
 
 class InternalJobListing(BaseModel):
     """Full internal job document (DB + API response)."""

@@ -1,3 +1,6 @@
+# JobMouka Coding Guidelines
+> Also see EnterpriseRules.md in this same folder for full enterprise standards.
+
 You are generating code for an Angular 20+ + FastAPI backend project. Follow these rules strictly:
 FRONTEND:
 - Use standalone components, @if/@for/@switch.
