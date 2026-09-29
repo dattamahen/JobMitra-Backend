@@ -82,6 +82,7 @@ from pdf_endpoints import router as pdf_router
 from sitemap_routes import sitemap_router
 from cv_jd_endpoints import cv_jd_router
 from internal_job_endpoints import internal_job_router
+from cv_upload_endpoints import router as cv_upload_router
 
 
 @asynccontextmanager
@@ -283,6 +284,7 @@ def create_app() -> FastAPI:
     app.include_router(sitemap_router)  # Sitemap & robots.txt for SEO
     app.include_router(cv_jd_router)  # CV tailoring by raw JD
     app.include_router(internal_job_router)  # Internal Job Market (Refer & Hire)
+    app.include_router(cv_upload_router)  # CV upload → profile fill
 
     # Health check endpoint
     @app.get("/", tags=["Health"])
