@@ -26,6 +26,7 @@ CATEGORIES = {
     "job_image_parse": "job_image_parse.json",
     "job_text_parse": "job_text_parse.json",
     "job_moderation": "job_moderation.json",
+    "cv_upload_parse": "cv_upload_parse.json",
 }
 
 

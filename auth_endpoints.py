@@ -291,7 +291,8 @@ async def get_current_user_profile(current_user: dict = Depends(get_current_user
             "feature_usage_count": current_user.get("feature_usage_count", 5),
             "user_plan": current_user.get("user_plan", "free"),
             "user_type": current_user.get("user_type", "candidate"),
-            "user_status": current_user.get("user_status", "active")
+            "user_status": current_user.get("user_status", "active"),
+            "profile_setup_done": current_user.get("profile_setup_done", False)
         }
     except Exception as e:
         logger.error("Error in /auth/me: %s", e)
@@ -447,6 +448,9 @@ async def update_profile(
             if request.key_contributions:
                 professional_info["key_contributions"] = request.key_contributions
             update_data["professional_info"] = professional_info
+        
+        # Mark profile as intentionally set up
+        update_data["profile_setup_done"] = True
         
         # Update last_active timestamp
         update_data["last_active"] = datetime.utcnow()

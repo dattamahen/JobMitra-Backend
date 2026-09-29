@@ -112,6 +112,7 @@ async def create_user(user_data: Dict[str, Any]) -> Dict[str, Any]:
             "match_tailored_count": 0,
             "mock_interview_count": 0,
             "profile_completion_count": 20,  # Basic registration completion
+            "profile_setup_done": False,  # True once user intentionally fills profile
             "profile_visits": 0,
             "recent_activity": [],
             
