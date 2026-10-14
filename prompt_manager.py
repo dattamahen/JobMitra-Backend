@@ -27,6 +27,9 @@ CATEGORIES = {
     "job_text_parse": "job_text_parse.json",
     "job_moderation": "job_moderation.json",
     "cv_upload_parse": "cv_upload_parse.json",
+    "contest_level_prompts": "contest_level_prompts.json",
+    "contest_interview_questions": "contest_interview_questions.json",
+    "contest_interview_evaluation": "contest_interview_evaluation.json",
 }
 
 
@@ -35,6 +38,7 @@ class PromptManager:
 
     def __init__(self):
         self._cache: Dict[str, List[Dict[str, Any]]] = {}
+        self._raw_cache: Dict[str, Dict[str, Any]] = {}
         self._user_history: Dict[str, Dict[str, List[str]]] = {}
         self._load_all()
 
@@ -48,17 +52,16 @@ class PromptManager:
                     with open(filepath, "r", encoding="utf-8") as f:
                         data = json.load(f)
                     self._cache[category] = data.get("variants", [])
-                    logger.info(
-                        "Loaded %d variants for '%s'",
-                        len(self._cache[category]),
-                        category,
-                    )
+                    self._raw_cache[category] = data
+                    logger.info("Loaded %d variants for '%s'", len(self._cache[category]), category)
                 except Exception as e:
                     logger.error("Failed to load %s: %s", filepath, e)
                     self._cache[category] = []
+                    self._raw_cache[category] = {}
             else:
                 logger.warning("Prompt file not found: %s", filepath)
                 self._cache[category] = []
+                self._raw_cache[category] = {}
 
     def reload(self):
         """Hot-reload all prompt files without restart."""
@@ -102,6 +105,10 @@ class PromptManager:
             if v.get("style") == style:
                 return v
         return None
+
+    def get_raw(self, category: str) -> Dict[str, Any]:
+        """Return the full raw prompt file data. Used for contest prompts with nested structure."""
+        return self._raw_cache.get(category, {})
 
     def list_variants(self, category: str) -> List[Dict[str, str]]:
         """Return summary list of available variants for a category."""
