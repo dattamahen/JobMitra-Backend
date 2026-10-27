@@ -311,6 +311,16 @@ async def deduct_credit(req: DeductCreditRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/api/v1/payments/create-link")
+async def create_payment_link(body: dict = None):
+    """Return the Razorpay payment link for the active plan. Used by subscription and contest flows."""
+    plan = await _get_paid_plan()
+    link = plan.get("payment_link", "")
+    if not link:
+        raise HTTPException(status_code=503, detail="Payment link not configured.")
+    return {"payment_url": link, "amount": plan.get("amount", 0), "currency": plan.get("currency", "INR")}
+
+
 @router.get("/api/v1/users/{user_id}/payment-history")
 async def get_payment_history(user_id: str):
     """Get payment history for a user."""

@@ -22,15 +22,25 @@ class CreatePaymentLinkRequest(BaseModel):
     user_id: str
 
 
+class CreateContestPaymentLinkRequest(BaseModel):
+    user_id: str
+    entry_id: str
+    amount: float
+
+
 async def _razorpay_request(method: str, path: str, payload: dict = None) -> dict:
     """Make authenticated request to Razorpay API."""
+    if not settings.RAZORPAY_KEY_ID or not settings.RAZORPAY_KEY_SECRET:
+        logger.error("Razorpay credentials not configured")
+        raise HTTPException(status_code=502, detail="Payment service not configured")
     url = f"https://api.razorpay.com/v1{path}"
     auth = (settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET)
     async with httpx.AsyncClient() as client:
         resp = await client.request(method, url, json=payload, auth=auth, timeout=10)
         if resp.status_code >= 400:
-            logger.error("Razorpay API error %s: %s", resp.status_code, resp.text)
-            raise HTTPException(status_code=502, detail="Payment service error")
+            rz_error = resp.json().get("error", {}) if resp.headers.get("content-type", "").startswith("application/json") else {}
+            logger.error("Razorpay API error %s: code=%s desc=%s", resp.status_code, rz_error.get("code"), rz_error.get("description"))
+            raise HTTPException(status_code=502, detail=rz_error.get("description") or "Payment service error")
         return resp.json()
 
 
@@ -96,6 +106,64 @@ async def create_payment_link(req: CreatePaymentLinkRequest):
         raise HTTPException(status_code=500, detail="Failed to create payment link")
 
 
+@router.post("/api/v1/payments/create-contest-link")
+async def create_contest_payment_link(req: CreateContestPaymentLinkRequest):
+    """Create a Razorpay Payment Link for a contest entry."""
+    try:
+        user = await db.database["users"].find_one(
+            {"user_id": req.user_id},
+            {"email": 1, "first_name": 1, "last_name": 1, "phone": 1}
+        )
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        payload = {
+            "amount": int(req.amount * 100),
+            "currency": "INR",
+            "accept_partial": False,
+            "description": "JobMouka Project Contest Entry Fee",
+            "customer": {
+                "name": f"{user.get('first_name', '')} {user.get('last_name', '')}".strip(),
+                "email": user.get("email", ""),
+                "contact": user.get("phone", ""),
+            },
+            "notify": {"sms": False, "email": True},
+            "reminder_enable": False,
+            "notes": {
+                "user_id": req.user_id,
+                "entry_id": req.entry_id,
+                "payment_type": "contest",
+                "env": settings.APP_ENV,
+            },
+            "callback_url": f"{settings.FRONTEND_URL}/dashboard/project-contest?payment=success&entry_id={req.entry_id}",
+            "callback_method": "get",
+        }
+
+        link = await _razorpay_request("POST", "/payment_links", payload)
+
+        await db.database[PAYMENTS_COLLECTION].insert_one({
+            "user_id": req.user_id,
+            "entry_id": req.entry_id,
+            "payment_link_id": link["id"],
+            "amount": req.amount,
+            "currency": "INR",
+            "payment_type": "contest",
+            "status": "pending",
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+        })
+
+        return {
+            "payment_link_id": link["id"],
+            "payment_url": link["short_url"],
+            "amount": req.amount,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Error creating contest payment link: %s", e)
+        raise HTTPException(status_code=500, detail="Failed to create payment link")
+
+
 @router.post("/payments/webhook")
 async def razorpay_webhook(
     request: Request,
@@ -127,7 +195,9 @@ async def razorpay_webhook(
 
         user_id = payload.get("notes", {}).get("user_id")
         plan_id = payload.get("notes", {}).get("plan_id")
-        amount_paid = payment_entity.get("amount", 0) / 100  # convert paise to INR
+        payment_type = payload.get("notes", {}).get("payment_type", "subscription")
+        entry_id = payload.get("notes", {}).get("entry_id")
+        amount_paid = payment_entity.get("amount", 0) / 100
         payment_id = payment_entity.get("id")
         link_id = payload.get("id")
 
@@ -135,7 +205,36 @@ async def razorpay_webhook(
             logger.error("Webhook missing user_id in notes")
             return {"status": "error", "detail": "missing user_id"}
 
-        # Get plan credits
+        # ── Contest payment ───────────────────────────────────
+        if payment_type == "contest" and entry_id:
+            from project_contest_db import contest_db
+            from project_contest_schemas import CONTEST_SUBSCRIPTION_BENEFITS
+
+            benefits = CONTEST_SUBSCRIPTION_BENEFITS.copy()
+            await contest_db.grant_subscription(user_id, benefits)
+
+            entry = await contest_db.get_by_id(entry_id)
+            if entry:
+                for m in entry.get("team_members", []):
+                    if m.get("email"):
+                        await contest_db.grant_subscription_by_email(m["email"], benefits)
+
+            await contest_db.confirm_payment(entry_id, payment_id, amount_paid, benefits)
+            await contest_db.set_fields(entry_id, {"status": "spark_confirmed"})
+
+            await db.database[PAYMENTS_COLLECTION].update_one(
+                {"payment_link_id": link_id},
+                {"$set": {"status": "paid", "razorpay_payment_id": payment_id}}
+            )
+            await log_user_activity(
+                user_id, "project_contest",
+                f"Contest payment confirmed — ₹{int(amount_paid)}",
+                {"entry_id": entry_id, "razorpay_payment_id": payment_id},
+            )
+            logger.info("Contest payment confirmed for entry %s by user %s", entry_id, user_id)
+            return {"status": "ok"}
+
+        # ── Subscription payment ──────────────────────────────
         plan = await _get_paid_plan()
         cv_credits = plan.get("cv_downloads", 10)
         interview_credits = plan.get("mock_interviews", 10)

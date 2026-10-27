@@ -79,6 +79,16 @@ async def ensure_indexes(database: AsyncIOMotorDatabase) -> None:
         await otps.create_index("email", unique=True)
         await otps.create_index("expires_at", expireAfterSeconds=0)  # TTL index
 
+        # ── Project Contest Entries ──────────────────────────────────────
+        contest = database["project_contest_entries"]
+        await contest.create_index("entry_id", unique=True)
+        await contest.create_index("lead_user_id")
+        await contest.create_index("status")
+        await contest.create_index("category")
+        await contest.create_index([("lead_user_id", 1), ("created_at", -1)])
+        await contest.create_index([("status", 1), ("composite_score", -1)])
+        await contest.create_index("interview_sessions.participant_user_id")
+
         logger.info("All database indexes ensured successfully")
 
     except Exception as e:
