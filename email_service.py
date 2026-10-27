@@ -21,6 +21,8 @@ from email_constants import (
     InternalJobAppliedCandidateEmail,
     ContestSparkConfirmedEmail,
     ContestSparkConfirmedNewUserEmail,
+    ContestTeamInviteNewUserEmail,
+    ContestTeamInviteExistingUserEmail,
     ContestBlueprintOpenEmail,
     ContestBlueprintResultEmail,
     ContestProofOpenEmail,
@@ -405,6 +407,44 @@ class EmailService:
         if advance:
             return "✅", f"Advanced to next level!", "#16a34a", "#f0fdf4"
         return "❌", f"Did not meet the threshold ({threshold}/100)", "#dc2626", "#fef2f2"
+
+    def send_contest_team_invites(self, team_members: list[dict], entry: dict) -> None:
+        """Send invite emails to team members at submission time.
+        team_members: [{ name, email, is_registered }]
+        Registered users get an intimation with project summary.
+        Unregistered users get a registration invite with ₹25,000 prize highlight.
+        """
+        category = entry.get("category", "").replace("_", " ").title()
+        project_summary = entry.get("refined_description") or entry.get("raw_description", "")
+        if len(project_summary) > 300:
+            project_summary = project_summary[:300] + "..."
+        for m in team_members:
+            if m["is_registered"]:
+                cls = ContestTeamInviteExistingUserEmail
+                ctx = dict(
+                    app_name=self.app_name,
+                    frontend_url=self.frontend_url,
+                    recipient_name=m["name"],
+                    lead_name=entry["lead_name"],
+                    project_title=entry.get("refined_title") or entry["raw_project_name"],
+                    entry_id=entry["entry_id"],
+                    category=category,
+                    team_size=entry["team_size"],
+                    project_summary=project_summary,
+                )
+            else:
+                cls = ContestTeamInviteNewUserEmail
+                ctx = dict(
+                    app_name=self.app_name,
+                    frontend_url=self.frontend_url,
+                    recipient_name=m["name"],
+                    lead_name=entry["lead_name"],
+                    project_title=entry.get("refined_title") or entry["raw_project_name"],
+                    entry_id=entry["entry_id"],
+                    category=category,
+                )
+            html = self._build_email(cls.HEADLINE, cls.BODY.format(**ctx))
+            self.send_email(m["email"], cls.SUBJECT.format(**ctx), html)
 
     def send_contest_spark_confirmed(self, recipients: list[dict], entry: dict) -> None:
         """Send Level 1 confirmation to all team members.

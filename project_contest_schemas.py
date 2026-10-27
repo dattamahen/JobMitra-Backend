@@ -14,21 +14,25 @@ from pydantic import BaseModel, Field, EmailStr
 # ── Categories ───────────────────────────────────────────────
 
 TECHNICAL_CATEGORIES = [
-    "web_development", "mobile_development", "ai_ml", "data_science",
-    "cloud_devops", "cybersecurity", "blockchain", "iot_embedded",
-    "game_development", "ar_vr", "other_technical",
+    "web_development", "mobile_app", "ai_ml", "data_science",
+    "cloud_devops", "cybersecurity", "blockchain", "iot",
+    "game_development", "open_source",
 ]
 
 NON_TECHNICAL_CATEGORIES = [
-    "business_plan", "marketing_strategy", "social_impact", "content_creation",
-    "event_management", "finance_analytics", "hr_management", "other_non_technical",
+    "business_plan", "social_impact", "design_ux", "content_marketing",
+    "research_paper", "entrepreneurship",
 ]
 
 ALL_CATEGORIES = TECHNICAL_CATEGORIES + NON_TECHNICAL_CATEGORIES
 
 # ── Pricing ──────────────────────────────────────────────────
+import os
 
-PRICING = {"solo": 149, "team": 599, "currency": "INR"}
+_solo_fee = int(os.getenv("CONTEST_FEE_SOLO", "149"))
+_team_fee = int(os.getenv("CONTEST_FEE_TEAM", "599"))
+
+PRICING = {"solo": _solo_fee, "team": _team_fee, "currency": "INR"}
 
 CONTEST_SUBSCRIPTION_BENEFITS = {"mock_interviews": 3, "cv_downloads": 5}
 
@@ -113,11 +117,16 @@ class BlueprintSubmitRequest(BaseModel):
 
 
 class ProofSubmitRequest(BaseModel):
-    """Level 3 — team submits demo links."""
+    """Level 3 — team submits demo/proof links.
+    Technical: youtube_url + github_url required.
+    Non-technical: youtube_url required; github_url optional; document_url/report_url for reports.
+    """
     entry_id: str
-    youtube_url: str = Field(..., min_length=10)
-    github_url: str = Field(..., min_length=10)
-    demo_url: Optional[str] = None
+    youtube_url: str = Field(..., min_length=10)          # required for all
+    github_url: Optional[str] = None                      # technical projects
+    demo_url: Optional[str] = None                        # optional live demo
+    document_url: Optional[str] = None                    # non-technical: Google Drive / Notion / Canva
+    report_url: Optional[str] = None                      # non-technical: research paper / PDF link
 
 
 class InterviewAnswerRequest(BaseModel):

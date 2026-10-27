@@ -237,13 +237,85 @@ class ContestSparkConfirmedEmail:
     """
 
 
-class ContestSparkConfirmedNewUserEmail:
-    """Sent to team members who don't have an account yet."""
-    SUBJECT = "🏆 You've been added to '{project_title}' — Join {app_name} to claim your benefits"
-    HEADLINE = "You're part of a contest team! 🎉"
+class ContestTeamInviteNewUserEmail:
+    """Sent at submission time to team members who don't have a JobMouka account."""
+    SUBJECT = "🏆 Your teammate enrolled you in a contest — Win ₹25,000 | {app_name}"
+    HEADLINE = "You've been invited to a ₹25,000 contest! 🎉"
     BODY = """
     <p>Hi <strong>{recipient_name}</strong>,</p>
-    <p><strong>{lead_name}</strong> has added you as a team member for the project <strong>{project_title}</strong> in the <strong>{app_name} Project Contest</strong>.</p>
+    <p>Your teammate <strong>{lead_name}</strong> has enrolled you as a team member for the project <strong>{project_title}</strong> in the <strong>{app_name} Project Contest</strong>.</p>
+
+    <div style="background:linear-gradient(135deg,#fef9c3,#fef08a);border:2px solid #ca8a04;border-radius:12px;padding:20px 24px;margin:20px 0;text-align:center;">
+      <p style="font-size:28px;font-weight:800;color:#92400e;margin:0;">🏆 ₹25,000 Cash Prize</p>
+      <p style="font-size:14px;color:#78350f;margin-top:6px;">The winning team takes home ₹25,000. Your team is already in!</p>
+    </div>
+
+    <div style="background:#f5f3ff;border-left:4px solid #4831af;border-radius:8px;padding:16px 20px;margin:20px 0">
+      <p style="font-size:13px;color:#6b7280;margin-bottom:4px;">YOUR PROJECT</p>
+      <p style="font-size:18px;font-weight:700;color:#1a1a2e;margin-bottom:4px;">{project_title}</p>
+      <p style="font-size:13px;color:#4b5563;"><strong>Entry ID:</strong> {entry_id}</p>
+      <p style="font-size:13px;color:#4b5563;"><strong>Category:</strong> {category}</p>
+      <p style="font-size:13px;color:#4b5563;"><strong>Team Lead:</strong> {lead_name}</p>
+    </div>
+
+    <p>Create your free <strong>{app_name}</strong> account to participate and claim your benefits:</p>
+    <ul class="feature-list">
+      <li>Participate in the <strong>Level 4 AI Interview</strong> round (mandatory for all team members)</li>
+      <li>Claim <strong>+5 CV Downloads</strong> and <strong>+3 Mock Interviews</strong> added to your account</li>
+      <li>Track your team's contest progress in real time</li>
+      <li>Build your career profile — AI resume builder, job search, mock interviews</li>
+    </ul>
+
+    <div class="btn-wrap">
+      <a href="{frontend_url}/login" class="btn">Create Your Free Account</a>
+    </div>
+    <p class="note">The contest has 5 levels. Your team has already cleared Level 1. Don't miss out on the ₹25,000 prize!</p>
+    """
+
+
+class ContestTeamInviteExistingUserEmail:
+    """Sent at submission time to team members who already have a JobMouka account."""
+    SUBJECT = "🏆 {lead_name} added you to a contest entry — '{project_title}' | {app_name}"
+    HEADLINE = "You've been added to a contest team! 🎉"
+    BODY = """
+    <p>Hi <strong>{recipient_name}</strong>,</p>
+    <p>Your teammate <strong>{lead_name}</strong> has added you as a team member for the project <strong>{project_title}</strong> in the <strong>{app_name} Project Contest</strong>.</p>
+
+    <div style="background:#f5f3ff;border-left:4px solid #4831af;border-radius:8px;padding:16px 20px;margin:20px 0">
+      <p style="font-size:13px;color:#6b7280;margin-bottom:4px;">YOUR PROJECT</p>
+      <p style="font-size:18px;font-weight:700;color:#1a1a2e;margin-bottom:4px;">{project_title}</p>
+      <p style="font-size:13px;color:#4b5563;"><strong>Entry ID:</strong> {entry_id}</p>
+      <p style="font-size:13px;color:#4b5563;"><strong>Category:</strong> {category}</p>
+      <p style="font-size:13px;color:#4b5563;"><strong>Team Lead:</strong> {lead_name}</p>
+      <p style="font-size:13px;color:#4b5563;"><strong>Team Size:</strong> {team_size} member(s)</p>
+    </div>
+
+    <p style="font-size:15px;font-weight:600;color:#1a1a2e;margin:20px 0 10px;">📋 Project Summary</p>
+    <p style="font-size:14px;color:#4b5563;background:#f9fafb;border-radius:8px;padding:12px 16px;">{project_summary}</p>
+
+    <p style="font-size:15px;font-weight:600;color:#1a1a2e;margin:20px 0 10px;">🗺️ Contest Levels</p>
+    <ul class="feature-list">
+      <li><strong>Level 1 ✅ Spark</strong> — Idea submitted (pending payment confirmation)</li>
+      <li><strong>Level 2 — Blueprint</strong> — AI-generated questionnaire about your project</li>
+      <li><strong>Level 3 — Proof</strong> — Demo video and GitHub repository</li>
+      <li><strong>Level 4 — Interrogation</strong> — Individual AI interview for each team member</li>
+      <li><strong>Level 5 — Verdict</strong> — Top project wins <strong>₹25,000 cash prize</strong></li>
+    </ul>
+
+    <div class="btn-wrap">
+      <a href="{frontend_url}/dashboard" class="btn">View in Dashboard</a>
+    </div>
+    <p class="note">Once payment is confirmed by your team lead, your entry will be officially live and credits will be added to your account.</p>
+    """
+
+
+class ContestSparkConfirmedNewUserEmail:
+    """Sent to team members who don't have an account yet — after payment confirmed."""
+    SUBJECT = "🏆 You've been added to '{project_title}' — Join {app_name} to claim your benefits"
+    HEADLINE = "Your team's entry is confirmed! Create your account 🎉"
+    BODY = """
+    <p>Hi <strong>{recipient_name}</strong>,</p>
+    <p><strong>{lead_name}</strong>'s team entry for <strong>{project_title}</strong> is now officially live in the <strong>{app_name} Project Contest</strong>.</p>
 
     <div style="background:#f5f3ff;border-left:4px solid #4831af;border-radius:8px;padding:16px 20px;margin:20px 0">
       <p style="font-size:13px;color:#6b7280;margin-bottom:4px;">PROJECT</p>
@@ -254,15 +326,15 @@ class ContestSparkConfirmedNewUserEmail:
 
     <p>🎁 Create your free account to:</p>
     <ul class="feature-list">
-      <li>Claim <strong>+5 CV Downloads</strong> and <strong>+3 Mock Interviews</strong></li>
+      <li>Claim <strong>+5 CV Downloads</strong> and <strong>+3 Mock Interviews</strong> added to your account</li>
       <li>Track your team's contest progress</li>
-      <li>Participate in the Level 4 AI interview round</li>
+      <li>Participate in the Level 4 AI interview round (required to win)</li>
     </ul>
 
     <div class="btn-wrap">
       <a href="{frontend_url}/login" class="btn">Create Your Account</a>
     </div>
-    <p class="note">The contest has 5 levels — the top project wins ₹25,000. Don't miss out!</p>
+    <p class="note">The contest has 5 levels — the top project wins <strong>₹25,000</strong>. Don't miss out!</p>
     """
 
 

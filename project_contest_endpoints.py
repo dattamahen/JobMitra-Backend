@@ -39,6 +39,43 @@ router = APIRouter(prefix="/api/v1/project-contest", tags=["Project Contest"])
 llm = MultiLLMService()
 GMAIL_REGEX = re.compile(r"^[a-zA-Z0-9._%+-]+@gmail\.com$")
 
+_CONTEST_BLOCKED_RE = re.compile(
+    r"\bsex\b|\bporn\b|\bescort\b|\bprostitut|\bterror|\bbomb\b|\bweapon\b"
+    r"|\btheft\b|\bsteal\b|\bdrug\b|\bnarco|\bhack\b|\bphish"
+    r"|\bkill\b|\bmurder\b|\bjihad\b|\bnaxal|\bsediti"
+    r"|\bfuck\b|\bshit\b|\bbitch\b|\basshole\b|\bchutiya\b|\bmadarchod\b|\bbenchod\b",
+    re.IGNORECASE
+)
+
+
+async def _check_contest_content(name: str, description: str, tech_stack: list[str]) -> None:
+    """Regex pre-check + LLM moderation. Raises 422 if content is objectionable."""
+    combined = f"{name} {description} {' '.join(tech_stack)}"
+    if _CONTEST_BLOCKED_RE.search(combined):
+        raise HTTPException(
+            status_code=422,
+            detail="Project content contains restricted words or topics. Please revise and resubmit."
+        )
+    try:
+        mod_variant = prompt_manager.get_random("contest_moderation")
+        prompt = (
+            mod_variant["system_prompt"]
+            + f"\n\nProject Name: {name}"
+            + f"\nDescription: {description[:500]}"
+            + f"\nTech Stack: {', '.join(tech_stack)}"
+        )
+        res = await llm.generate(prompt, model="gemini", temperature=0.0)
+        result = json.loads(_strip_json(res.get("content", "{}")))
+        if not result.get("safe", True):
+            raise HTTPException(
+                status_code=422,
+                detail=result.get("reason", "Project content violates community guidelines.")
+            )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.warning("Contest moderation LLM failed, regex passed: %s", e)
+
 
 # ── Helpers ──────────────────────────────────────────────────
 
@@ -96,11 +133,14 @@ async def get_categories():
 
 @router.get("/pricing")
 async def get_pricing():
-    """Return pricing tiers and subscription benefits."""
+    """Return pricing tiers, subscription benefits, and Razorpay payment link."""
+    from credits_endpoints import _get_paid_plan
+    plan = await _get_paid_plan()
     return {
         "solo": {"members": 1, "amount": PRICING["solo"], "currency": PRICING["currency"]},
         "team": {"members": "2-4", "amount": PRICING["team"], "currency": PRICING["currency"]},
         "benefits": CONTEST_SUBSCRIPTION_BENEFITS,
+        "payment_link": plan.get("payment_link", ""),
     }
 
 
@@ -143,6 +183,9 @@ async def submit_spark(req: SparkSubmitRequest, current_user: dict = Depends(get
             raise HTTPException(status_code=400, detail="Invalid category.")
         if len(req.team_members) > 3:
             raise HTTPException(status_code=400, detail="Maximum 4 team members including lead.")
+
+        await _check_contest_content(req.raw_project_name, req.raw_description, req.tech_stack)
+
 
         lead_email = current_user.get("email", "")
         for m in req.team_members:
@@ -214,6 +257,19 @@ async def submit_spark(req: SparkSubmitRequest, current_user: dict = Depends(get
             "updated_at": datetime.utcnow(),
         }
         await contest_db.create_entry(entry)
+
+        # Send invite emails to team members immediately after submission
+        if req.team_members:
+            team_recipients = []
+            for m in req.team_members:
+                from db import db as _db
+                existing = await _db.database["users"].find_one({"email": m.email}, {"_id": 0, "user_id": 1})
+                team_recipients.append({
+                    "name": m.full_name,
+                    "email": m.email,
+                    "is_registered": bool(existing),
+                })
+            await asyncio.to_thread(email_service.send_contest_team_invites, team_recipients, entry)
 
         return {
             "success": True,
