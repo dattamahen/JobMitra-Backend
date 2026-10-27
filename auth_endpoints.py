@@ -322,52 +322,52 @@ async def update_profile(
         # Professional Information
         if request.overall_experience_years is not None:
             update_data["overall_experience_years"] = request.overall_experience_years
-        if request.highest_qualification:
+        if request.highest_qualification is not None:
             update_data["highest_qualification"] = request.highest_qualification
-        if request.previous_organizations:
+        if request.previous_organizations is not None:
             update_data["previous_organizations"] = [org.dict() for org in request.previous_organizations]
         if request.skills is not None:
             update_data["skills"] = request.skills
-        if request.technical_skills:
+        if request.technical_skills is not None:
             update_data["technical_skills"] = request.technical_skills
             if not request.skills:
                 update_data["skills"] = [s["name"] for s in request.technical_skills if s.get("name")]
-        if request.work_experience:
+        if request.work_experience is not None:
             update_data["work_experience"] = request.work_experience
-        if request.education:
+        if request.education is not None:
             update_data["education"] = request.education
-        if request.projects:
+        if request.projects is not None:
             update_data["projects"] = request.projects
-        if request.certifications:
+        if request.certifications is not None:
             # Process certifications as objects
             update_data["certifications"] = request.certifications
-        if request.contributions:
+        if request.contributions is not None:
             update_data["contributions"] = request.contributions
-        if request.communication_skills:
+        if request.communication_skills is not None:
             update_data["communication_skills"] = [skill.dict() for skill in request.communication_skills]
-        if request.ai_tools:
+        if request.ai_tools is not None:
             update_data["ai_tools"] = request.ai_tools
-        if request.professional_summary:
+        if request.professional_summary is not None:
             update_data["professional_summary"] = request.professional_summary
-        if request.current_role:
+        if request.current_role is not None:
             update_data["current_role"] = request.current_role
-        if request.current_company:
+        if request.current_company is not None:
             update_data["current_company"] = request.current_company
-        if request.portfolio_link:
+        if request.portfolio_link is not None:
             update_data["portfolio_link"] = request.portfolio_link
-        if request.desired_job_title:
+        if request.desired_job_title is not None:
             update_data["desired_job_title"] = request.desired_job_title
         if request.expected_salary is not None:
             update_data["expected_salary"] = request.expected_salary
-        if request.currency:
+        if request.currency is not None:
             update_data["currency"] = request.currency
-        if request.linkedin_link:
+        if request.linkedin_link is not None:
             update_data["linkedin_link"] = request.linkedin_link
-        if request.github_link:
+        if request.github_link is not None:
             update_data["github_link"] = request.github_link
-        if request.city:
+        if request.city is not None:
             update_data["city"] = request.city
-        if request.state:
+        if request.state is not None:
             update_data["state"] = request.state
             
         # Social Links - handle both new schema and legacy URL fields
@@ -405,9 +405,9 @@ async def update_profile(
             update_data["user_plan"] = request.user_plan
             
         # Preferences
-        if request.job_preferences:
+        if request.job_preferences is not None:
             update_data["job_preferences"] = request.job_preferences
-        if request.employment_type:
+        if request.employment_type is not None:
             update_data["employment_type"] = request.employment_type
             
         # Legacy compatibility fields
