@@ -19,6 +19,18 @@ from email_constants import (
     CvDownloadUserNudgeEmail,
     InternalJobAppliedPosterEmail,
     InternalJobAppliedCandidateEmail,
+    ContestSparkConfirmedEmail,
+    ContestSparkConfirmedNewUserEmail,
+    ContestTeamInviteNewUserEmail,
+    ContestTeamInviteExistingUserEmail,
+    ContestBlueprintOpenEmail,
+    ContestBlueprintResultEmail,
+    ContestProofOpenEmail,
+    ContestProofResultEmail,
+    ContestInterviewScheduledEmail,
+    ContestInterviewCompleteEmail,
+    ContestWinnerEmail,
+    ContestEliminatedEmail,
 )
 
 logger = logging.getLogger(__name__)
@@ -385,6 +397,218 @@ class EmailService:
         )
         html = self._build_email(InternalJobAppliedCandidateEmail.HEADLINE, InternalJobAppliedCandidateEmail.BODY.format(**ctx))
         return self.send_email(to_email, InternalJobAppliedCandidateEmail.SUBJECT.format(**ctx), html)
+
+    # ------------------------------------------------------------------ #
+    #  Project Contest emails                                              #
+    # ------------------------------------------------------------------ #
+
+    def _contest_result_blocks(self, score: int, threshold: int, advance: bool) -> tuple[str, str, str, str]:
+        """Return (result_emoji, result_label, result_color, result_bg) based on outcome."""
+        if advance:
+            return "✅", f"Advanced to next level!", "#16a34a", "#f0fdf4"
+        return "❌", f"Did not meet the threshold ({threshold}/100)", "#dc2626", "#fef2f2"
+
+    def send_contest_team_invites(self, team_members: list[dict], entry: dict) -> None:
+        """Send invite emails to team members at submission time.
+        team_members: [{ name, email, is_registered }]
+        Registered users get an intimation with project summary.
+        Unregistered users get a registration invite with ₹25,000 prize highlight.
+        """
+        category = entry.get("category", "").replace("_", " ").title()
+        project_summary = entry.get("refined_description") or entry.get("raw_description", "")
+        if len(project_summary) > 300:
+            project_summary = project_summary[:300] + "..."
+        for m in team_members:
+            if m["is_registered"]:
+                cls = ContestTeamInviteExistingUserEmail
+                ctx = dict(
+                    app_name=self.app_name,
+                    frontend_url=self.frontend_url,
+                    recipient_name=m["name"],
+                    lead_name=entry["lead_name"],
+                    project_title=entry.get("refined_title") or entry["raw_project_name"],
+                    entry_id=entry["entry_id"],
+                    category=category,
+                    team_size=entry["team_size"],
+                    project_summary=project_summary,
+                )
+            else:
+                cls = ContestTeamInviteNewUserEmail
+                ctx = dict(
+                    app_name=self.app_name,
+                    frontend_url=self.frontend_url,
+                    recipient_name=m["name"],
+                    lead_name=entry["lead_name"],
+                    project_title=entry.get("refined_title") or entry["raw_project_name"],
+                    entry_id=entry["entry_id"],
+                    category=category,
+                )
+            html = self._build_email(cls.HEADLINE, cls.BODY.format(**ctx))
+            self.send_email(m["email"], cls.SUBJECT.format(**ctx), html)
+
+    def send_contest_spark_confirmed(self, recipients: list[dict], entry: dict) -> None:
+        """Send Level 1 confirmation to all team members.
+        recipients: [{ name, email, is_registered }]
+        """
+        category = entry.get("category", "").replace("_", " ").title()
+        for r in recipients:
+            cls = ContestSparkConfirmedEmail if r["is_registered"] else ContestSparkConfirmedNewUserEmail
+            ctx = dict(
+                app_name=self.app_name,
+                frontend_url=self.frontend_url,
+                recipient_name=r["name"],
+                lead_name=entry["lead_name"],
+                project_title=entry["refined_title"] or entry["raw_project_name"],
+                entry_id=entry["entry_id"],
+                category=category,
+                team_size=entry["team_size"],
+            )
+            html = self._build_email(cls.HEADLINE, cls.BODY.format(**ctx))
+            self.send_email(r["email"], cls.SUBJECT.format(**ctx), html)
+
+    def send_contest_blueprint_open(self, recipients: list[dict], entry: dict) -> None:
+        """Send Level 2 open notification to all team members."""
+        project_title = entry.get("refined_title") or entry.get("raw_project_name", "")
+        for r in recipients:
+            ctx = dict(
+                app_name=self.app_name,
+                frontend_url=self.frontend_url,
+                recipient_name=r["name"],
+                project_title=project_title,
+            )
+            html = self._build_email(ContestBlueprintOpenEmail.HEADLINE, ContestBlueprintOpenEmail.BODY.format(**ctx))
+            self.send_email(r["email"], ContestBlueprintOpenEmail.SUBJECT.format(**ctx), html)
+
+    def send_contest_blueprint_result(self, recipients: list[dict], entry: dict,
+                                      score: int, feedback: str, advance: bool) -> None:
+        """Send Level 2 evaluation result to all team members."""
+        from project_contest_schemas import SCORE_THRESHOLDS
+        threshold = SCORE_THRESHOLDS["blueprint"]
+        emoji, label, color, bg = self._contest_result_blocks(score, threshold, advance)
+        project_title = entry.get("refined_title") or entry.get("raw_project_name", "")
+        next_steps_block = (
+            '<p style="font-size:15px;font-weight:600;color:#1a1a2e;margin:20px 0 8px;">&#127381; What\'s next?</p>'
+            '<p style="font-size:14px;color:#4b5563;">Level 3 — <strong>Proof</strong> — will open in 30 days. '
+            'Prepare your working demo video and GitHub repository.</p>'
+        ) if advance else (
+            '<p style="font-size:14px;color:#4b5563;">Thank you for participating. '
+            'Use your Mock Interview credits to keep building your skills.</p>'
+        )
+        for r in recipients:
+            ctx = dict(
+                app_name=self.app_name, frontend_url=self.frontend_url,
+                recipient_name=r["name"], project_title=project_title,
+                score=score, result_emoji=emoji, result_label=label,
+                result_color=color, result_bg=bg, feedback=feedback,
+                next_steps_block=next_steps_block,
+            )
+            html = self._build_email(ContestBlueprintResultEmail.HEADLINE, ContestBlueprintResultEmail.BODY.format(**ctx))
+            self.send_email(r["email"], ContestBlueprintResultEmail.SUBJECT.format(**ctx), html)
+
+    def send_contest_proof_open(self, recipients: list[dict], entry: dict) -> None:
+        """Send Level 3 open notification to all team members."""
+        project_title = entry.get("refined_title") or entry.get("raw_project_name", "")
+        for r in recipients:
+            ctx = dict(
+                app_name=self.app_name, frontend_url=self.frontend_url,
+                recipient_name=r["name"], project_title=project_title,
+            )
+            html = self._build_email(ContestProofOpenEmail.HEADLINE, ContestProofOpenEmail.BODY.format(**ctx))
+            self.send_email(r["email"], ContestProofOpenEmail.SUBJECT.format(**ctx), html)
+
+    def send_contest_proof_result(self, recipients: list[dict], entry: dict,
+                                  score: int, feedback: str, advance: bool) -> None:
+        """Send Level 3 evaluation result to all team members."""
+        from project_contest_schemas import SCORE_THRESHOLDS
+        threshold = SCORE_THRESHOLDS["demo"]
+        emoji, label, color, bg = self._contest_result_blocks(score, threshold, advance)
+        project_title = entry.get("refined_title") or entry.get("raw_project_name", "")
+        next_steps_block = (
+            '<p style="font-size:14px;color:#4b5563;">Level 4 — <strong>Interrogation</strong> — opens in 30 days. '
+            'Each team member will face a separate 3-round AI interview. Prepare individually.</p>'
+        ) if advance else (
+            '<p style="font-size:14px;color:#4b5563;">Thank you for participating. '
+            'Use your Mock Interview credits to keep building your skills.</p>'
+        )
+        for r in recipients:
+            ctx = dict(
+                app_name=self.app_name, frontend_url=self.frontend_url,
+                recipient_name=r["name"], project_title=project_title,
+                score=score, result_emoji=emoji, result_label=label,
+                result_color=color, result_bg=bg, feedback=feedback,
+                next_steps_block=next_steps_block,
+            )
+            html = self._build_email(ContestProofResultEmail.HEADLINE, ContestProofResultEmail.BODY.format(**ctx))
+            self.send_email(r["email"], ContestProofResultEmail.SUBJECT.format(**ctx), html)
+
+    def send_contest_interview_scheduled(self, recipient: dict, entry: dict,
+                                         participant_role: str) -> None:
+        """Send Level 4 interview ready notification to ONE participant."""
+        project_title = entry.get("refined_title") or entry.get("raw_project_name", "")
+        ctx = dict(
+            app_name=self.app_name, frontend_url=self.frontend_url,
+            recipient_name=recipient["name"], project_title=project_title,
+            participant_role=participant_role,
+        )
+        html = self._build_email(ContestInterviewScheduledEmail.HEADLINE, ContestInterviewScheduledEmail.BODY.format(**ctx))
+        self.send_email(recipient["email"], ContestInterviewScheduledEmail.SUBJECT.format(**ctx), html)
+
+    def send_contest_interview_complete(self, recipients: list[dict], entry: dict,
+                                        team_score: int, advance: bool,
+                                        personal_feedbacks: dict) -> None:
+        """Send Level 4 team result to all members. personal_feedbacks: {email: feedback_str}"""
+        from project_contest_schemas import SCORE_THRESHOLDS
+        threshold = SCORE_THRESHOLDS["interview"]
+        emoji, label, color, bg = self._contest_result_blocks(team_score, threshold, advance)
+        project_title = entry.get("refined_title") or entry.get("raw_project_name", "")
+        next_steps_block = (
+            '<p style="font-size:14px;color:#4b5563;">Your team is now a <strong>Finalist</strong>! '
+            'Final results and winner announcement coming soon.</p>'
+        ) if advance else (
+            '<p style="font-size:14px;color:#4b5563;">Thank you for participating. '
+            'Your detailed journey report is available in your dashboard.</p>'
+        )
+        for r in recipients:
+            personal_fb = personal_feedbacks.get(r["email"], "See your full report in the dashboard.")
+            ctx = dict(
+                app_name=self.app_name, frontend_url=self.frontend_url,
+                recipient_name=r["name"], project_title=project_title,
+                team_score=team_score, result_emoji=emoji, result_label=label,
+                result_color=color, result_bg=bg,
+                personal_feedback=personal_fb, next_steps_block=next_steps_block,
+            )
+            html = self._build_email(ContestInterviewCompleteEmail.HEADLINE, ContestInterviewCompleteEmail.BODY.format(**ctx))
+            self.send_email(r["email"], ContestInterviewCompleteEmail.SUBJECT.format(**ctx), html)
+
+    def send_contest_winner(self, recipients: list[dict], entry: dict) -> None:
+        """Send winner announcement to all team members."""
+        project_title = entry.get("refined_title") or entry.get("raw_project_name", "")
+        for r in recipients:
+            ctx = dict(
+                app_name=self.app_name, frontend_url=self.frontend_url,
+                recipient_name=r["name"], project_title=project_title,
+                score_l1=entry.get("idea_quality_score", 0),
+                score_l2=entry.get("blueprint_score", 0),
+                score_l3=entry.get("demo_score", 0),
+                score_l4=entry.get("team_interview_score", 0),
+                composite_score=round(entry.get("composite_score", 0), 1),
+            )
+            html = self._build_email(ContestWinnerEmail.HEADLINE, ContestWinnerEmail.BODY.format(**ctx))
+            self.send_email(r["email"], ContestWinnerEmail.SUBJECT.format(**ctx), html)
+
+    def send_contest_eliminated(self, recipients: list[dict], entry: dict,
+                                level_name: str, score: int, threshold: int,
+                                feedback: str) -> None:
+        """Send elimination notice to all team members."""
+        project_title = entry.get("refined_title") or entry.get("raw_project_name", "")
+        for r in recipients:
+            ctx = dict(
+                app_name=self.app_name, frontend_url=self.frontend_url,
+                recipient_name=r["name"], project_title=project_title,
+                level_name=level_name, score=score, threshold=threshold, feedback=feedback,
+            )
+            html = self._build_email(ContestEliminatedEmail.HEADLINE, ContestEliminatedEmail.BODY.format(**ctx))
+            self.send_email(r["email"], ContestEliminatedEmail.SUBJECT.format(**ctx), html)
 
 
 email_service = EmailService()
