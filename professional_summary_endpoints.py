@@ -52,6 +52,53 @@ Rules:
 - Return ONLY the bullet points, no headers or extra text"""
 
 
+# ── Skill Suggestions ───────────────────────────────────────────────────────
+
+SKILL_SUGGEST_PROMPT = """You are a senior tech recruiter and career advisor with deep knowledge of the job market.
+
+Given a candidate's current skills, suggest the NEXT most relevant skills they should add to their profile.
+
+Rules:
+- Return ONLY a JSON array of skill name strings. Example: ["Docker", "Kubernetes", "AWS"]
+- Suggest 8-12 skills that are:
+  1. Directly complementary to their existing skills (same ecosystem)
+  2. In high demand in the current job market
+  3. Not already in their skill list
+  4. Realistic to learn given their current stack
+- Mix: 60% technical skills closely related to their stack, 40% adjacent/emerging skills
+- Be specific (e.g. "PostgreSQL" not "Databases", "React Query" not "State Management")
+- No explanations, no markdown, no extra text — ONLY the JSON array."""
+
+
+class SkillSuggestRequest(BaseModel):
+    current_skills: List[str]
+
+
+class SkillSuggestResponse(BaseModel):
+    suggestions: List[str]
+
+
+@router.post("/profile/suggest-skills", response_model=SkillSuggestResponse)
+async def suggest_skills(request: SkillSuggestRequest):
+    """Suggest next relevant skills based on the user's current skill set using LLM."""
+    import json, re
+    try:
+        skills_str = ", ".join(request.current_skills) if request.current_skills else "No skills yet"
+        prompt = f"{SKILL_SUGGEST_PROMPT}\n\nCandidate's current skills: {skills_str}\n\nSuggest the next best skills to add:"
+        ai_response = await llm_service.generate(prompt, "gemini")
+        content = ai_response.get("content", "").strip()
+        content = re.sub(r"^```(?:json)?\s*", "", content)
+        content = re.sub(r"\s*```$", "", content).strip()
+        suggestions = json.loads(content)
+        if not isinstance(suggestions, list):
+            raise ValueError("Expected a list")
+        suggestions = [s for s in suggestions if isinstance(s, str) and s.strip()]
+        return SkillSuggestResponse(suggestions=suggestions[:12])
+    except Exception as e:
+        logger.warning("Skill suggestion failed, returning empty: %s", e)
+        return SkillSuggestResponse(suggestions=[])
+
+
 class GenerateAIContentRequest(BaseModel):
     type: Literal["professional_summary", "job_description", "project_description"]
 
