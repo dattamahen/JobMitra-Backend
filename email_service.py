@@ -355,7 +355,10 @@ class EmailService:
             f"\U0001f4cb Job ID: {job_id}\n\n"
             f"Apply now on JobMouka:\n"
             f"\U0001f310 https://www.jobmouka.com\n"
-            f"\U0001f4f1 Play Store: https://play.google.com/store/apps/details?id=com.jobmouka.app"
+            f"\U0001f4f1 Play Store: https://play.google.com/store/apps/details?id=com.jobmouka.app\n\n"
+            f"\U0001f4e2 Join our WhatsApp Channels for more jobs:\n"
+            f"\U0001f4bc Experienced: https://whatsapp.com/channel/0029VbESGTO8F2pHL4NOmt3S\n"
+            f"\U0001f393 Freshers: https://whatsapp.com/channel/0029VbDZLJS3wtb7Zhe2G90h"
         )
         import urllib.parse
         whatsapp_share_url = f"https://wa.me/?text={urllib.parse.quote(wa_text)}"
