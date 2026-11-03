@@ -210,6 +210,14 @@ async def get_my_entries(current_user: dict = Depends(get_current_user)):
     return {"success": True, "data": {"entries": entries, "count": len(entries)}}
 
 
+@router.get("/member-entries")
+async def get_member_entries(current_user: dict = Depends(get_current_user)):
+    """Get all confirmed contest entries where the user is a team member (not lead)."""
+    email = current_user.get("email", "")
+    entries = await contest_db.get_member_entries(email)
+    return {"success": True, "data": {"entries": entries, "count": len(entries)}}
+
+
 @router.get("/entry/{entry_id}")
 async def get_entry(entry_id: str, current_user: dict = Depends(get_current_user)):
     """Get a single contest entry detail."""

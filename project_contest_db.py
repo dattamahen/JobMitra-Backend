@@ -73,6 +73,15 @@ class ProjectContestDB:
         docs = await cursor.to_list(length=50)
         return [self._serialize(d) for d in docs]
 
+    async def get_member_entries(self, email: str) -> list:
+        """All entries where user appears as a team member (by email)."""
+        cursor = self.col.find(
+            {"team_members.email": email, "payment_status": "confirmed"},
+            {"_id": 0}
+        ).sort("created_at", -1)
+        docs = await cursor.to_list(length=50)
+        return [self._serialize(d) for d in docs]
+
     async def get_participant_entry(self, entry_id: str, user_id: str) -> Optional[dict]:
         """Fetch entry where user is lead OR a team member (for interview access)."""
         doc = await self.col.find_one({"entry_id": entry_id}, {"_id": 0})
