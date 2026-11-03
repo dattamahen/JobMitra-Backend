@@ -144,6 +144,52 @@ async def get_pricing():
     }
 
 
+# ── Team Member OTP ──────────────────────────────────────────
+
+@router.post("/team-member/send-otp")
+async def send_team_member_otp(email: str, current_user: dict = Depends(get_current_user)):
+    """Send a 6-digit OTP to a team member email for pre-submission verification."""
+    import random
+    from db import db
+    if not GMAIL_REGEX.match(email):
+        raise HTTPException(status_code=400, detail="Team member email must be a Gmail address.")
+    if email == current_user.get("email", ""):
+        raise HTTPException(status_code=400, detail="Team member email cannot be the same as yours.")
+    otp = str(random.randint(100000, 999999))
+    await db.database["contest_otps"].delete_many({"email": email, "lead_user_id": current_user["user_id"]})
+    await db.database["contest_otps"].insert_one({
+        "email": email,
+        "lead_user_id": current_user["user_id"],
+        "otp": otp,
+        "created_at": datetime.utcnow(),
+    })
+    lead_name = f"{current_user.get('first_name', '')} {current_user.get('last_name', '')}".strip() or "Your teammate"
+    await asyncio.to_thread(email_service.send_contest_member_otp, email, otp, lead_name)
+    logger.info("Contest OTP sent to %s by %s", email, current_user["user_id"])
+    return {"success": True, "message": "OTP sent to the email address."}
+
+
+@router.post("/team-member/verify-otp")
+async def verify_team_member_otp(
+    email: str, otp: str, current_user: dict = Depends(get_current_user)
+):
+    """Verify the OTP entered by the team lead for a team member email."""
+    from db import db
+    record = await db.database["contest_otps"].find_one({
+        "email": email,
+        "lead_user_id": current_user["user_id"],
+        "otp": otp,
+    })
+    if not record:
+        raise HTTPException(status_code=400, detail="Invalid or expired OTP.")
+    age_seconds = (datetime.utcnow() - record["created_at"]).total_seconds()
+    if age_seconds > 600:
+        await db.database["contest_otps"].delete_one({"_id": record["_id"]})
+        raise HTTPException(status_code=400, detail="OTP has expired. Please request a new one.")
+    await db.database["contest_otps"].delete_one({"_id": record["_id"]})
+    return {"success": True, "verified": True, "email": email}
+
+
 @router.get("/leaderboard")
 async def get_leaderboard(limit: int = Query(20, le=50)):
     """Public finalist leaderboard ordered by composite score."""
