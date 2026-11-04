@@ -562,6 +562,20 @@ class ContestEliminatedEmail:
     """
 
 
+class ContestMemberOtpEmail:
+    """OTP sent to a team member email for verification before form submission."""
+    SUBJECT = "🔐 Your team verification code — {app_name} Project Contest"
+    HEADLINE = "Team Member Verification Code"
+    BODY = """
+    <p>Hi,</p>
+    <p><strong>{lead_name}</strong> is adding you as a team member for the <strong>{app_name} Project Contest</strong>.</p>
+    <p>Use the code below to confirm your participation:</p>
+    <div class="code-box"><span class="code">{otp}</span></div>
+    <p class="note">⏰ This code expires in <strong>10 minutes</strong>. Do not share it with anyone.</p>
+    <p style="font-size:14px;color:#4b5563;margin-top:16px;">Once your team submits the project, you'll receive a full invite email with contest details and the <strong>₹25,000 prize</strong> opportunity.</p>
+    """
+
+
 class InternalJobAppliedCandidateEmail:
     SUBJECT = "\u2705 Application submitted \u2014 {job_title} at {company}"
     HEADLINE = "You\u2019re in the running! \U0001f3af"

@@ -74,16 +74,18 @@ SCORE_THRESHOLDS = {
 # ── Request Models ───────────────────────────────────────────
 
 class TeamMember(BaseModel):
-    full_name: str = Field(..., min_length=2, max_length=100)
+    first_name: str = Field(..., min_length=2, max_length=100)
+    last_name: Optional[str] = None
     email: EmailStr
     role_in_project: Optional[str] = None
     college: Optional[str] = None
+    user_id: Optional[str] = None  # resolved at interview time, not at submission
 
 
 class SparkSubmitRequest(BaseModel):
     """Level 1 — raw idea submission."""
     raw_project_name: str = Field(..., min_length=3, max_length=200)
-    raw_description: str = Field(..., min_length=10, max_length=1000)
+    raw_description: str = Field(..., min_length=750, max_length=1000)
     project_type: Literal["technical", "non_technical"]
     category: str
     tech_stack: List[str] = Field(default_factory=list)
