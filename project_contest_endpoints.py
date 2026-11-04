@@ -7,7 +7,7 @@ import asyncio
 import json
 import logging
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -90,8 +90,9 @@ def _build_recipients(entry: dict) -> list[dict]:
     """Build recipient list: lead + all team members with name/email/is_registered flag."""
     recipients = [{"name": entry["lead_name"], "email": entry["lead_email"], "is_registered": True}]
     for m in entry.get("team_members", []):
+        name = f"{m.get('first_name', '')} {m.get('last_name', '')}".strip() or "Team Member"
         recipients.append({
-            "name": m.get("full_name", "Team Member"),
+            "name": name,
             "email": m.get("email", ""),
             "is_registered": m.get("is_registered", False),
         })
@@ -107,8 +108,9 @@ async def _resolve_member_registration(entry: dict) -> list[dict]:
         if not email:
             continue
         user = await db.database["users"].find_one({"email": email}, {"_id": 0, "user_id": 1})
+        name = f"{m.get('first_name', '')} {m.get('last_name', '')}".strip() or "Team Member"
         recipients.append({
-            "name": m.get("full_name", "Team Member"),
+            "name": name,
             "email": email,
             "is_registered": bool(user),
         })
@@ -190,6 +192,75 @@ async def verify_team_member_otp(
     return {"success": True, "verified": True, "email": email}
 
 
+@router.post("/verdict/run")
+async def run_verdict(admin_key: str = Query(...)):
+    """Level 5: Rank all finalists by composite score. Crown the top entry as winner.
+    Requires admin_key query param matching CONTEST_ADMIN_KEY env var.
+    """
+    import os
+    expected = os.getenv("CONTEST_ADMIN_KEY", "")
+    if not expected or admin_key != expected:
+        raise HTTPException(status_code=403, detail="Invalid admin key.")
+
+    finalists = await contest_db.get_all_finalists()
+    if not finalists:
+        return {"success": True, "message": "No finalists found.", "data": {"processed": 0}}
+
+    # Sort by composite_score descending (already sorted from DB, but enforce here)
+    finalists.sort(key=lambda e: e.get("composite_score", 0), reverse=True)
+    ranked_ids = [e["entry_id"] for e in finalists]
+    await contest_db.assign_final_ranks(ranked_ids)
+
+    winner_entry = finalists[0]
+    await contest_db.declare_winner(winner_entry["entry_id"])
+
+    # Grant winner badge to lead's profile
+    from db import db as _db
+    await _db.database["users"].update_one(
+        {"user_id": winner_entry["lead_user_id"]},
+        {"$set": {"contest_winner_badge": True, "updated_at": datetime.utcnow()}}
+    )
+
+    # Eliminate all other finalists at verdict stage
+    for entry in finalists[1:]:
+        await contest_db.eliminate_at_verdict(entry["entry_id"])
+
+    # Send winner email
+    winner_full = await contest_db.get_by_id(winner_entry["entry_id"])
+    winner_recipients = await _resolve_member_registration(winner_full)
+    await asyncio.to_thread(email_service.send_contest_winner, winner_recipients, winner_full)
+
+    # Send eliminated emails to all other finalists
+    for entry in finalists[1:]:
+        full_entry = await contest_db.get_by_id(entry["entry_id"])
+        recipients = await _resolve_member_registration(full_entry)
+        feedback = full_entry.get("team_verdict") or "Your composite score did not reach the top position."
+        await asyncio.to_thread(
+            email_service.send_contest_eliminated,
+            recipients, full_entry,
+            "Level 5 — Verdict",
+            round(full_entry.get("composite_score", 0)),
+            round(winner_entry.get("composite_score", 0)),
+            feedback,
+        )
+
+    logger.info(
+        "Verdict run: winner=%s (score=%.2f), finalists_eliminated=%d",
+        winner_entry["entry_id"], winner_entry.get("composite_score", 0), len(finalists) - 1
+    )
+    return {
+        "success": True,
+        "message": "Verdict complete. Winner declared.",
+        "data": {
+            "winner_entry_id": winner_entry["entry_id"],
+            "winner_project": winner_full.get("refined_title") or winner_full.get("raw_project_name"),
+            "winner_composite_score": winner_entry.get("composite_score"),
+            "total_finalists": len(finalists),
+            "eliminated": len(finalists) - 1,
+        },
+    }
+
+
 @router.get("/leaderboard")
 async def get_leaderboard(limit: int = Query(20, le=50)):
     """Public finalist leaderboard ordered by composite score."""
@@ -265,7 +336,7 @@ async def submit_spark(req: SparkSubmitRequest, current_user: dict = Depends(get
         try:
             llm_response = await llm.generate(
                 f"{system_prompt}\n\n{l1.get('output_instruction', 'Return JSON only.')}",
-                model="gemini", temperature=0.5,
+                model="gemini", temperature=l1.get("temperature", 0.3),
             )
             refined = json.loads(_strip_json(llm_response.get("content", "{}")))
         except Exception as e:
@@ -312,17 +383,25 @@ async def submit_spark(req: SparkSubmitRequest, current_user: dict = Depends(get
         }
         await contest_db.create_entry(entry)
 
-        # Send invite emails to team members immediately after submission
+        # Resolve user_ids for registered team members and send invite emails
         if req.team_members:
+            from db import db as _db
             team_recipients = []
+            resolved_members = []
             for m in req.team_members:
-                from db import db as _db
                 existing = await _db.database["users"].find_one({"email": m.email}, {"_id": 0, "user_id": 1})
+                resolved_members.append({
+                    **m.model_dump(),
+                    "user_id": existing["user_id"] if existing else None,
+                })
                 team_recipients.append({
-                    "name": m.full_name,
+                    "name": f"{m.first_name} {m.last_name or ''}".strip(),
                     "email": m.email,
                     "is_registered": bool(existing),
                 })
+            # Update stored team_members with resolved user_ids
+            await contest_db.set_fields(entry_id, {"team_members": resolved_members})
+            entry["team_members"] = resolved_members
             await asyncio.to_thread(email_service.send_contest_team_invites, team_recipients, entry)
 
         return {
@@ -404,8 +483,11 @@ async def confirm_payment(req: ContestPaymentConfirm, current_user: dict = Depen
                 await contest_db.grant_subscription_by_email(m["email"], benefits)
 
         await contest_db.confirm_payment(req.entry_id, req.upi_transaction_id, req.amount, benefits)
-        await contest_db.confirm_spark(req.entry_id, await contest_db.get_by_id(req.entry_id) or {})
-        await contest_db.set_fields(req.entry_id, {"status": "spark_confirmed"})
+        await contest_db.set_fields(req.entry_id, {
+            "status": "spark_confirmed",
+            "spark_confirmed_at": datetime.utcnow(),
+            "blueprint_opens_at": datetime.utcnow() + timedelta(days=30),
+        })
 
         from db import db
         await db.database["payments"].insert_one({
@@ -448,7 +530,11 @@ async def generate_blueprint_questions(entry_id: str, current_user: dict = Depen
         l2 = raw_data.get("level2_blueprint_questionnaire", {})
         team_roles = ", ".join(
             [f"{entry['lead_name']} (Lead)"] +
-            [f"{m.get('full_name', 'Member')} ({m.get('role_in_project', 'Member')})" for m in entry.get("team_members", [])]
+            [
+                f"{m.get('first_name', '')} {m.get('last_name', '')}".strip()
+                + f" ({m.get('role_in_project', 'Member')})"
+                for m in entry.get("team_members", [])
+            ]
         )
         system_prompt = l2.get("system_prompt", "").format(
             refined_title=entry.get("refined_title", entry.get("raw_project_name")),
@@ -591,8 +677,8 @@ async def submit_proof(entry_id: str, req: ProofSubmitRequest, current_user: dic
         yt_video_id = yt_match.group(1) if yt_match else ""
 
         # Extract GitHub repo name
-        gh_match = re.search(r"github\.com/[^/]+/([^/]+)", req.github_url)
-        gh_repo_name = gh_match.group(1) if gh_match else req.github_url
+        gh_match = re.search(r"github\.com/[^/]+/([^/]+)", req.github_url or "")
+        gh_repo_name = gh_match.group(1) if gh_match else (req.github_url or "Not provided")
 
         raw_data = prompt_manager.get_raw("contest_level_prompts")
         l3 = raw_data.get("level3_demo_evaluation", {})
@@ -669,11 +755,19 @@ async def start_interview(entry_id: str, current_user: dict = Depends(get_curren
         if existing:
             return {"success": True, "message": "Interview already started.", "data": {"current_round": len(existing["rounds"]), "session": existing}}
 
-        # Determine participant role
-        participant_role = "Team Lead" if entry["lead_user_id"] == current_user["user_id"] else next(
-            (m.get("role_in_project", "Team Member") for m in entry.get("team_members", []) if m.get("user_id") == current_user["user_id"]),
-            "Team Member"
-        )
+        # Determine participant role — resolve by user_id OR by email for members
+        if entry["lead_user_id"] == current_user["user_id"]:
+            participant_role = "Team Lead"
+        else:
+            matched_member = next(
+                (m for m in entry.get("team_members", [])
+                 if m.get("user_id") == current_user["user_id"]
+                 or m.get("email") == current_user.get("email", "")),
+                None
+            )
+            if not matched_member:
+                raise HTTPException(status_code=403, detail="You are not a participant in this entry.")
+            participant_role = matched_member.get("role_in_project") or "Team Member"
 
         # Generate Round 1 questions
         raw_data = prompt_manager.get_raw("contest_interview_questions")
@@ -771,19 +865,33 @@ async def submit_answer(entry_id: str, req: InterviewAnswerRequest, current_user
             entry_id, current_user["user_id"], req.round_number, req.question_id, req.answer, evaluation
         )
 
+        # Guard: reject duplicate answer for same question_id in this round
+        already_answered = any(
+            a.get("question_id") == req.question_id
+            for a in current_round.get("answers", [])
+        )
+        if already_answered:
+            raise HTTPException(status_code=400, detail=f"Question {req.question_id} already answered in this round.")
+
         # Check if round is complete (all 8 answers submitted)
         existing_answers = len(current_round.get("answers", [])) + 1
         round_complete = existing_answers >= 8
         response_data: dict = {"evaluation": evaluation, "round_complete": round_complete}
 
         if round_complete:
-            # Generate round summary
-            await _finalize_round(entry_id, current_user["user_id"], req.round_number, entry, session)
+            # Re-fetch session from DB so _finalize_round and _generate_round_questions
+            # have the complete picture including the 8th answer just stored
+            fresh_entry = await contest_db.get_by_id(entry_id)
+            fresh_sessions = fresh_entry.get("interview_sessions", []) if fresh_entry else []
+            fresh_session = next(
+                (s for s in fresh_sessions if s["participant_user_id"] == current_user["user_id"]), session
+            )
+            await _finalize_round(entry_id, current_user["user_id"], req.round_number, entry, fresh_session)
 
             if req.round_number < 3:
-                # Generate next round questions
+                # Generate next round questions with real round score summaries
                 next_questions = await _generate_round_questions(
-                    req.round_number + 1, entry, session.get("participant_role", "Team Member"), entry
+                    req.round_number + 1, entry, fresh_session.get("participant_role", "Team Member"), fresh_session
                 )
                 response_data["next_round"] = req.round_number + 1
                 response_data["next_questions"] = next_questions
@@ -804,11 +912,21 @@ async def submit_answer(entry_id: str, req: InterviewAnswerRequest, current_user
 
 # ── Interview internal helpers ─────────────────────────────────
 
-async def _generate_round_questions(round_number: int, entry: dict, participant_role: str, _entry: dict) -> list:
+async def _generate_round_questions(round_number: int, entry: dict, participant_role: str, session: dict) -> list:
     """Generate questions for a given round number."""
     raw_data = prompt_manager.get_raw("contest_interview_questions")
     rounds_config = raw_data.get("rounds", [])
     r_config = next((r for r in rounds_config if r["round"] == round_number), {})
+
+    # Build score summaries from completed rounds in the session
+    def _round_summary(rn: int) -> str:
+        r = next((x for x in session.get("rounds", []) if x["round_number"] == rn), {})
+        score = r.get("round_score")
+        pattern = r.get("knowledge_pattern", "")
+        if score is None:
+            return ""
+        return f"Score: {score}/100. {pattern}".strip()
+
     system_prompt = r_config.get("system_prompt", "").format(
         project_name=entry.get("refined_title", entry.get("raw_project_name")),
         project_description=entry.get("refined_description", entry.get("raw_description")),
@@ -817,10 +935,10 @@ async def _generate_round_questions(round_number: int, entry: dict, participant_
         participant_role=participant_role,
         team_size=entry.get("team_size", 1),
         blueprint_summary=entry.get("blueprint_feedback", ""),
-        demo_url=entry.get("demo_url", ""),
-        github_url=entry.get("github_url", ""),
-        round1_score_summary="",
-        round2_score_summary="",
+        demo_url=entry.get("demo_url", "") or "Not provided",
+        github_url=entry.get("github_url", "") or "Not provided",
+        round1_score_summary=_round_summary(1),
+        round2_score_summary=_round_summary(2),
     )
     try:
         llm_response = await llm.generate(
@@ -840,7 +958,11 @@ async def _finalize_round(entry_id: str, participant_user_id: str, round_number:
     raw_data = prompt_manager.get_raw("contest_interview_evaluation")
     summary_variant = next((v for v in raw_data.get("variants", []) if v["id"] == "contest_eval_round_summary"), {})
 
-    rounds = session.get("rounds", [])
+    # Re-fetch from DB so the 8th answer's evaluation is included
+    fresh = await contest_db.get_by_id(entry_id)
+    fresh_sessions = fresh.get("interview_sessions", []) if fresh else []
+    fresh_session = next((s for s in fresh_sessions if s["participant_user_id"] == participant_user_id), {})
+    rounds = fresh_session.get("rounds", [])
     current_round = next((r for r in rounds if r["round_number"] == round_number), {})
     evals = current_round.get("evaluations", [])
     answer_scores = [e.get("score", 0) for e in evals]
@@ -870,8 +992,15 @@ async def _finalize_round(entry_id: str, participant_user_id: str, round_number:
 
     # Push next round questions into the session if not round 3
     if round_number < 3:
+        # Re-fetch after storing round summary so score is available for next round prompt
+        post_summary_entry = await contest_db.get_by_id(entry_id)
+        post_summary_sessions = post_summary_entry.get("interview_sessions", []) if post_summary_entry else []
+        post_summary_session = next(
+            (s for s in post_summary_sessions if s["participant_user_id"] == participant_user_id),
+            fresh_session
+        )
         next_questions = await _generate_round_questions(
-            round_number + 1, entry, session.get("participant_role", "Team Member"), entry
+            round_number + 1, entry, session.get("participant_role", "Team Member"), post_summary_session
         )
         next_round_doc = {
             "round_number": round_number + 1,
@@ -928,14 +1057,24 @@ async def _finalize_participant(entry_id: str, participant_user_id: str, entry: 
 
 
 async def _check_all_interviews_complete(entry_id: str, entry: dict) -> None:
-    """Check if all participants finished. If yes, compute team score and send emails."""
+    """Atomically increment completed_interview_count. Only the call that reaches
+    team_size triggers team score computation — prevents race condition when two
+    members finish simultaneously."""
+    from db import db as _db
+    result = await _db.database["project_contest_entries"].find_one_and_update(
+        {"entry_id": entry_id},
+        {"$inc": {"completed_interview_count": 1}},
+        return_document=True,
+        projection={"_id": 0, "completed_interview_count": 1, "team_size": 1}
+    )
+    if not result:
+        return
+    if result.get("completed_interview_count") != result.get("team_size", 1):
+        return  # Not all done yet — another participant will trigger this
+
     fresh = await contest_db.get_by_id(entry_id)
     sessions = fresh.get("interview_sessions", [])
-    expected_count = fresh.get("team_size", 1)
     complete_sessions = [s for s in sessions if s.get("status") == "complete"]
-
-    if len(complete_sessions) < expected_count:
-        return  # Not all done yet
 
     # Compute team score
     raw_data = prompt_manager.get_raw("contest_interview_evaluation")

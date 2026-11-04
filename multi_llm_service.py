@@ -20,30 +20,38 @@ _client = genai.Client(api_key=settings.GEMINI_API_KEY) if settings.GEMINI_API_K
 class MultiLLMService:
     """All providers route through Gemini internally. Provider names are kept for UI branding."""
 
-    async def generate(self, prompt: str, provider: str = "gemini") -> Dict[str, Any]:
+    async def generate(self, prompt: str, provider: str = "gemini", model: str = None, temperature: float = 1.0) -> Dict[str, Any]:
         """Generate response with timeout protection and fallback chain on 503."""
         if not _client:
             raise Exception("GEMINI_API_KEY not configured")
 
+        from google.genai import types as genai_types
+        gen_config = genai_types.GenerateContentConfig(temperature=temperature)
+
         all_models = [MODEL] + FALLBACK_MODELS
         last_error = None
 
-        for model in all_models:
+        for attempt_model in all_models:
             try:
                 response = await asyncio.wait_for(
-                    asyncio.to_thread(_client.models.generate_content, model=model, contents=prompt),
+                    asyncio.to_thread(
+                        _client.models.generate_content,
+                        model=attempt_model,
+                        contents=prompt,
+                        config=gen_config,
+                    ),
                     timeout=LLM_TIMEOUT
                 )
-                if model != MODEL:
-                    logger.info("Fallback model %s succeeded", model)
+                if attempt_model != MODEL:
+                    logger.info("Fallback model %s succeeded", attempt_model)
                 break
             except asyncio.TimeoutError:
-                logger.warning("Model %s timed out, trying next", model)
+                logger.warning("Model %s timed out, trying next", attempt_model)
                 last_error = Exception("AI service timed out. Please try again.")
                 continue
             except Exception as e:
                 if "503" in str(e) or "404" in str(e):
-                    logger.warning("Model %s unavailable (%s), trying next", model, str(e)[:60])
+                    logger.warning("Model %s unavailable (%s), trying next", attempt_model, str(e)[:60])
                     last_error = e
                     continue
                 logger.error("LLM generation failed: %s", e)

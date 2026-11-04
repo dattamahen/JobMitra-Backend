@@ -79,6 +79,7 @@ class TeamMember(BaseModel):
     email: EmailStr
     role_in_project: Optional[str] = None
     college: Optional[str] = None
+    user_id: Optional[str] = None  # resolved at interview time, not at submission
 
 
 class SparkSubmitRequest(BaseModel):

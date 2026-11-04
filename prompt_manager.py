@@ -27,6 +27,7 @@ CATEGORIES = {
     "job_text_parse": "job_text_parse.json",
     "job_moderation": "job_moderation.json",
     "cv_upload_parse": "cv_upload_parse.json",
+    "contest_moderation": "contest_moderation.json",
     "contest_level_prompts": "contest_level_prompts.json",
     "contest_interview_questions": "contest_interview_questions.json",
     "contest_interview_evaluation": "contest_interview_evaluation.json",

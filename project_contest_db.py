@@ -318,12 +318,33 @@ class ProjectContestDB:
             fields["eliminated_at_level"] = "interview"
         await self.set_fields(entry_id, fields)
 
+    async def get_all_finalists(self) -> list:
+        """Return all entries with status 'finalist', sorted by composite_score descending."""
+        cursor = self.col.find({"status": "finalist"}, {"_id": 0}).sort("composite_score", -1)
+        docs = await cursor.to_list(length=1000)
+        return [self._serialize(d) for d in docs]
+
+    async def assign_final_ranks(self, ranked_entry_ids: list[str]) -> None:
+        """Write final_rank (1-based) to each finalist in ranked order."""
+        for rank, entry_id in enumerate(ranked_entry_ids, start=1):
+            await self.col.update_one(
+                {"entry_id": entry_id},
+                {"$set": {"final_rank": rank, "updated_at": datetime.utcnow()}}
+            )
+
     async def declare_winner(self, entry_id: str) -> None:
         """Mark entry as winner."""
         await self.set_fields(entry_id, {
             "status": "winner",
             "winner_badge_granted": True,
             "winner_declared_at": datetime.utcnow(),
+        })
+
+    async def eliminate_at_verdict(self, entry_id: str) -> None:
+        """Mark a finalist as eliminated at the verdict stage."""
+        await self.set_fields(entry_id, {
+            "status": "eliminated",
+            "eliminated_at_level": "verdict",
         })
 
     # ── Subscription ─────────────────────────────────────────
