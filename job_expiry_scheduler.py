@@ -33,7 +33,7 @@ def _is_before(value, cutoff_dt: datetime, cutoff_iso: str) -> bool:
 async def expire_stale_jobs() -> int:
     """Find and archive stale jobs. Returns total count archived."""
     try:
-        if db.fallback_mode or not db.database:
+        if db.fallback_mode or db.database is None:
             return 0
 
         now = datetime.utcnow()
@@ -92,7 +92,8 @@ async def job_expiry_loop():
 
 def start_expiry_scheduler():
     """Start the background expiry task. Call from app startup."""
-    asyncio.create_task(job_expiry_loop())
+    loop = asyncio.get_event_loop()
+    loop.create_task(job_expiry_loop())
     logger.info(
         "Job expiry scheduler started (interval: %dh, default expiry: %dd, hard cap: %dd)",
         CHECK_INTERVAL_HOURS, DEFAULT_JOB_EXPIRY_DAYS, MAX_JOB_AGE_DAYS,

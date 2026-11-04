@@ -31,6 +31,7 @@ from email_constants import (
     ContestInterviewCompleteEmail,
     ContestWinnerEmail,
     ContestEliminatedEmail,
+    ContestMemberOtpEmail,
 )
 
 logger = logging.getLogger(__name__)
@@ -355,7 +356,10 @@ class EmailService:
             f"\U0001f4cb Job ID: {job_id}\n\n"
             f"Apply now on JobMouka:\n"
             f"\U0001f310 https://www.jobmouka.com\n"
-            f"\U0001f4f1 Play Store: https://play.google.com/store/apps/details?id=com.jobmouka.app"
+            f"\U0001f4f1 Play Store: https://play.google.com/store/apps/details?id=com.jobmouka.app\n\n"
+            f"\U0001f4e2 Join our WhatsApp Channels for more jobs:\n"
+            f"\U0001f4bc Experienced: https://whatsapp.com/channel/0029VbESGTO8F2pHL4NOmt3S\n"
+            f"\U0001f393 Freshers: https://whatsapp.com/channel/0029VbDZLJS3wtb7Zhe2G90h"
         )
         import urllib.parse
         whatsapp_share_url = f"https://wa.me/?text={urllib.parse.quote(wa_text)}"
@@ -407,6 +411,12 @@ class EmailService:
         if advance:
             return "✅", f"Advanced to next level!", "#16a34a", "#f0fdf4"
         return "❌", f"Did not meet the threshold ({threshold}/100)", "#dc2626", "#fef2f2"
+
+    def send_contest_member_otp(self, to_email: str, otp: str, lead_name: str) -> bool:
+        """Send OTP to a team member email for pre-submission verification."""
+        ctx = dict(app_name=self.app_name, otp=otp, lead_name=lead_name)
+        html = self._build_email(ContestMemberOtpEmail.HEADLINE, ContestMemberOtpEmail.BODY.format(**ctx))
+        return self.send_email(to_email, ContestMemberOtpEmail.SUBJECT.format(**ctx), html)
 
     def send_contest_team_invites(self, team_members: list[dict], entry: dict) -> None:
         """Send invite emails to team members at submission time.

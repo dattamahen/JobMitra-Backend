@@ -124,6 +124,12 @@ async def lifespan(app: FastAPI):
             logger.info("Startup sweep: expired %d internal job(s)", expired_internal)
     start_expiry_scheduler()
 
+    # Contest level scheduler — auto-advances entries between levels on time gates
+    from contest_scheduler import start_contest_scheduler, run_contest_level_sweep
+    if not db.fallback_mode:
+        await run_contest_level_sweep()
+    start_contest_scheduler()
+
     yield
 
     # Shutdown
