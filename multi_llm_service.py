@@ -10,8 +10,8 @@ from config import settings
 
 logger = logging.getLogger(__name__)
 
-MODEL = "gemini-3.8-flash"
-FALLBACK_MODELS = ["gemini-3.7-flash", "gemini-3.5-flash", "gemini-3-flash-preview", "gemini-flash-latest"]
+MODEL = "gemini-3.5-flash"
+FALLBACK_MODELS = ["gemini-3.6-flash", "gemini-3.7-flash", "gemini-3.8-flash", "gemini-3-flash-preview"]
 LLM_TIMEOUT = 30
 
 _client = genai.Client(api_key=settings.GEMINI_API_KEY) if settings.GEMINI_API_KEY else None

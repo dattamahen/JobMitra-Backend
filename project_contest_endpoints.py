@@ -339,6 +339,8 @@ async def submit_spark(req: SparkSubmitRequest, current_user: dict = Depends(get
                 model="gemini", temperature=l1.get("temperature", 0.3),
             )
             refined = json.loads(_strip_json(llm_response.get("content", "{}")))
+            if not refined.get("refined_title") or not refined.get("refined_description") or not refined.get("idea_quality_score"):
+                raise ValueError("LLM returned incomplete refinement fields")
         except Exception as e:
             logger.warning("LLM idea refinement failed, using fallback: %s", e)
             refined = {
