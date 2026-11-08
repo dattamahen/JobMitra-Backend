@@ -32,6 +32,7 @@ from email_constants import (
     ContestWinnerEmail,
     ContestEliminatedEmail,
     ContestMemberOtpEmail,
+    ContestSubmissionAckEmail,
 )
 
 logger = logging.getLogger(__name__)
@@ -417,6 +418,25 @@ class EmailService:
         ctx = dict(app_name=self.app_name, otp=otp, lead_name=lead_name)
         html = self._build_email(ContestMemberOtpEmail.HEADLINE, ContestMemberOtpEmail.BODY.format(**ctx))
         return self.send_email(to_email, ContestMemberOtpEmail.SUBJECT.format(**ctx), html)
+
+    def send_contest_submission_ack(self, recipients: list[dict], entry: dict) -> None:
+        """Send submission acknowledgement to lead + registered team members after POST /submit.
+        recipients: [{ name, email }]
+        """
+        category = entry.get("category", "").replace("_", " ").title()
+        for r in recipients:
+            ctx = dict(
+                app_name=self.app_name,
+                frontend_url=self.frontend_url,
+                recipient_name=r["name"],
+                project_title=entry.get("refined_title") or entry["raw_project_name"],
+                entry_id=entry["entry_id"],
+                category=category,
+                idea_quality_score=entry.get("idea_quality_score", 0),
+                team_size=entry["team_size"],
+            )
+            html = self._build_email(ContestSubmissionAckEmail.HEADLINE, ContestSubmissionAckEmail.BODY.format(**ctx))
+            self.send_email(r["email"], ContestSubmissionAckEmail.SUBJECT.format(**ctx), html)
 
     def send_contest_team_invites(self, team_members: list[dict], entry: dict) -> None:
         """Send invite emails to team members at submission time.
