@@ -406,6 +406,16 @@ async def submit_spark(req: SparkSubmitRequest, current_user: dict = Depends(get
             entry["team_members"] = resolved_members
             await asyncio.to_thread(email_service.send_contest_team_invites, team_recipients, entry)
 
+        # Send submission acknowledgement to lead + registered team members
+        ack_recipients = [{"name": lead_name, "email": lead_email}]
+        for m in entry.get("team_members", []):
+            if m.get("user_id") and m.get("email"):
+                ack_recipients.append({
+                    "name": f"{m.get('first_name', '')} {m.get('last_name', '')}".strip() or "Team Member",
+                    "email": m["email"],
+                })
+        await asyncio.to_thread(email_service.send_contest_submission_ack, ack_recipients, entry)
+
         return {
             "success": True,
             "message": "Project idea received and refined by AI.",

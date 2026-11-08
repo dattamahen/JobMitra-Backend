@@ -35,21 +35,27 @@ Style rules:
 
 Return ONLY the summary text. No quotes, no labels, no markdown, no extra formatting."""
 
-JOB_DESCRIPTION_PROMPT = """You are a senior resume writer who specializes in writing impactful job descriptions for resumes.
+JOB_DESCRIPTION_PROMPT = """You are a senior resume writer and ATS specialist with 15+ years of experience helping candidates get shortlisted at top companies.
 
-Generate a compelling job description with achievements (4-6 bullet points) for the given role.
+Your task: Write exactly 5 powerful, ATS-optimised achievement bullet points for a specific role in a candidate's resume.
 
-Rules:
-- Write in PAST TENSE (unless it's a current role)
-- Start each bullet with a strong action verb (Architected, Spearheaded, Optimized, Delivered, Led, Built, Reduced, Increased, Automated, Migrated)
-- QUANTIFY impact wherever possible (percentages, numbers, scale, team size, revenue, users)
-- Be specific to the technologies and skills mentioned
-- Each bullet should show: Action + Context + Impact/Result
-- Keep each bullet to 1-2 lines max
-- Make it ATS-friendly with relevant keywords
-- NO generic statements like "Responsible for..." or "Worked on..."
-- Format as bullet points starting with •
-- Return ONLY the bullet points, no headers or extra text"""
+CRITICAL RULES — follow every single one:
+1. Output EXACTLY 5 bullet points — no more, no less
+2. EACH bullet must be on its own line, starting with the • character
+3. EACH bullet must be 1-2 complete sentences — never a fragment
+4. Start EVERY bullet with a strong action verb: Architected, Spearheaded, Engineered, Delivered, Optimised, Reduced, Increased, Automated, Migrated, Led, Mentored, Designed, Implemented, Scaled, Streamlined, Launched, Drove, Established, Overhauled, Championed, Refactored, Integrated, Deployed, Coordinated, Accelerated
+5. QUANTIFY every bullet — include at least one number, percentage, scale, team size, time saved, or revenue figure. Use realistic estimates if exact numbers are unknown (e.g. "reduced deployment time by ~40%", "served 50,000+ daily active users", "cut manual effort by 3 hours/week")
+6. Structure every bullet: Action Verb + What you did + Technology/Method used + Measurable Result
+7. Be SPECIFIC to the technologies, domain, and seniority level provided — never generic
+8. Embed ATS keywords naturally from the skills and technologies listed
+9. NEVER use: "Responsible for", "Worked on", "Assisted with", "Helped to", "Involved in", "Part of a team"
+10. Seniority calibration — match the bullets to the level:
+    - Junior (0-2 yrs): feature delivery, bug fixes, test coverage, code quality, learning velocity
+    - Mid-level (2-5 yrs): feature ownership, performance improvements, cross-team collaboration, mentoring juniors
+    - Senior (5-10 yrs): architecture decisions, system design, team leadership, process improvements, business impact
+    - Staff/Principal (10+ yrs): org-wide technical strategy, hiring, cross-functional leadership, platform direction
+11. Career progression: if a next role is provided, the bullets for THIS role must show the achievements that EARNED that promotion — the scope expanded, the leadership demonstrated, the impact delivered
+12. Return ONLY the 5 bullet points — no headers, no intro, no outro, no markdown, no numbering"""
 
 
 # ── Skill Suggestions ───────────────────────────────────────────────────────
@@ -119,6 +125,12 @@ class GenerateAIContentRequest(BaseModel):
     position: Optional[str] = ""
     company: Optional[str] = ""
     is_current: Optional[bool] = False
+    start_date: Optional[str] = ""
+    end_date: Optional[str] = ""
+    industry: Optional[str] = ""
+    next_role: Optional[str] = ""
+    next_company: Optional[str] = ""
+    all_experience: Optional[List[dict]] = []
 
     # Project description fields
     project_title: Optional[str] = ""
@@ -223,17 +235,60 @@ async def _generate_summary(request: GenerateAIContentRequest) -> str:
 
 async def _generate_job_description(request: GenerateAIContentRequest) -> str:
     skills_str = ", ".join(request.skills) if request.skills else "Not specified"
-    tense = "present tense (current role)" if request.is_current else "past tense"
+    tense = "PRESENT TENSE (current role)" if request.is_current else "PAST TENSE (previous role)"
 
-    user_prompt = f"""Generate job description bullet points for:
+    exp = request.experience_years or 0
+    if exp <= 2:
+        seniority = "Junior (0-2 yrs) — focus on feature delivery, learning velocity, code quality, test coverage"
+    elif exp <= 5:
+        seniority = "Mid-level (2-5 yrs) — focus on feature ownership, performance improvements, cross-team work, mentoring juniors"
+    elif exp <= 10:
+        seniority = "Senior (5-10 yrs) — focus on architecture, system design, team leadership, business impact"
+    else:
+        seniority = "Staff/Principal (10+ yrs) — focus on technical strategy, org-wide impact, hiring, platform direction"
 
-- Job Title: {request.position}
+    duration_line = ""
+    if request.start_date:
+        end = request.end_date if request.end_date else "Present"
+        duration_line = f"- Duration in this role: {request.start_date} to {end}"
+
+    industry_line = f"- Industry/Domain: {request.industry}" if request.industry else ""
+
+    progression_block = ""
+    if request.next_role:
+        next_co = f" at {request.next_company}" if request.next_company else ""
+        progression_block = (
+            f"- After this role the candidate moved to: {request.next_role}{next_co}\n"
+            f"  The bullets for THIS role must show the achievements and growth that earned that next step."
+        )
+
+    career_context = ""
+    if request.all_experience:
+        lines = []
+        for e in request.all_experience[:6]:
+            pos = e.get("position") or e.get("role", "")
+            co = e.get("company", "")
+            sd = e.get("start_date", "")
+            ed = e.get("end_date") or "Present"
+            if pos or co:
+                lines.append(f"  - {pos} at {co} ({sd} to {ed})")
+        if lines:
+            career_context = "- Full career timeline (for context only, do NOT generate bullets for other roles):\n" + "\n".join(lines)
+
+    user_prompt = f"""Generate 5 achievement bullet points for this specific role:
+
+- Job Title: {request.position or 'Not specified'}
 - Company: {request.company or 'Not specified'}
-- Relevant Skills/Technologies: {skills_str}
-- Candidate's Total Experience: {request.experience_years} years
-- Write in: {tense}
+- Total Experience of Candidate: {exp} years
+- Seniority Level: {seniority}
+- Tense: {tense}
+{duration_line}
+{industry_line}
+- Core Skills and Technologies used in this role: {skills_str}
+{progression_block}
+{career_context}
 
-Generate 4-6 achievement-focused bullet points for this role."""
+Write exactly 5 bullet points showing what this person achieved in this specific role, calibrated precisely to their seniority and career trajectory."""
 
     full_prompt = f"{JOB_DESCRIPTION_PROMPT}\n\n{user_prompt}"
     ai_response = await llm_service.generate(full_prompt, "gemini")
