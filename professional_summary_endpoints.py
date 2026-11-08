@@ -65,7 +65,9 @@ SKILL_SUGGEST_PROMPT = """You are a senior tech recruiter and career advisor wit
 Given a candidate's current skills, suggest the NEXT most relevant skills they should add to their profile.
 
 Rules:
-- Return ONLY a JSON array of skill name strings. Example: ["Docker", "Kubernetes", "AWS"]
+- Return ONLY a JSON array of objects. Each object must have:
+  - "name": skill name (string)
+  - "version": latest stable version string if the skill is a versioned technology (e.g. "3.12" for Python, "18" for Node.js, "20" for Angular). Leave as empty string "" for non-versioned skills (soft skills, methodologies, cloud services, etc.)
 - Suggest 8-12 skills that are:
   1. Directly complementary to their existing skills (same ecosystem)
   2. In high demand in the current job market
@@ -73,7 +75,16 @@ Rules:
   4. Realistic to learn given their current stack
 - Mix: 60% technical skills closely related to their stack, 40% adjacent/emerging skills
 - Be specific (e.g. "PostgreSQL" not "Databases", "React Query" not "State Management")
-- No explanations, no markdown, no extra text — ONLY the JSON array."""
+- Use the LATEST STABLE version known to you for versioned technologies
+- No explanations, no markdown, no extra text — ONLY the JSON array.
+
+Example output:
+[{"name": "Docker", "version": "27"}, {"name": "Kubernetes", "version": "1.31"}, {"name": "System Design", "version": ""}]"""
+
+
+class SkillSuggestion(BaseModel):
+    name: str
+    version: str = ""
 
 
 class SkillSuggestRequest(BaseModel):
@@ -81,7 +92,7 @@ class SkillSuggestRequest(BaseModel):
 
 
 class SkillSuggestResponse(BaseModel):
-    suggestions: List[str]
+    suggestions: List[SkillSuggestion]
 
 
 @router.post("/profile/suggest-skills", response_model=SkillSuggestResponse)
@@ -98,8 +109,13 @@ async def suggest_skills(request: SkillSuggestRequest):
         suggestions = json.loads(content)
         if not isinstance(suggestions, list):
             raise ValueError("Expected a list")
-        suggestions = [s for s in suggestions if isinstance(s, str) and s.strip()]
-        return SkillSuggestResponse(suggestions=suggestions[:12])
+        result = []
+        for s in suggestions:
+            if isinstance(s, dict) and s.get("name"):
+                result.append(SkillSuggestion(name=s["name"].strip(), version=(s.get("version") or "").strip()))
+            elif isinstance(s, str) and s.strip():
+                result.append(SkillSuggestion(name=s.strip(), version=""))
+        return SkillSuggestResponse(suggestions=result[:12])
     except Exception as e:
         logger.warning("Skill suggestion failed, returning empty: %s", e)
         return SkillSuggestResponse(suggestions=[])
