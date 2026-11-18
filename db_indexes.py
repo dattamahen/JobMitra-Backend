@@ -79,6 +79,11 @@ async def ensure_indexes(database: AsyncIOMotorDatabase) -> None:
         await otps.create_index("email", unique=True)
         await otps.create_index("expires_at", expireAfterSeconds=0)  # TTL index
 
+        # ── Signup Email OTPs ────────────────────────────────────
+        email_otps = database["email_otps"]
+        await email_otps.create_index("email", unique=True)
+        await email_otps.create_index("expires_at", expireAfterSeconds=0)  # TTL — auto-delete after 10 min
+
         # ── Project Contest Entries ──────────────────────────────────────
         contest = database["project_contest_entries"]
         await contest.create_index("entry_id", unique=True)
