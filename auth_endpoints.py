@@ -16,7 +16,8 @@ logger = logging.getLogger(__name__)
 from auth_schemas import (
     LoginRequest, LoginResponse, RegisterRequest, UserResponse,
     UserProfileUpdateRequest, PasswordChangeRequest, UserProfileResponse,
-    ForgotPasswordRequest, ResetPasswordRequest
+    ForgotPasswordRequest, ResetPasswordRequest,
+    SendEmailOtpRequest, VerifyEmailOtpRequest
 )
 from auth_db import (
     create_user, authenticate_user, get_user_by_id, get_user_by_email,
@@ -119,6 +120,14 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
 async def register_user(request: RegisterRequest):
     """Register a new user with minimal required fields"""
     try:
+        # Enforce email OTP verification for candidate accounts
+        if request.user_type not in ("hire", "hr"):
+            otp_record = await db.database["email_otps"].find_one({"email": request.email})
+            if not otp_record or not otp_record.get("verified"):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Email OTP verification is required before registration."
+                )
         user_data = {
             "email": request.email,
             "password": request.password,
@@ -138,6 +147,9 @@ async def register_user(request: RegisterRequest):
             user_data["user_status"] = "pending_verification"
         
         user = await create_user(user_data)
+        
+        # Clean up OTP record after successful registration
+        await db.database["email_otps"].delete_one({"email": request.email})
         
         # Send verification email for HR users, welcome email for candidates
         if request.user_type in ("hire", "hr"):
@@ -708,6 +720,52 @@ async def verify_email_endpoint(token: str = None, code: str = None):
     await asyncio.to_thread(email_service.send_welcome_email, user["email"], user_name)
 
     return {"message": "Email verified successfully. Your HR account is now active.", "user_id": user["user_id"]}
+
+
+@auth_router.post("/send-email-otp")
+async def send_email_otp(request: SendEmailOtpRequest):
+    """Generate and send a 6-digit OTP to the given email for signup verification."""
+    import random
+    from datetime import timedelta
+    from email_service import email_service
+
+    # Block if email already registered
+    existing = await get_user_by_email(request.email)
+    if existing:
+        raise HTTPException(status_code=400, detail="An account with this email already exists.")
+
+    otp = str(random.randint(100000, 999999))
+    expires_at = datetime.utcnow() + timedelta(minutes=10)
+
+    await db.database["email_otps"].update_one(
+        {"email": request.email},
+        {"$set": {"email": request.email, "otp": otp, "expires_at": expires_at, "verified": False}},
+        upsert=True
+    )
+
+    await asyncio.to_thread(email_service.send_signup_otp_email, request.email, otp)
+    return {"message": "OTP sent to your email"}
+
+
+@auth_router.post("/verify-email-otp")
+async def verify_email_otp(request: VerifyEmailOtpRequest):
+    """Verify the OTP entered by the user during signup."""
+    record = await db.database["email_otps"].find_one({"email": request.email})
+
+    if not record:
+        raise HTTPException(status_code=400, detail="No OTP found for this email. Please request a new one.")
+
+    if record["expires_at"] < datetime.utcnow():
+        raise HTTPException(status_code=400, detail="OTP has expired. Please request a new one.")
+
+    if record["otp"] != request.otp:
+        raise HTTPException(status_code=400, detail="Invalid OTP. Please try again.")
+
+    await db.database["email_otps"].update_one(
+        {"email": request.email},
+        {"$set": {"verified": True}}
+    )
+    return {"verified": True}
 
 
 @auth_router.post("/forgot-password")

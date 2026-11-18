@@ -342,3 +342,10 @@ class ResetPasswordRequest(BaseModel):
 
 class VerifyEmailRequest(BaseModel):
     token: str
+
+class SendEmailOtpRequest(BaseModel):
+    email: EmailStr
+
+class VerifyEmailOtpRequest(BaseModel):
+    email: EmailStr
+    otp: str = Field(..., min_length=6, max_length=6)

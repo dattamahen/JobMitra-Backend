@@ -168,6 +168,17 @@ class EmailService:
     #  Transactional emails                                                #
     # ------------------------------------------------------------------ #
 
+    def send_signup_otp_email(self, to_email: str, otp: str) -> bool:
+        """Send 6-digit OTP for signup email verification."""
+        body_html = f"""
+        <p>You're one step away from creating your JobMouka account.</p>
+        <p>Use the OTP below to verify your email address. It expires in <strong>10 minutes</strong>.</p>
+        <div class="code-box"><span class="code">{otp}</span></div>
+        <p class="note">If you did not request this, please ignore this email.</p>
+        """
+        html = self._build_email("Verify your email to get started", body_html)
+        return self.send_email(to_email, f"Your JobMouka signup OTP: {otp}", html)
+
     def send_welcome_email(self, to_email: str, user_name: str) -> bool:
         """Welcome email for newly registered candidates."""
         ctx = dict(user_name=user_name, app_name=self.app_name, frontend_url=self.frontend_url)
