@@ -39,6 +39,12 @@ from email_constants.contest_emails import (
     ContestWinnerEmail,
     ContestEliminatedEmail,
 )
+from email_constants.engagement_emails import (
+    ProfileNudgeEmail,
+    MockInterviewNudgeEmail,
+    ProjectContestNudgeEmail,
+    JobDigestEmail,
+)
 
 __all__ = [
     "WelcomeEmail",
@@ -64,4 +70,8 @@ __all__ = [
     "ContestInterviewCompleteEmail",
     "ContestWinnerEmail",
     "ContestEliminatedEmail",
+    "ProfileNudgeEmail",
+    "MockInterviewNudgeEmail",
+    "ProjectContestNudgeEmail",
+    "JobDigestEmail",
 ]

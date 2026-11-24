@@ -11,6 +11,10 @@ from email.mime.multipart import MIMEMultipart
 from config import settings
 from email_constants import (
     WelcomeEmail,
+    ProfileNudgeEmail,
+    MockInterviewNudgeEmail,
+    ProjectContestNudgeEmail,
+    JobDigestEmail,
     PasswordResetEmail,
     VerificationEmail,
     AuthFailureEmail,
@@ -650,6 +654,94 @@ class EmailService:
             )
             html = self._build_email(ContestEliminatedEmail.HEADLINE, ContestEliminatedEmail.BODY.format(**ctx))
             self.send_email(r["email"], ContestEliminatedEmail.SUBJECT.format(**ctx), html)
+
+    # ------------------------------------------------------------------ #
+    #  Engagement campaign emails                                          #
+    # ------------------------------------------------------------------ #
+
+    def send_profile_nudge_email(
+        self, to_email: str, first_name: str, completion_pct: int, missing_sections: list[str]
+    ) -> bool:
+        """Send profile completion nudge to a candidate."""
+        items_html = "".join(f"<li>{s}</li>" for s in missing_sections)
+        ctx = dict(
+            first_name=first_name,
+            completion_pct=completion_pct,
+            missing_sections_html=items_html,
+            frontend_url=self.frontend_url,
+        )
+        html = self._build_email(ProfileNudgeEmail.HEADLINE, ProfileNudgeEmail.BODY.format(**ctx))
+        return self.send_email(to_email, ProfileNudgeEmail.SUBJECT.format(**ctx), html)
+
+    def send_mock_interview_nudge_email(
+        self, to_email: str, first_name: str, days_since_last: int
+    ) -> bool:
+        """Send mock interview inactivity nudge to a candidate."""
+        ctx = dict(
+            first_name=first_name,
+            days_since_last=days_since_last,
+            frontend_url=self.frontend_url,
+        )
+        html = self._build_email(MockInterviewNudgeEmail.HEADLINE, MockInterviewNudgeEmail.BODY.format(**ctx))
+        return self.send_email(to_email, MockInterviewNudgeEmail.SUBJECT.format(**ctx), html)
+
+    def send_project_contest_nudge_email(self, to_email: str, first_name: str) -> bool:
+        """Send project contest awareness email to a fresher candidate."""
+        ctx = dict(first_name=first_name, frontend_url=self.frontend_url)
+        html = self._build_email(ProjectContestNudgeEmail.HEADLINE, ProjectContestNudgeEmail.BODY.format(**ctx))
+        return self.send_email(to_email, ProjectContestNudgeEmail.SUBJECT.format(**ctx), html)
+
+    def send_job_digest_email(
+        self, to_email: str, first_name: str, jobs: list[dict]
+    ) -> bool:
+        """Send weekly job digest to a candidate. jobs: list of job dicts."""
+        rows = []
+        for j in jobs:
+            title = j.get("title", "")
+            company = j.get("company", "")
+            location = j.get("location", "")
+            rows.append(
+                f'<div style="border:1px solid #e5e7eb;border-radius:8px;padding:14px 16px;margin-bottom:10px;">'
+                f'<p style="font-weight:600;color:#1a1a2e;margin-bottom:4px;">{title}</p>'
+                f'<p style="font-size:13px;color:#6b7280;">{company}'
+                f'{" &mdash; " + location if location else ""}</p>'
+                f'</div>'
+            )
+        ctx = dict(
+            first_name=first_name,
+            job_count=len(jobs),
+            job_rows_html="".join(rows),
+            frontend_url=self.frontend_url,
+        )
+        html = self._build_email(JobDigestEmail.HEADLINE, JobDigestEmail.BODY.format(**ctx))
+        return self.send_email(to_email, JobDigestEmail.SUBJECT.format(**ctx), html)
+
+    def send_engagement_campaign_report(self, run_reports: list[dict]) -> bool:
+        """Send admin summary report after all campaign runs complete."""
+        rows = "".join(
+            f'<tr>'
+            f'<td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;">{r["campaign_id"]}</td>'
+            f'<td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;text-align:center;">{r["eligible_count"]}</td>'
+            f'<td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;text-align:center;color:#16a34a;">{r["sent_count"]}</td>'
+            f'<td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;text-align:center;">{r["skipped_count"]}</td>'
+            f'<td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;text-align:center;color:#dc2626;">{r["failed_count"]}</td>'
+            f'</tr>'
+            for r in run_reports
+        )
+        body_html = (
+            '<p>Engagement campaign run completed. Summary below:</p>'
+            '<table style="width:100%;border-collapse:collapse;font-size:14px;">'
+            '<thead><tr style="background:#f3f4f6;">'
+            '<th style="padding:8px 12px;text-align:left;">Campaign</th>'
+            '<th style="padding:8px 12px;">Eligible</th>'
+            '<th style="padding:8px 12px;">Sent</th>'
+            '<th style="padding:8px 12px;">Skipped</th>'
+            '<th style="padding:8px 12px;">Failed</th>'
+            '</tr></thead>'
+            f'<tbody>{rows}</tbody></table>'
+        )
+        html = self._build_email("Engagement Campaign Run Report", body_html)
+        return self.send_email(self.ADMIN_EMAIL, "JobMouka — Engagement Campaign Run Report", html)
 
 
 email_service = EmailService()
