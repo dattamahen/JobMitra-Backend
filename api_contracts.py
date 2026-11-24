@@ -240,6 +240,15 @@ def parse_job_text_response(raw_content: str) -> dict:
         if isinstance(skills, str):
             skills = [s.strip() for s in skills.split(",") if s.strip()]
 
+        # Normalise locations — always a list
+        locations = data.get("locations") or []
+        if isinstance(locations, str):
+            locations = [l.strip() for l in re.split(r"[,/|]", locations) if l.strip()]
+        if not locations:
+            city = (data.get("location_city") or "").strip()
+            if city:
+                locations = [city]
+
         return {
             "rejected": False,
             "title": (data.get("title") or "").strip(),
@@ -249,6 +258,7 @@ def parse_job_text_response(raw_content: str) -> dict:
             "experience_level": exp,
             "employment_type": emp,
             "job_type": jt,
+            "locations": locations,
             "location_city": (data.get("location_city") or "").strip(),
             "location_state": (data.get("location_state") or "").strip(),
             "requirements": data.get("requirements") or [],

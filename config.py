@@ -84,6 +84,7 @@ class Settings:
 
     # Email
     EMAIL_ENABLED = os.getenv("EMAIL_ENABLED", "false").lower() == "true"
+    ENGAGEMENT_CAMPAIGNS_ENABLED = os.getenv("ENGAGEMENT_CAMPAIGNS_ENABLED", "false").lower() == "true"
     SMTP_HOST = os.getenv("SMTP_HOST", "smtp.gmail.com")
     SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
     SMTP_USER = os.getenv("SMTP_USER", "")

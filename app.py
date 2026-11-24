@@ -83,6 +83,7 @@ from sitemap_routes import sitemap_router
 from cv_jd_endpoints import cv_jd_router
 from internal_job_endpoints import internal_job_router
 from cv_upload_endpoints import router as cv_upload_router
+from engagement_email_endpoints import router as engagement_router
 
 
 @asynccontextmanager
@@ -129,6 +130,13 @@ async def lifespan(app: FastAPI):
     if not db.fallback_mode:
         await run_contest_level_sweep()
     start_contest_scheduler()
+
+    # Engagement email scheduler — fires campaigns on their UTC schedule
+    from engagement_scheduler import start_engagement_scheduler
+    if not db.fallback_mode:
+        from engagement_email_db import engagement_email_db
+        await engagement_email_db.seed_default_configs()
+    start_engagement_scheduler()
 
     yield
 
@@ -291,6 +299,7 @@ def create_app() -> FastAPI:
     app.include_router(cv_jd_router)  # CV tailoring by raw JD
     app.include_router(internal_job_router)  # Internal Job Market (Refer & Hire)
     app.include_router(cv_upload_router)  # CV upload → profile fill
+    app.include_router(engagement_router)  # Engagement email campaign admin endpoints
 
     # Health check endpoint
     @app.get("/", tags=["Health"])

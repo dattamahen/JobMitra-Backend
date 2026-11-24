@@ -24,6 +24,7 @@ class InternalJobPostRequest(BaseModel):
     experience_level: str = Field(default="mid")          # entry/mid/senior/lead
     employment_type: str = Field(default="full-time")     # full-time/part-time/contract
     job_type: str = Field(default="onsite")               # remote/onsite/hybrid
+    locations: List[str] = Field(default_factory=list)   # multiple cities/Remote
     location_city: str = Field(default="India")
     location_state: str = Field(default="")
     requirements: List[str] = Field(default_factory=list)
