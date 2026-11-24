@@ -164,7 +164,12 @@ def create_app() -> FastAPI:
     # Add GZip compression for responses > 1KB
     app.add_middleware(GZipMiddleware, minimum_size=1000)
 
-    # Add CORS middleware
+    # Add rate limiting middleware (added before CORS so CORS wraps it — LIFO execution order)
+    from rate_limiter import RateLimitMiddleware
+    app.add_middleware(RateLimitMiddleware, requests_per_minute=settings.RATE_LIMIT_PER_MINUTE)
+
+    # Add CORS middleware — must be added AFTER rate limiter so it executes FIRST (LIFO)
+    # This ensures CORS headers are present even on rate-limited / rejected responses
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.CORS_ORIGINS,
@@ -172,10 +177,6 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
-
-    # Add rate limiting middleware
-    from rate_limiter import RateLimitMiddleware
-    app.add_middleware(RateLimitMiddleware, requests_per_minute=settings.RATE_LIMIT_PER_MINUTE)
 
     # Add request ID for tracing
     from request_id_middleware import RequestIDMiddleware
