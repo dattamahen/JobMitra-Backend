@@ -31,6 +31,7 @@ CATEGORIES = {
     "contest_level_prompts": "contest_level_prompts.json",
     "contest_interview_questions": "contest_interview_questions.json",
     "contest_interview_evaluation": "contest_interview_evaluation.json",
+    "roles_responsibilities": "roles_responsibilities.json",
 }
 
 
