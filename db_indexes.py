@@ -94,6 +94,13 @@ async def ensure_indexes(database: AsyncIOMotorDatabase) -> None:
         await contest.create_index([("status", 1), ("composite_score", -1)])
         await contest.create_index("interview_sessions.participant_user_id")
 
+        # ── Engagement Email Collections ─────────────────────────────────
+        await database["engagement_campaign_config"].create_index("campaign_id", unique=True)
+        await database["engagement_send_log"].create_index(
+            [("campaign_id", 1), ("user_id", 1), ("sent_at", -1)]
+        )
+        await database["engagement_send_log"].create_index("sent_at")
+
         logger.info("All database indexes ensured successfully")
 
     except Exception as e:
