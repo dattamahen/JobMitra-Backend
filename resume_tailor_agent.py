@@ -44,6 +44,8 @@ def run_resume_tailor(user_profile: dict, job_description: str) -> dict:
         tailor_variant = prompt_manager.get_random("resume_tailoring")
         tailor_system_prompt = tailor_variant.get("system_prompt")
         
+        total_exp = user_data.get("overall_experience_years", 0)
+
         prompt = f"""
 {tailor_system_prompt}
 
@@ -53,13 +55,22 @@ Your task:
 - Rewrite content to match keywords and expectations from the JD.
 - Do NOT fabricate experience, companies, or skills.
 - Preserve truthfulness while optimizing phrasing and structure.
-- Use strong, impact-driven bullet points.
 - Optimize for ATS (Applicant Tracking Systems).
+
+CRITICAL — Work Experience R&R Rules:
+- For EACH work experience entry, generate EXACTLY 4-5 bullet points in the "achievements" array. Never fewer than 4.
+- Calibrate the language and scope to the candidate's experience level AT THAT COMPANY:
+  * First/oldest job (fresher level): task execution, tool usage, supporting seniors, learning
+  * Middle jobs (junior/mid level): independent ownership, feature delivery, cross-team work
+  * Most recent job (current level based on {total_exp} total years): leadership, architecture, business impact
+- Each bullet must start with a strong action verb.
+- Quantify with numbers/percentages where realistic.
+- Mirror JD keywords naturally in the bullets.
+- Do NOT use generic filler like 'Worked on various tasks'.
 
 Rules:
 - Base all tailoring strictly on the provided user details.
 - Emphasize skills and experience that match the JD.
-- De-emphasize unrelated information.
 - Maintain professional tone.
 - Return output in STRICT JSON only.
 - Do NOT include explanations, markdown, or extra text.
@@ -80,7 +91,13 @@ Return ONLY a JSON object with this exact structure:
         "company": "Company Name",
         "position": "Position",
         "duration": "Duration",
-        "achievements": ["achievement1", "achievement2"]
+        "achievements": [
+          "Strong action-verb bullet 1 with quantified impact",
+          "Strong action-verb bullet 2 with quantified impact",
+          "Strong action-verb bullet 3 with quantified impact",
+          "Strong action-verb bullet 4 with quantified impact",
+          "Strong action-verb bullet 5 with quantified impact"
+        ]
       }}
     ],
     "education": [
@@ -113,8 +130,8 @@ Return ONLY a JSON object with this exact structure:
 }}
 
 IMPORTANT for match scores:
-- "match_before": Estimate how well the ORIGINAL resume matches the JD (0-100). Be realistic — if the candidate lacks key required skills, this should be low.
-- "match_improvement": Estimate how well the TAILORED resume matches the JD (0-100). This should always be higher than match_before since you optimized phrasing, keywords, and structure. The improvement should be realistic (typically 10-30 points higher).
+- "match_before": Estimate how well the ORIGINAL resume matches the JD (0-100). Be realistic.
+- "match_improvement": Estimate how well the TAILORED resume matches the JD (0-100). Always higher than match_before (typically 10-30 points higher).
 """
         
         response = client.models.generate_content(model=MODEL, contents=prompt)

@@ -855,7 +855,14 @@ async def google_signin(request: GoogleSignInRequest):
             })
             from email_service import email_service
             user_name = f"{google_user_info['first_name']} {google_user_info['last_name']}"
-            await asyncio.to_thread(email_service.send_welcome_email, google_user_info['email'], user_name)
+            results = await asyncio.gather(
+                asyncio.to_thread(email_service.send_welcome_email, google_user_info['email'], user_name),
+                asyncio.to_thread(email_service.send_new_user_admin_notification, google_user_info['first_name'], google_user_info['last_name'], google_user_info['email'], "Google", "candidate"),
+                return_exceptions=True,
+            )
+            for i, r in enumerate(results):
+                if isinstance(r, Exception):
+                    logger.error("google-signin email task %d failed: %s", i, r)
 
         jwt_token = _google_auth.create_jwt_token({
             'user_id': user['user_id'],
